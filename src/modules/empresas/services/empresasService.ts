@@ -1,0 +1,171 @@
+// Vite exposes env via import.meta.env in the browser
+const _metaEnvEmp = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+export const API_BASE = _metaEnvEmp?.VITE_API_URL || "http://localhost:4000";
+
+// Obtener token del localStorage
+function getToken(): string | null {
+  return localStorage.getItem("token");
+}
+
+// getEmpresas accepts optional filters which are sent as query params to the backend
+export async function getEmpresas(filters?: Record<string, string | number | undefined>) {
+  const qs = filters
+    ? Object.entries(filters)
+        .filter(([, v]) => v !== undefined && v !== "")
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+        .join("&")
+    : "";
+
+  const url = `${API_BASE}/api/empresas/${qs ? `?${qs}` : ""}`;
+  
+  const token = getToken();
+  console.log("🔍 Solicitando empresas de:", url);
+  console.log("🔑 Token:", token ? "✓ Presente" : "✗ No encontrado");
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { 
+      "Content-Type": "application/json",
+      ...(token && { "Authorization": `Bearer ${token}` })
+    },
+  });
+
+  console.log("📊 Respuesta status:", res.status);
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("❌ Error:", text);
+    throw new Error(`Error fetching empresas: ${res.status} ${res.statusText} - ${text}`);
+  }
+
+  const data = await res.json();
+  console.log("✅ Datos recibidos:", data);
+  return data;
+}
+
+// createEmpresa - POST /api/empresas/
+export async function createEmpresa(empresaData: {
+  nombre: string;
+  ruc?: string;
+  direccionFiscal?: string;
+  direccionOperativa?: string;
+  ciudad?: string;
+  provincia?: string;
+  sector?: string;
+  paginaWeb?: string;
+  estadoContrato?: string;
+  adminNombre?: string;
+  adminCargo?: string;
+  adminTelefono?: string;
+  adminEmail?: string;
+  observaciones?: string;
+  tecNombre?: string;
+  tecCargo?: string;
+  tecTelefono1?: string;
+  tecTelefono2?: string;
+  tecEmail?: string;
+  nivelAutorizacion?: string;
+}) {
+  const url = `${API_BASE}/api/empresas/`;
+  
+  const token = getToken();
+  console.log("➕ Creando empresa:", empresaData);
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { 
+      "Content-Type": "application/json",
+      ...(token && { "Authorization": `Bearer ${token}` })
+    },
+    body: JSON.stringify(empresaData),
+  });
+
+  console.log("📊 Respuesta status:", res.status);
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("❌ Error:", text);
+    throw new Error(`Error creating empresa: ${res.status} ${res.statusText} - ${text}`);
+  }
+
+  const data = await res.json();
+  console.log("✅ Empresa creada:", data);
+  return data;
+}
+
+// getEmpresaById - GET /api/empresas/:id
+export async function getEmpresaById(empresaId: string | number) {
+  const url = `${API_BASE}/api/empresas/${empresaId}`;
+  
+  const token = getToken();
+  console.log("🔍 Obteniendo empresa:", url);
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { 
+      "Content-Type": "application/json",
+      ...(token && { "Authorization": `Bearer ${token}` })
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("❌ Error:", text);
+    throw new Error(`Error fetching empresa: ${res.status} ${res.statusText} - ${text}`);
+  }
+
+  const data = await res.json();
+  console.log("✅ Empresa obtenida:", data);
+  return data;
+}
+
+// updateEmpresa - PUT /api/empresas/:id
+export async function updateEmpresa(empresaId: string | number, empresaData: {
+  nombre?: string;
+  ruc?: string;
+  direccionFiscal?: string;
+  direccionOperativa?: string;
+  ciudad?: string;
+  provincia?: string;
+  sector?: string;
+  paginaWeb?: string;
+  estadoContrato?: string;
+  adminNombre?: string;
+  adminCargo?: string;
+  adminTelefono?: string;
+  adminEmail?: string;
+  observaciones?: string;
+  tecNombre?: string;
+  tecCargo?: string;
+  tecTelefono1?: string;
+  tecTelefono2?: string;
+  tecEmail?: string;
+  nivelAutorizacion?: string;
+}, motivo?: string) {
+  const url = `${API_BASE}/api/empresas/${empresaId}`;
+  const token = getToken();
+  console.log("🔁 Actualizando empresa:", empresaId, empresaData, motivo ? `(motivo: ${motivo})` : "");
+
+  const body = motivo ? { ...empresaData, motivo } : empresaData;
+
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token && { "Authorization": `Bearer ${token}` })
+    },
+    body: JSON.stringify(body),
+  });
+
+  console.log("📊 Respuesta status:", res.status);
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("❌ Error:", text);
+    throw new Error(`Error updating empresa: ${res.status} ${res.statusText} - ${text}`);
+  }
+
+  const data = await res.json();
+  console.log("✅ Empresa actualizada:", data);
+  return data;
+}

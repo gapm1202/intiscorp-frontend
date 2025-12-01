@@ -1,0 +1,290 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+:root{
+  --bg: #f8fafc;
+  --panel: #ffffff;
+  --text: #0f172a;
+  --muted: #64748b;
+  --subtle: #f1f5f9;
+  --primary: #5061f7;
+  --primary-600: #4453e6;
+  --card-shadow: 0 6px 18px rgba(15,23,42,0.06);
+  --radius: 12px;
+  font-size: 15px;
+}
+
+.dark {
+  --bg: #0b1220;
+  --panel: #0f1724;
+  --text: #e6eef8;
+  --muted: #94a3b8;
+  --subtle: rgba(255,255,255,0.03);
+  --card-shadow: 0 6px 18px rgba(2,6,23,0.6);
+}
+
+@layer components {
+  .btn {
+    padding: 0.5rem 1rem;
+    background-color: var(--primary);
+    color: white;
+    border-radius: 0.5rem;
+  }
+}
+
+/* Base utilities to apply the CSS variables */
+body{
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  font-size: 0.9375rem; /* 15px */
+  line-height: 1.45;
+}
+
+.card{
+  background-color: var(--panel);
+  box-shadow: var(--card-shadow);
+  border-radius: var(--radius);
+}
+
+/* Small helpers to make certain Tailwind classes follow our CSS variables in dark mode */
+.bg-subtle { background-color: var(--subtle) !important; }
+
+/* Dark-mode overrides: map commonly-used light-mode Tailwind classes to our dark variables */
+.dark [class*="bg-panel"] { background-color: var(--panel) !important; }
+.dark .bg-subtle { background-color: var(--subtle) !important; }
+.dark .bg-linear-to-br, .dark .bg-linear-to-r, .dark [class*="bg-gradient-to"] { background-image: none !important; background: transparent !important; }
+
+/* Force text colors to the --text value in dark mode so labels/icons are legible */
+.dark .text-slate-800,
+.dark .text-slate-700,
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-slate-400,
+.dark .text-slate-200,
+.dark .text-muted {
+  color: var(--text) !important;
+}
+
+/* Make SVG icons match text color in dark mode */
+.dark svg { color: var(--text) !important; }
+
+/* Ensure buttons and links that used light backgrounds become readable */
+.dark .group-hover\:bg-primary:hover, .dark .group-hover\:bg-primary:focus { background-color: var(--primary-600) !important; }
+
+/* Make common light backgrounds become dark panels in dark mode */
+.dark .bg-white,
+.dark .bg-gray-50,
+.dark .bg-slate-50,
+.dark .bg-gray-100,
+.dark .bg-slate-100,
+.dark .bg-gray-200,
+.dark .bg-gray-300 {
+  background-color: var(--panel) !important;
+}
+
+/* Ensure text that was gray becomes the light text color in dark mode */
+.dark .text-gray-600,
+.dark .text-gray-500,
+.dark .text-gray-400,
+.dark .text-gray-700,
+.dark .text-gray-800,
+.dark .text-slate-800,
+.dark .text-slate-700,
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-slate-400,
+.dark .text-slate-200,
+.dark .text-muted {
+  color: var(--text) !important;
+}
+
+/* Keep explicit `.text-white` white in dark mode */
+.dark .text-white { color: #ffffff !important; }
+
+/* Borders: soften / adapt to dark */
+.dark .border-gray-200,
+.dark .border-gray-100,
+.dark .border-slate-100,
+.dark .border-gray-50 {
+  border-color: rgba(255,255,255,0.06) !important;
+}
+
+/* Buttons with colored backgrounds: ensure contrast remains good (keep text-white) */
+.dark .bg-green-600, .dark .bg-blue-600, .dark .bg-indigo-600, .dark .bg-purple-600, .dark .bg-red-600 {
+  filter: brightness(0.95);
+}
+
+/* Panels that previously used subtle light backgrounds */
+.dark .bg-subtle { background-color: var(--subtle) !important; }
+
+/* Force the sidebar and header to use dark panel + white text when .dark is active */
+.dark aside, .dark header, .dark .sidebar {
+  background-color: var(--panel) !important;
+  color: var(--text) !important;
+}
+
+/* Sidebar: ensure nav items use white/light text and have visible active/focus state */
+.dark aside .text-slate-700,
+.dark aside .text-slate-800,
+.dark aside .text-slate-600,
+.dark aside .text-muted {
+  color: var(--text) !important;
+}
+.dark aside button, .dark aside a {
+  color: var(--text) !important;
+}
+.dark aside .group-hover\:text-white:hover, .dark aside .group-hover\:text-white:focus {
+  color: #ffffff !important;
+}
+
+/* Focus and active styles for accessibility */
+.dark aside button:focus,
+.dark nav button:focus,
+.dark nav a:focus {
+  outline: 2px solid rgba(80,97,247,0.24);
+  outline-offset: 2px;
+}
+.dark nav button.active, .dark nav button[aria-current="true"] {
+  background-color: rgba(80,97,247,0.12) !important;
+  color: #fff !important;
+}
+
+/* Light-mode active nav item */
+nav button.active, nav button[aria-current="true"] {
+  background-color: rgba(80,97,247,0.06);
+  color: var(--primary-600);
+}
+
+/* Table rows and cards in dark mode */
+.dark table thead th { color: var(--text) !important; }
+.dark tbody td { color: var(--text) !important; }
+.dark tbody tr:hover { background-color: rgba(255,255,255,0.02) !important; }
+.dark .card { background-color: var(--panel) !important; border: 1px solid rgba(255,255,255,0.04); }
+
+
+
+/* Headings: consistent, readable and slightly smaller */
+h1, h2, h3, h4 {
+  color: var(--text);
+  font-weight: 600;
+  margin: 0;
+}
+h1 { font-size: 1.25rem; }
+h2 { font-size: 1.1rem; }
+h3 { font-size: 1rem; }
+
+/* Table styles for better readability in inventory and lists */
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(15,23,42,0.06);
+}
+tbody td {
+  padding: 0.65rem 1rem;
+  font-size: 0.95rem;
+  color: var(--text);
+  border-bottom: 1px solid rgba(15,23,42,0.04);
+}
+
+/* Make action buttons consistent and legible */
+.btn {
+  padding: 0.45rem 0.9rem;
+  background-color: var(--primary);
+  color: white;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.btn-outline {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid rgba(80,97,247,0.12);
+}
+
+
+/* Compact/neutral mode tweaks: reduce large typography and neutralize gradients */
+.app-compact {
+  --muted: #6b7280;
+}
+.app-compact h1, .app-compact h2, .app-compact h3 { font-weight: 600; }
+.app-compact h1 { font-size: 1.25rem; }
+.app-compact h2 { font-size: 1.125rem; }
+.app-compact h3 { font-size: 1rem; }
+.app-compact p { font-size: 0.95rem; }
+
+/* Neutralize gradient utilities used in several pages and ensure readable text
+   - Remove the heavy gradient backgrounds in compact mode
+   - Force their text to inherit the main text color so `text-white` won't be invisible
+*/
+.app-compact .bg-gradient-to-r,
+.app-compact .bg-linear-to-r,
+.app-compact .bg-gradient-to-br,
+.app-compact .bg-linear-to-br {
+  background-image: none !important;
+  background: transparent !important;
+  color: var(--text) !important;
+}
+.app-compact .bg-gradient-to-r *,
+.app-compact .bg-linear-to-r *,
+.app-compact .bg-gradient-to-br *,
+.app-compact .bg-linear-to-br * {
+  color: inherit !important;
+}
+
+/* Reduce large icon/text sizes in inventory details */
+.app-compact .text-4xl { font-size: 1.25rem !important; }
+.app-compact .text-3xl { font-size: 1.125rem !important; }
+.app-compact .text-2xl { font-size: 1rem !important; }
+
+/* Tighter paddings/margins for compact inventory view */
+.app-compact .p-6 { padding: 0.75rem !important; }
+.app-compact .p-4 { padding: 0.5rem !important; }
+.app-compact .px-6 { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+.app-compact .py-4 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+.app-compact .mb-8 { margin-bottom: 0.75rem !important; }
+.app-compact .gap-6 { gap: 0.5rem !important; }
+.app-compact .grid-cols-3 .col-span-2, .app-compact .lg\:col-span-2 { grid-column: span 2 / span 2; }
+
+/* Reduce prominence of colorful badges/alerts: make them more muted */
+.app-compact .bg-green-100 { background-color: rgba(34,197,94,0.12) !important; }
+.app-compact .bg-yellow-100 { background-color: rgba(245,158,11,0.09) !important; }
+.app-compact .bg-red-100 { background-color: rgba(239,68,68,0.08) !important; }
+.app-compact .bg-indigo-100 { background-color: rgba(79,70,229,0.06) !important; }
+
+/* Muted icons and accent tones */
+.app-compact svg { color: var(--muted) !important; }
+
+/* Ensure standalone `.text-white` inside gradient-neutralized containers becomes readable */
+.app-compact .bg-linear-to-r .text-white,
+.app-compact .bg-gradient-to-r .text-white,
+.app-compact .bg-linear-to-br .text-white,
+.app-compact .bg-gradient-to-br .text-white {
+  color: var(--text) !important;
+}
+.app-compact .text-2xl, .app-compact .text-3xl { font-weight: 600 !important; color: var(--text) !important; }
+
+/* Reduce image preview sizes in galleries */
+.app-compact .h-20 { height: 64px !important; }
+.app-compact img { max-height: 180px; object-fit: cover; }
+
+/* Slightly smaller rounded corners for compact look */
+.app-compact .rounded-lg { border-radius: 8px !important; }
+
+
+@layer utilities {
+  /* Aquí puedes agregar clases personalizadas */
+}

@@ -1,0 +1,118 @@
+import { Routes, Route } from "react-router-dom";
+import Dashboard from "../modules/dashboard/pages/Dashboard";
+import PrivateRoute from "./PrivateRoute";
+import RoleRoute from "./RoleRoute";
+import AdminLayout from "../layouts/AdminLayout";
+import ClientLayout from "../layouts/ClientLayout";
+import TechnicianLayout from "../layouts/TechnicianLayout";
+import Login from "../modules/auth/pages/Login";
+import EmpresasList from "../modules/empresas/pages/EmpresasList";
+import EmpresaDetailPage from "../modules/empresas/pages/EmpresaDetailPage";
+import HistorialEmpresaPage from "../modules/empresas/pages/HistorialEmpresaPage";
+import InventarioPage from "../modules/inventario/pages/InventarioPage";
+
+const AppRouter = () => {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+
+      <Route element={<PrivateRoute />}>
+        <Route
+          path="/admin/*"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <Dashboard />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/empresas"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <EmpresasList />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/empresas/:empresaId"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <EmpresaDetailPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/empresas/:empresaId/historial"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <HistorialEmpresaPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/empresas/:empresaId/inventario"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <InventarioPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/empresas/:empresaId/sedes/:sedeId/inventario"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <InventarioPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        {/* Ruta accesible en /empresas (protegida) - usar AdminLayout para mantener sidebar */}
+        <Route
+          path="/empresas"
+          element={
+            <AdminLayout>
+              <EmpresasList />
+            </AdminLayout>
+          }
+        />
+
+        <Route
+          path="/cliente/*"
+          element={
+            <RoleRoute role="cliente">
+              <ClientLayout>
+                <Dashboard />
+              </ClientLayout>
+            </RoleRoute>
+          }
+        />
+
+        <Route
+          path="/tecnico/*"
+          element={
+            <RoleRoute role="tecnico">
+              <TechnicianLayout>
+                <Dashboard />
+              </TechnicianLayout>
+            </RoleRoute>
+          }
+        />
+      </Route>
+
+
+    </Routes>
+  );
+};
+
+export default AppRouter;
