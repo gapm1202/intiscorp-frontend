@@ -17,15 +17,19 @@ const PublicReportPage: React.FC = () => {
   const [users, setUsers] = useState<AssignedUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<string>('');
   const [reporterName, setReporterName] = useState<string>('');
+  const [reporterEmail, setReporterEmail] = useState<string>('');
   const [description, setDescription] = useState('');
   const [operational, setOperational] = useState<string>('Sí');
   const [anydesk, setAnydesk] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [dragActive, setDragActive] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<any>(null);
+  const [reportStatus, setReportStatus] = useState<'none'|'enviado'|'en-progreso'|'finalizado'>('none');
   const [error, setError] = useState<string | null>(null);
+  const CORP_COLOR = '#0ea5e9';
 
   useEffect(() => {
     const load = async () => {
@@ -33,7 +37,7 @@ const PublicReportPage: React.FC = () => {
       setLoading(true); setError(null);
       try {
         const raw = await fetchPublicAsset({ token, assetId: assetIdParam });
-        console.log('Public asset raw response:', raw);
+        // response normalized below
 
         // Normalize common wrapper shapes
         const payload = (raw && typeof raw === 'object' && ('data' in raw) && raw.data) ? raw.data : raw;
@@ -102,7 +106,10 @@ const PublicReportPage: React.FC = () => {
 
         setAsset(normalized);
         setUsers(normUsers);
-        if (normUsers.length > 0) setSelectedUser(normUsers[0].value ?? '');
+        if (normUsers.length > 0) {
+          setSelectedUser(normUsers[0].value ?? '');
+          setReporterEmail(normUsers[0].email ?? '');
+        }
       } catch (e: any) {
         console.error('Error loading public asset:', e);
         setError(e?.message ?? 'No se pudo cargar la información del activo');
@@ -125,6 +132,18 @@ const PublicReportPage: React.FC = () => {
     setFiles(chosen.slice(0, 10));
   };
 
+  const handleDrop = (ev: React.DragEvent<HTMLDivElement>) => {
+    ev.preventDefault(); ev.stopPropagation(); setDragActive(false); setError(null);
+    const dt = ev.dataTransfer;
+    const chosen = dt?.files ? Array.from(dt.files) : [];
+    const invalid = chosen.find(f => !ALLOWED_TYPES.includes(f.type) || f.size > MAX_FILE_SIZE);
+    if (invalid) return setError('Archivo no permitido o demasiado grande (máx 10MB, jpg/png/mp4)');
+    setFiles(prev => [...prev, ...chosen].slice(0, 10));
+  };
+
+  const handleDragOver = (ev: React.DragEvent<HTMLDivElement>) => { ev.preventDefault(); ev.stopPropagation(); setDragActive(true); };
+  const handleDragLeave = (ev: React.DragEvent<HTMLDivElement>) => { ev.preventDefault(); ev.stopPropagation(); setDragActive(false); };
+
   const onSubmit = async (ev?: React.FormEvent) => {
     if (ev) ev.preventDefault();
     setError(null);
@@ -138,24 +157,88 @@ const PublicReportPage: React.FC = () => {
     if (assetIdParam) fd.append('assetId', assetIdParam);
     if (selectedUser) fd.append('reporterUserId', selectedUser);
     else fd.append('reporterName', reporterName);
+    if (reporterEmail) fd.append('reporterEmail', reporterEmail);
     fd.append('description', description);
     fd.append('operational', operational);
     fd.append('anydesk', anydesk);
     files.forEach((f,i) => fd.append('attachments', f, f.name));
 
     try {
-      setSubmitting(true); setProgress(0);
-      const res = await submitPublicReport(fd, (p) => setProgress(p));
+      setSubmitting(true); setProgress(0); setReportStatus('enviado');
+      const res = await submitPublicReport(fd, (p) => {
+        // update progress and set status to 'en-progreso' once upload starts
+        setProgress(p);
+        if (p > 0) setReportStatus('en-progreso');
+      });
       setResult(res);
+      setReportStatus('finalizado');
     } catch (e: any) {
       setError(e?.message || 'Error enviando el ticket');
     } finally { setSubmitting(false); }
   };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Reporte Público de Incidencia</h1>
+    <div className="p-8 max-w-4xl mx-auto font-sans">
+      <div className="relative mb-6 flex items-start justify-between">
+        <div className="min-w-0">
+          {/* decorative bar directly behind the title with width matching the title */}
+          <div className="relative inline-block">
+            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-3 bg-[#0ea5e9] opacity-10 rounded-md z-0" />
+            <h1 className="relative text-3xl font-extrabold mb-1 text-slate-900 tracking-tight z-10 inline-block" style={{fontFamily: 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial'}}>
+              Reporte de Incidencia
+            </h1>
+          </div>
+          <p className="mt-2 text-sm text-slate-500 max-w-2xl">Rellena el formulario para reportar una incidencia en el activo identificado.</p>
+        </div>
+        <img src="/logo.png" alt="logo" className="w-20 h-20 object-contain ml-6 flex-shrink-0 rounded" />
+      </div>
       {loading ? <div>Cargando...</div> : error ? <div className="text-red-600">{error}</div> : null}
+
+      {/* Status steps (Tailwind, lowered connector and animated fill) */}
+      <div className="mb-6">
+        <div className="bg-white p-6 md:p-8 rounded-xl shadow-lg border border-slate-100">
+          <div className="relative py-8">
+            {/* background connector line (lowered) */}
+            <div className="absolute left-8 right-8 top-1/2 translate-y-2 h-1 rounded bg-sky-100" />
+            {/* animated fill */}
+            {(() => {
+              const steps = ['Enviado','En progreso','Finalizado'];
+              const idx = reportStatus === 'enviado' ? 0 : reportStatus === 'en-progreso' ? 1 : reportStatus === 'finalizado' ? 2 : 0;
+              const pct = Math.round((idx / Math.max(1, steps.length - 1)) * 100);
+              return (
+                <div className="absolute left-8 right-8 top-1/2 translate-y-2 h-1 rounded overflow-hidden">
+                  <div className="h-1 bg-[#0ea5e9] transition-all duration-500" style={{ width: `${pct}%` }} />
+                </div>
+              );
+            })()}
+
+            <div className="flex items-center justify-between relative">
+              {(() => {
+                const steps = ['Enviado','En progreso','Finalizado'];
+                const idx = reportStatus === 'enviado' ? 0 : reportStatus === 'en-progreso' ? 1 : reportStatus === 'finalizado' ? 2 : -1;
+                return steps.map((label, i) => {
+                  const completed = i < idx;
+                  const active = i === idx;
+                  return (
+                    <div key={label} className="flex-1 flex flex-col items-center z-20">
+                      <div className="relative w-full flex items-center justify-center -translate-y-8">
+                        <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 border ${completed ? 'bg-[#0ea5e9] border-[#0ea5e9]' : active ? 'bg-white border-[#cfeffc]' : 'bg-gray-50 border-gray-200'}`}>
+                          {completed ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-7.071 7.071a1 1 0 01-1.414 0L3.293 9.95a1 1 0 011.414-1.414L9 12.828l6.293-6.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+                          ) : (
+                            <span className={`${active ? 'text-[#0ea5e9]' : 'text-gray-500'} font-medium`}>{i + 1}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-3 text-sm text-gray-600 font-medium">{label}</div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {result ? (
         <div className="bg-green-50 border border-green-200 p-4 rounded">
@@ -164,7 +247,10 @@ const PublicReportPage: React.FC = () => {
           <div className="mt-2 text-sm text-gray-600">Gracias. Si corresponde, el equipo asignado dará seguimiento.</div>
         </div>
       ) : (
-        <form onSubmit={onSubmit} className="space-y-4 bg-white p-4 rounded shadow">
+        <form onSubmit={onSubmit} className="space-y-6 bg-white p-8 rounded-xl shadow-md border border-slate-100">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-sky-700">Formulario de Reporte</h2>
+              </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Empresa</label>
             <div className="mt-1 text-sm text-gray-900">{asset?.empresa?.nombre ?? asset?.empresaNombre ?? asset?.empresa ?? '-'}</div>
@@ -183,30 +269,53 @@ const PublicReportPage: React.FC = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700">Usuario que reporta</label>
             {users.length > 0 ? (
-              <select value={selectedUser} onChange={e => setSelectedUser(e.target.value)} className="mt-1 block w-full p-2 border rounded">
-                <option value="">-- Seleccionar --</option>
-                {users.map(u => <option key={u.value} value={u.value}>{u.nombre}</option>)}
-              </select>
+              <div className="mt-1 flex flex-col md:flex-row md:items-center md:gap-4">
+                <select value={selectedUser} onChange={e => {
+                  const val = e.target.value;
+                  setSelectedUser(val);
+                  const found = users.find(u => u.value === val);
+                  setReporterEmail(found?.email ?? '');
+                }} className="flex-1 block w-full p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]">
+                  <option value="">-- Seleccionar --</option>
+                  {users.map(u => <option key={u.value} value={u.value}>{u.nombre}</option>)}
+                </select>
+                <input type="email" value={reporterEmail} onChange={e => setReporterEmail(e.target.value)} placeholder="Correo electrónico" className="mt-3 md:mt-0 md:w-1/2 p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]" />
+              </div>
             ) : (
-              <div className="mt-1">
-                <div className="text-sm text-gray-600 mb-2">No hay usuarios asignados al activo. Escribe tu nombre para reportar.</div>
-                <input value={reporterName} onChange={e => setReporterName(e.target.value)} placeholder="Tu nombre" className="block w-full p-2 border rounded" />
+              <div className="mt-1 flex flex-col md:flex-row md:gap-4">
+                <div className="flex-1">
+                  <div className="text-sm text-gray-600 mb-2">No hay usuarios asignados al activo. Escribe tu nombre para reportar.</div>
+                  <input value={reporterName} onChange={e => setReporterName(e.target.value)} placeholder="Tu nombre" className="block w-full p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]" />
+                </div>
+                <input type="email" value={reporterEmail} onChange={e => setReporterEmail(e.target.value)} placeholder="Correo electrónico (opcional)" className="mt-3 md:mt-0 md:w-1/2 p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]" />
               </div>
             )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700">Describe tu problema</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} className="mt-1 block w-full p-2 border rounded" />
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} className="mt-1 block w-full p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]" />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Adjuntar imágenes o video (jpg/png/mp4, máx 10MB por archivo)</label>
-            <input type="file" multiple accept=".jpg,.jpeg,.png,.mp4,image/*,video/mp4" onChange={onFileChange} className="mt-1" />
-            <div className="flex gap-2 mt-2 flex-wrap">
+            <label className="block text-sm font-medium text-slate-700 mb-2">Adjuntar imágenes o video (jpg/png/mp4, máx 10MB por archivo)</label>
+            <div
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              className={`mt-1 relative flex flex-col items-center justify-center border-2 rounded-md p-6 cursor-pointer transition-colors bg-white ${dragActive ? 'border-sky-400 bg-sky-50' : 'border-dashed border-gray-200'}`}
+            >
+              <input id="file-upload" type="file" multiple accept=".jpg,.jpeg,.png,.mp4,image/*,video/mp4" onChange={onFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+              <div className="flex flex-col items-center text-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-[#06b6d4] mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16V8m0 0l5-5m-5 5l5 5M17 8v8" /></svg>
+                <div className="text-sm text-slate-700 font-medium">Arrastra y suelta aquí o haz clic para subir</div>
+                <div className="text-xs text-slate-400 mt-2">JPG, PNG, MP4 — hasta 10MB por archivo</div>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-3 flex-wrap">
               {previews.map((p,i) => (
-                <div key={i} className="w-24 h-24 border p-1 bg-gray-50 flex items-center justify-center">
-                  {files[i].type.startsWith('image') ? <img src={p} className="max-w-full max-h-full" alt="preview" /> : <div className="text-xs">Video</div>}
+                <div key={i} className="w-28 h-28 border p-1 bg-gray-50 flex items-center justify-center rounded">
+                  {files[i] && files[i].type.startsWith('image') ? <img src={p} className="max-w-full max-h-full rounded" alt="preview" /> : <div className="text-xs">Video</div>}
                 </div>
               ))}
             </div>
@@ -223,18 +332,18 @@ const PublicReportPage: React.FC = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">Anydesk</label>
-            <input value={anydesk} onChange={e => setAnydesk(e.target.value)} className="mt-1 block w-full p-2 border rounded" />
+            <input value={anydesk} onChange={e => setAnydesk(e.target.value)} className="mt-1 block w-full p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]" />
           </div>
 
           {progress > 0 && submitting && (
             <div className="w-full bg-gray-100 rounded overflow-hidden">
-              <div style={{ width: `${progress}%` }} className="bg-indigo-600 text-white text-xs text-center">{progress}%</div>
+              <div style={{ width: `${progress}%` }} className="bg-[#0ea5e9] text-white text-xs text-center">{progress}%</div>
             </div>
           )}
 
           <div className="flex items-center justify-between">
             <div className="text-sm text-red-600">{error}</div>
-            <button type="submit" disabled={submitting} className="px-4 py-2 bg-indigo-600 text-white rounded" onClick={onSubmit}>{submitting ? 'Enviando...' : 'Enviar Ticket'}</button>
+            <button type="submit" disabled={submitting} className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-sky-500 hover:scale-[0.995] transform text-white rounded-md shadow-lg focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] transition-transform" onClick={onSubmit}>{submitting ? 'Enviando...' : 'Enviar Ticket'}</button>
           </div>
         </form>
       )}
