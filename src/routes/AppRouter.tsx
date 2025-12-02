@@ -10,6 +10,8 @@ import EmpresasList from "../modules/empresas/pages/EmpresasList";
 import EmpresaDetailPage from "../modules/empresas/pages/EmpresaDetailPage";
 import HistorialEmpresaPage from "../modules/empresas/pages/HistorialEmpresaPage";
 import InventarioPage from "../modules/inventario/pages/InventarioPage";
+import EtiquetasPage from "../modules/inventario/pages/EtiquetasPage";
+import PublicReportPage from "../modules/public/pages/PublicReportPage";
 
 const AppRouter = () => {
   return (
@@ -77,6 +79,26 @@ const AppRouter = () => {
             </RoleRoute>
           }
         />
+        <Route
+          path="/admin/empresas/:empresaId/etiquetas"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <EtiquetasPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/empresas/:empresaId/sedes/:sedeId/etiquetas"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <EtiquetasPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
         {/* Ruta accesible en /empresas (protegida) - usar AdminLayout para mantener sidebar */}
         <Route
           path="/empresas"
@@ -108,6 +130,9 @@ const AppRouter = () => {
             </RoleRoute>
           }
         />
+        {/* Public report page (no auth) - accessed from QR */}
+        <Route path="/public/report" element={<PublicReportPage />} />
+        <Route path="/public/activos" element={<PublicReportPage />} />
       </Route>
 
 

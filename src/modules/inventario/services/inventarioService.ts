@@ -336,6 +336,71 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
   }
 }
 
+/**
+ * Obtiene o crea (si no existe) un token público asociado a un activo.
+ * El backend debe exponer un endpoint que retorne { token: string } y
+ * que cree el token permanentemente la primera vez. Ej: POST /api/activos/:assetId/token
+ */
+export async function getOrCreateAssetToken(assetId: string | number) {
+  const url = `${API_BASE}/api/activos/${assetId}/token`;
+  const token = getToken();
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token && { "Authorization": `Bearer ${token}` })
+    },
+    body: JSON.stringify({})
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    const err = new Error(`Error fetching/creating asset token: ${res.status} ${res.statusText} - ${text}`) as ServiceError;
+    err.status = res.status;
+    err.body = text;
+    throw err;
+  }
+
+  const data = await res.json();
+  // Esperamos { token: '...' }
+  return data?.token ?? null;
+}
+
+/**
+ * Solicita tokens para varios activos en un solo llamado.
+ * Endpoint backend: POST /api/activos/tokens with body { ids: [id...] }
+ * Devuelve un objeto mapa { [id]: token }
+ */
+export async function getTokensForAssets(ids: Array<string | number>) {
+  const url = `${API_BASE}/api/activos/tokens`;
+  const token = getToken();
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token && { "Authorization": `Bearer ${token}` })
+    },
+    body: JSON.stringify({ ids })
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    const err = new Error(`Error fetching asset tokens batch: ${res.status} ${res.statusText} - ${text}`) as ServiceError;
+    err.status = res.status;
+    err.body = text;
+    throw err;
+  }
+
+  const data = await res.json();
+  // Esperamos un mapa { id: token }
+  // Algunos backends devuelven { data: { ... } } — normalizamos para retornar siempre el mapa interno.
+  if (data && typeof data === 'object') {
+    if ('data' in data && typeof (data as any).data === 'object') return (data as any).data ?? {};
+    if ('tokens' in data && typeof (data as any).tokens === 'object') return (data as any).tokens ?? {};
+  }
+  return data ?? {};
+}
+
 export async function updateActivo(empresaId: string | number, sedeId: string | number, activoId: string | number, activoData: ActivoPayload) {
   const url = `${API_BASE}/api/empresas/${empresaId}/sedes/${sedeId}/inventario/${activoId}`;
   const token = getToken();

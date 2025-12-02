@@ -559,16 +559,24 @@ const InventarioPage = () => {
                       <span className="text-gray-500 font-mono text-xs">{String(s._id ?? s.id ?? "-").slice(0, 8)}...</span>
                     </div>
 
-                    {/* Action Button */}
-                    <button
-                      onClick={() => navigate(`/admin/empresas/${empresaId}/sedes/${s._id ?? s.id}/inventario`)}
-                      className="w-full flex items-center justify-center gap-2 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:shadow-lg transform hover:scale-[1.02] transition-all duration-200"
-                    >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                      </svg>
-                      Ver Inventario
-                    </button>
+                    {/* Action Buttons */}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => navigate(`/admin/empresas/${empresaId}/sedes/${s._id ?? s.id}/inventario`)}
+                        className="flex-1 flex items-center justify-center gap-2 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:shadow-lg transform hover:scale-[1.02] transition-all duration-200"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                        </svg>
+                        Ver Inventario
+                      </button>
+                      <button
+                        onClick={() => navigate(`/admin/empresas/${empresaId}/sedes/${s._id ?? s.id}/etiquetas`)}
+                        className="flex-none inline-flex items-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-sm transition-all text-sm"
+                      >
+                        📇 Generar Etiquetas
+                      </button>
+                    </div>
                   </div>
 
                   {/* Card Footer with Stats */}
@@ -603,6 +611,7 @@ const InventarioPage = () => {
                     <p className="text-sm text-gray-600">Visualiza el inventario consolidado de todas las sedes</p>
                   </div>
                 </div>
+                <div className="flex items-center gap-3">
                 <button
                   onClick={async () => {
                     setLoading(true);
@@ -625,6 +634,13 @@ const InventarioPage = () => {
                   </svg>
                   Ver Vista General
                 </button>
+                <button
+                  onClick={() => navigate(`/admin/empresas/${empresaId}/etiquetas`)}
+                  className="flex items-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-sm transition-all text-sm"
+                >
+                  📇 Generar Etiquetas
+                </button>
+                </div>
               </div>
             </div>
           </div>
@@ -637,6 +653,7 @@ const InventarioPage = () => {
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">No hay activos registrados</h3>
             <p className="text-gray-600 mb-6 max-w-md mx-auto">Comienza agregando tu primer activo al inventario de esta ubicación.</p>
+            <div className="flex items-center justify-center gap-4">
             <button
               onClick={() => setShowRegisterModal(true)}
               className="inline-flex items-center gap-2 bg-linear-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-medium py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
@@ -646,6 +663,13 @@ const InventarioPage = () => {
               </svg>
               Registrar primer activo
             </button>
+            <button
+              onClick={() => navigate(`/admin/empresas/${empresaId}/etiquetas`)}
+              className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-lg shadow-sm transition-all text-sm"
+            >
+              📇 Generar Etiquetas
+            </button>
+            </div>
           </div>
         ) : currentView === 'main' ? (
           <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
