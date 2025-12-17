@@ -82,7 +82,13 @@ const HistorialEmpresaPage = () => {
 
   const getAccionBadge = (entry: HistorialEntry): { text: string; color: string } => {
     const accion = (entry.accion || "").toString().toLowerCase();
-    if (accion.includes("eliminar")) {
+    if (accion.includes("desactivar_sede")) {
+      return { text: "DESACTIVADO", color: "bg-red-100 text-red-800" };
+    } else if (accion.includes("activar_sede")) {
+      return { text: "ACTIVADO", color: "bg-green-100 text-green-800" };
+    } else if (accion.includes("editar_empresa")) {
+      return { text: "EDITADO", color: "bg-yellow-100 text-yellow-800" };
+    } else if (accion.includes("eliminar")) {
       return { text: "ELIMINAR", color: "bg-red-100 text-red-800" };
     } else if (accion.includes("editar")) {
       return { text: "EDITAR", color: "bg-yellow-100 text-yellow-800" };

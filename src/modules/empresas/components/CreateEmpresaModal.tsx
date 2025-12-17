@@ -1,6 +1,26 @@
 import { useState, useEffect } from "react";
 import { createEmpresa, updateEmpresa } from "../services/empresasService";
 import ConfirmModal from "./ConfirmModal";
+import { computeNextClientCodeLocal } from "@/utils/helpers";
+
+interface ContactoAdmin {
+  nombre: string;
+  cargo: string;
+  telefono: string;
+  email: string;
+}
+
+interface ContactoTecnico {
+  nombre: string;
+  cargo: string;
+  telefono1: string;
+  telefono2: string;
+  email: string;
+  contactoPrincipal: boolean;
+  horarioDisponible: string;
+  autorizaCambiosCriticos: boolean;
+  nivelAutorizacion: string;
+}
 
 interface CreateEmpresaModalProps {
   isOpen: boolean;
@@ -9,6 +29,7 @@ interface CreateEmpresaModalProps {
   initialData?: Partial<{
     nombre: string;
     ruc: string;
+    codigoCliente: string;
     direccionFiscal: string;
     direccionOperativa: string;
     ciudad: string;
@@ -16,17 +37,10 @@ interface CreateEmpresaModalProps {
     sector: string;
     paginaWeb: string;
     estadoContrato: string;
-    adminNombre: string;
-    adminCargo: string;
-    adminTelefono: string;
-    adminEmail: string;
-    observaciones: string;
-    tecNombre: string;
-    tecCargo: string;
-    tecTelefono1: string;
-    tecTelefono2: string;
-    tecEmail: string;
-    nivelAutorizacion: string;
+    observacionesGenerales: string;
+    contactosAdmin: ContactoAdmin[];
+    autorizacionFacturacion: boolean;
+    contactosTecnicos: ContactoTecnico[];
   }>;
   onClose: () => void;
   onSuccess: () => void;
@@ -37,6 +51,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
     // Información general
     nombre: "",
     ruc: "",
+    codigoCliente: "",
     direccionFiscal: "",
     direccionOperativa: "",
     ciudad: "",
@@ -44,32 +59,91 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
     sector: "",
     paginaWeb: "",
     estadoContrato: "activo",
+    observacionesGenerales: "",
     
     // Contactos administrativos
-    adminNombre: "",
-    adminCargo: "",
-    adminTelefono: "",
-    adminEmail: "",
-    observaciones: "",
+    contactosAdmin: [{ nombre: "", cargo: "", telefono: "", email: "" }],
+    autorizacionFacturacion: false,
     
     // Contactos técnicos
-    tecNombre: "",
-    tecCargo: "",
-    tecTelefono1: "",
-    tecTelefono2: "",
-    tecEmail: "",
-    nivelAutorizacion: "",
+    contactosTecnicos: [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "" }],
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingEmpresaData, setPendingEmpresaData] = useState<typeof formData | null>(null);
+  const [loadingCodigo, setLoadingCodigo] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+  // Generar código de cliente automáticamente al abrir modal para crear
+  useEffect(() => {
+    if (isOpen && !empresaId && !initialData?.codigoCliente) {
+      setLoadingCodigo(true);
+      // Aquí se debería cargar la lista de empresas para calcular el siguiente código
+      // Por ahora, usamos un fallback local que se mejorará cuando el backend lo soporte
+      try {
+        const nextCode = computeNextClientCodeLocal([]);
+        setFormData(prev => ({ ...prev, codigoCliente: nextCode }));
+      } catch (e) {
+        // Si falla, al menos ponemos CLI-001 como fallback
+        setFormData(prev => ({ ...prev, codigoCliente: "CLI-001" }));
+      } finally {
+        setLoadingCodigo(false);
+      }
+    }
+  }, [isOpen, empresaId, initialData?.codigoCliente]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
     setFormData(prev => ({
       ...prev,
-      [name]: value,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+  };
+
+  const handleContactoAdminChange = (index: number, field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      contactosAdmin: prev.contactosAdmin.map((c, i) => 
+        i === index ? { ...c, [field]: value } : c
+      ),
+    }));
+  };
+
+  const addContactoAdmin = () => {
+    setFormData(prev => ({
+      ...prev,
+      contactosAdmin: [...prev.contactosAdmin, { nombre: "", cargo: "", telefono: "", email: "" }],
+    }));
+  };
+
+  const removeContactoAdmin = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      contactosAdmin: prev.contactosAdmin.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleContactoTecnicoChange = (index: number, field: string, value: string | boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      contactosTecnicos: prev.contactosTecnicos.map((c, i) => 
+        i === index ? { ...c, [field]: value } : c
+      ),
+    }));
+  };
+
+  const addContactoTecnico = () => {
+    setFormData(prev => ({
+      ...prev,
+      contactosTecnicos: [...prev.contactosTecnicos, { nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "" }],
+    }));
+  };
+
+  const removeContactoTecnico = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      contactosTecnicos: prev.contactosTecnicos.filter((_, i) => i !== index),
     }));
   };
 
@@ -81,6 +155,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
     const empresaData = {
       nombre: formData.nombre,
       ruc: formData.ruc,
+      codigoCliente: formData.codigoCliente,
       direccionFiscal: formData.direccionFiscal,
       direccionOperativa: formData.direccionOperativa,
       ciudad: formData.ciudad,
@@ -88,17 +163,10 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
       sector: formData.sector,
       paginaWeb: formData.paginaWeb,
       estadoContrato: formData.estadoContrato,
-      adminNombre: formData.adminNombre,
-      adminCargo: formData.adminCargo,
-      adminTelefono: formData.adminTelefono,
-      adminEmail: formData.adminEmail,
-      observaciones: formData.observaciones,
-      tecNombre: formData.tecNombre,
-      tecCargo: formData.tecCargo,
-      tecTelefono1: formData.tecTelefono1,
-      tecTelefono2: formData.tecTelefono2,
-      tecEmail: formData.tecEmail,
-      nivelAutorizacion: formData.nivelAutorizacion,
+      observacionesGenerales: formData.observacionesGenerales,
+      contactosAdmin: formData.contactosAdmin,
+      autorizacionFacturacion: formData.autorizacionFacturacion,
+      contactosTecnicos: formData.contactosTecnicos,
     };
 
     console.log("📤 Datos siendo enviados al backend:", empresaData);
@@ -118,6 +186,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
       setFormData({
         nombre: "",
         ruc: "",
+        codigoCliente: "",
         direccionFiscal: "",
         direccionOperativa: "",
         ciudad: "",
@@ -125,17 +194,10 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
         sector: "",
         paginaWeb: "",
         estadoContrato: "activo",
-        adminNombre: "",
-        adminCargo: "",
-        adminTelefono: "",
-        adminEmail: "",
-        observaciones: "",
-        tecNombre: "",
-        tecCargo: "",
-        tecTelefono1: "",
-        tecTelefono2: "",
-        tecEmail: "",
-        nivelAutorizacion: "",
+        observacionesGenerales: "",
+        contactosAdmin: [{ nombre: "", cargo: "", telefono: "", email: "" }],
+        autorizacionFacturacion: false,
+        contactosTecnicos: [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "" }],
       });
       onSuccess();
       onClose();
@@ -172,6 +234,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
         ...prev,
         nombre: initialData.nombre ?? "",
         ruc: initialData.ruc ?? "",
+        codigoCliente: initialData.codigoCliente ?? "",
         direccionFiscal: initialData.direccionFiscal ?? "",
         direccionOperativa: initialData.direccionOperativa ?? "",
         ciudad: initialData.ciudad ?? "",
@@ -179,23 +242,17 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
         sector: initialData.sector ?? "",
         paginaWeb: initialData.paginaWeb ?? "",
         estadoContrato: initialData.estadoContrato ?? "activo",
-        adminNombre: initialData.adminNombre ?? "",
-        adminCargo: initialData.adminCargo ?? "",
-        adminTelefono: initialData.adminTelefono ?? "",
-        adminEmail: initialData.adminEmail ?? "",
-        observaciones: initialData.observaciones ?? "",
-        tecNombre: initialData.tecNombre ?? "",
-        tecCargo: initialData.tecCargo ?? "",
-        tecTelefono1: initialData.tecTelefono1 ?? "",
-        tecTelefono2: initialData.tecTelefono2 ?? "",
-        tecEmail: initialData.tecEmail ?? "",
-        nivelAutorizacion: initialData.nivelAutorizacion ?? "",
+        observacionesGenerales: initialData.observacionesGenerales ?? "",
+        contactosAdmin: initialData.contactosAdmin ?? [{ nombre: "", cargo: "", telefono: "", email: "" }],
+        autorizacionFacturacion: initialData.autorizacionFacturacion ?? false,
+        contactosTecnicos: initialData.contactosTecnicos ?? [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "" }],
       }));
     }
     if (!isOpen) {
       setFormData({
         nombre: "",
         ruc: "",
+        codigoCliente: "",
         direccionFiscal: "",
         direccionOperativa: "",
         ciudad: "",
@@ -203,17 +260,10 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
         sector: "",
         paginaWeb: "",
         estadoContrato: "activo",
-        adminNombre: "",
-        adminCargo: "",
-        adminTelefono: "",
-        adminEmail: "",
-        observaciones: "",
-        tecNombre: "",
-        tecCargo: "",
-        tecTelefono1: "",
-        tecTelefono2: "",
-        tecEmail: "",
-        nivelAutorizacion: "",
+        observacionesGenerales: "",
+        contactosAdmin: [{ nombre: "", cargo: "", telefono: "", email: "" }],
+        autorizacionFacturacion: false,
+        contactosTecnicos: [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "" }],
       });
     }
   }, [initialData, empresaId, isOpen]);
@@ -276,6 +326,21 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Código interno de cliente
+                  </label>
+                  <input
+                    type="text"
+                    name="codigoCliente"
+                    value={formData.codigoCliente}
+                    readOnly
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm font-mono"
+                    placeholder="Se genera automáticamente"
+                  />
+                  {loadingCodigo && <p className="text-xs text-gray-500 mt-1">Generando código...</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Dirección fiscal
                   </label>
                   <input
@@ -304,7 +369,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Ciudad / Provincia *
+                    Ciudad *
                   </label>
                   <input
                     type="text"
@@ -333,7 +398,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Sector empresarial (opcional - ITIL: Gestión del Catálogo)
+                    Sector empresarial (opcional)
                   </label>
                   <input
                     type="text"
@@ -375,183 +440,236 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
                     <option value="no_renovado">No renovado</option>
                   </select>
                 </div>
-              </div>
-            </div>
-
-            {/* Sección: Contactos Administrativos */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                Contactos administrativos
-              </h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Para temas comerciales y facturación
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nombre completo
-                  </label>
-                  <input
-                    type="text"
-                    name="adminNombre"
-                    value={formData.adminNombre}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Nombre completo"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Cargo
-                  </label>
-                  <input
-                    type="text"
-                    name="adminCargo"
-                    value={formData.adminCargo}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ej: Gerente de Finanzas"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Teléfono
-                  </label>
-                  <input
-                    type="tel"
-                    name="adminTelefono"
-                    value={formData.adminTelefono}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ej: 01-2345678"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    name="adminEmail"
-                    value={formData.adminEmail}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="contacto@empresa.com"
-                  />
-                </div>
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Observaciones
+                    Observaciones generales
                   </label>
                   <textarea
-                    name="observaciones"
-                    value={formData.observaciones}
-                    onChange={(e) => setFormData(prev => ({ ...prev, observaciones: e.target.value }))}
+                    name="observacionesGenerales"
+                    value={formData.observacionesGenerales}
+                    onChange={handleChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Observaciones adicionales"
+                    placeholder="Observaciones generales de la empresa"
                     rows={3}
                   />
                 </div>
               </div>
             </div>
 
+            {/* Sección: Contactos Administrativos */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-semibold text-gray-800">Contactos administrativos</h3>
+                <button
+                  type="button"
+                  onClick={addContactoAdmin}
+                  className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                >
+                  + Agregar contacto
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">Para temas comerciales y facturación</p>
+              
+              {formData.contactosAdmin.map((contacto, idx) => (
+                <div key={idx} className="mb-6 p-4 border border-gray-200 rounded-lg">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="font-medium text-gray-700">Contacto administrativo {idx + 1}</h4>
+                    {formData.contactosAdmin.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeContactoAdmin(idx)}
+                        className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                      >
+                        Eliminar
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo</label>
+                      <input
+                        type="text"
+                        value={contacto.nombre}
+                        onChange={(e) => handleContactoAdminChange(idx, 'nombre', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Nombre completo"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
+                      <input
+                        type="text"
+                        value={contacto.cargo}
+                        onChange={(e) => handleContactoAdminChange(idx, 'cargo', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ej: Gerente de Finanzas"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                      <input
+                        type="tel"
+                        value={contacto.telefono}
+                        onChange={(e) => handleContactoAdminChange(idx, 'telefono', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ej: 01-2345678"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                      <input
+                        type="email"
+                        value={contacto.email}
+                        onChange={(e) => handleContactoAdminChange(idx, 'email', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="contacto@empresa.com"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <div className="mb-6 p-4 border border-gray-200 rounded-lg bg-blue-50">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={formData.autorizacionFacturacion}
+                    onChange={(e) => setFormData(prev => ({ ...prev, autorizacionFacturacion: e.target.checked }))}
+                    className="w-4 h-4"
+                  />
+                  Autorización de facturación
+                </label>
+              </div>
+            </div>
+
             {/* Sección: Contactos Técnicos */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                Contactos técnicos
-              </h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Usuarios clave para soporte
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nombre completo
-                  </label>
-                  <input
-                    type="text"
-                    name="tecNombre"
-                    value={formData.tecNombre}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Nombre completo"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Cargo
-                  </label>
-                  <input
-                    type="text"
-                    name="tecCargo"
-                    value={formData.tecCargo}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ej: Jefe de IT"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Teléfono 1
-                  </label>
-                  <input
-                    type="tel"
-                    name="tecTelefono1"
-                    value={formData.tecTelefono1}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ej: 01-2345678"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Teléfono 2
-                  </label>
-                  <input
-                    type="tel"
-                    name="tecTelefono2"
-                    value={formData.tecTelefono2}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ej: 9-87654321"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    name="tecEmail"
-                    value={formData.tecEmail}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="soporte@empresa.com"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nivel de autorización
-                  </label>
-                  <input
-                    type="text"
-                    name="nivelAutorizacion"
-                    value={formData.nivelAutorizacion}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ej: Puede aprobar cambios, solicitar credenciales"
-                  />
-                </div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-semibold text-gray-800">Contactos técnicos</h3>
+                <button
+                  type="button"
+                  onClick={addContactoTecnico}
+                  className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                >
+                  + Agregar contacto
+                </button>
               </div>
+              <p className="text-sm text-gray-600 mb-4">Usuarios clave para soporte</p>
+
+              {formData.contactosTecnicos.map((contacto, idx) => (
+                <div key={idx} className="mb-6 p-4 border border-gray-200 rounded-lg">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="font-medium text-gray-700">Contacto técnico {idx + 1}</h4>
+                    {formData.contactosTecnicos.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeContactoTecnico(idx)}
+                        className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                      >
+                        Eliminar
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo</label>
+                      <input
+                        type="text"
+                        value={contacto.nombre}
+                        onChange={(e) => handleContactoTecnicoChange(idx, 'nombre', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Nombre completo"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
+                      <input
+                        type="text"
+                        value={contacto.cargo}
+                        onChange={(e) => handleContactoTecnicoChange(idx, 'cargo', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ej: Jefe de IT"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono 1</label>
+                      <input
+                        type="tel"
+                        value={contacto.telefono1}
+                        onChange={(e) => handleContactoTecnicoChange(idx, 'telefono1', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ej: 01-2345678"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono 2</label>
+                      <input
+                        type="tel"
+                        value={contacto.telefono2}
+                        onChange={(e) => handleContactoTecnicoChange(idx, 'telefono2', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ej: 9-87654321"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                      <input
+                        type="email"
+                        value={contacto.email}
+                        onChange={(e) => handleContactoTecnicoChange(idx, 'email', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="soporte@empresa.com"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Horario disponible</label>
+                      <input
+                        type="text"
+                        value={contacto.horarioDisponible}
+                        onChange={(e) => handleContactoTecnicoChange(idx, 'horarioDisponible', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ej: Lunes a Viernes 8:00-18:00"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 p-3 border border-gray-200 rounded bg-gray-50 space-y-3">
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={contacto.contactoPrincipal}
+                        onChange={(e) => handleContactoTecnicoChange(idx, 'contactoPrincipal', e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                      Contacto principal de soporte
+                    </label>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={contacto.autorizaCambiosCriticos}
+                        onChange={(e) => handleContactoTecnicoChange(idx, 'autorizaCambiosCriticos', e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                      ¿Autoriza cambios críticos?
+                    </label>
+                  </div>
+
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nivel de autorización</label>
+                    <select
+                      value={contacto.nivelAutorizacion}
+                      onChange={(e) => handleContactoTecnicoChange(idx, 'nivelAutorizacion', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">-- Seleccionar --</option>
+                      <option value="solo_reporta">Solo reporta</option>
+                      <option value="autoriza_intervencion">Autoriza intervención</option>
+                      <option value="autoriza_cambios_mayores">Autoriza cambios mayores</option>
+                    </select>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Botones */}

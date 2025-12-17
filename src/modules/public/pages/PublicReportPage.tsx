@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { fetchPublicAsset, submitPublicReport } from '@/modules/public/services/publicService';
 
@@ -18,11 +18,21 @@ const PublicReportPage: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<string>('');
   const [reporterName, setReporterName] = useState<string>('');
   const [reporterEmail, setReporterEmail] = useState<string>('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string,string>>({});
   const [description, setDescription] = useState('');
   const [operational, setOperational] = useState<string>('Sí');
   const [anydesk, setAnydesk] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraMode, setCameraMode] = useState<'photo'|'video'|null>(null);
+  const [cameraFacing, setCameraFacing] = useState<'environment'|'user'>('environment');
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaRecorderRef = useRef<any>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const [streamInfo, setStreamInfo] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -144,12 +154,172 @@ const PublicReportPage: React.FC = () => {
   const handleDragOver = (ev: React.DragEvent<HTMLDivElement>) => { ev.preventDefault(); ev.stopPropagation(); setDragActive(true); };
   const handleDragLeave = (ev: React.DragEvent<HTMLDivElement>) => { ev.preventDefault(); ev.stopPropagation(); setDragActive(false); };
 
+  // Camera / recording helpers
+  const openCamera = async (mode: 'photo'|'video', facing?: 'environment'|'user') => {
+    setError(null);
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setError('Tu navegador no soporta acceso a la cámara');
+      return;
+    }
+    try {
+      const useFacing = facing ?? cameraFacing ?? 'environment';
+      const baseConstraints: any = { video: { facingMode: useFacing } };
+      if (mode === 'video') baseConstraints.audio = true;
+      let stream: MediaStream | null = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(baseConstraints);
+      } catch (innerErr) {
+        // fallback: try without facingMode (some desktops don't support 'environment')
+        try {
+          const fallback: any = { video: true };
+          if (mode === 'video') fallback.audio = true;
+          stream = await navigator.mediaDevices.getUserMedia(fallback);
+        } catch (ferr) {
+          throw innerErr || ferr;
+        }
+      }
+      if (!stream) throw new Error('No se obtuvo flujo de cámara');
+      mediaStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        try {
+          videoRef.current.muted = true;
+          videoRef.current.playsInline = true as any;
+          videoRef.current.setAttribute('autoplay','');
+          await videoRef.current.play();
+        } catch(playErr) {
+          console.warn('No se pudo iniciar reproducción automática:', playErr);
+        }
+      }
+      // gather some diagnostics
+      try {
+        const tracks = stream.getVideoTracks();
+        const t0 = tracks[0];
+        const settings = t0?.getSettings ? t0.getSettings() : undefined;
+        setStreamInfo(JSON.stringify({ tracks: tracks.length, label: t0?.label ?? null, settings }, null, 2));
+        console.debug('Camera stream info', { tracks: tracks.length, label: t0?.label, settings });
+      } catch (dErr) {
+        setStreamInfo(null);
+      }
+      setCameraMode(mode);
+      setCameraFacing(useFacing);
+      setIsCameraOpen(true);
+    } catch (e: any) {
+      console.error('getUserMedia error', e);
+      setError(e?.message ?? 'No se pudo acceder a la cámara');
+    }
+  };
+
+  const restartCameraWithFacing = async (facing: 'environment'|'user') => {
+    // stop current stream then re-open with new facing
+    try {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(t => t.stop());
+        mediaStreamRef.current = null;
+      }
+    } catch (e) {}
+    // reopen with same mode if present
+    if (cameraMode) await openCamera(cameraMode, facing);
+  };
+
+  const closeCamera = () => {
+    setIsCameraOpen(false);
+    setCameraMode(null);
+    setIsRecording(false);
+    try {
+      if (mediaRecorderRef.current) {
+        try { mediaRecorderRef.current.stop(); } catch(e) {}
+        mediaRecorderRef.current = null;
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(t => t.stop());
+        mediaStreamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      recordedChunksRef.current = [];
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const takePhoto = async () => {
+    if (!videoRef.current || !mediaStreamRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(b => resolve(b), 'image/jpeg', 0.9));
+    if (!blob) return setError('No se pudo capturar la imagen');
+    const file = new File([blob], `foto_${Date.now()}.jpg`, { type: 'image/jpeg' });
+    setFiles(prev => [...prev, file].slice(0, 10));
+    setIsCameraOpen(false);
+    // previews will be created by effect
+    closeCamera();
+  };
+
+  const handleDataAvailable = (e: BlobEvent) => {
+    if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+  };
+
+  const startRecording = () => {
+    if (!mediaStreamRef.current) return setError('No hay cámara abierta');
+    recordedChunksRef.current = [];
+    const options = { mimeType: 'video/webm;codecs=vp8,opus' } as any;
+    let mr: any;
+    try {
+      mr = new MediaRecorder(mediaStreamRef.current, options);
+    } catch (e) {
+      mr = new MediaRecorder(mediaStreamRef.current);
+    }
+    mediaRecorderRef.current = mr;
+    mr.ondataavailable = handleDataAvailable;
+    mr.start();
+    setIsRecording(true);
+  };
+
+  const stopRecording = async () => {
+    const mr = mediaRecorderRef.current;
+    if (!mr) return;
+    return new Promise<void>((resolve) => {
+      mr.onstop = async () => {
+        const blob = new Blob(recordedChunksRef.current, { type: recordedChunksRef.current[0]?.type ?? 'video/webm' });
+        const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+        const file = new File([blob], `video_${Date.now()}.${ext}`, { type: blob.type });
+        setFiles(prev => [...prev, file].slice(0, 10));
+        setIsRecording(false);
+        closeCamera();
+        resolve();
+      };
+      try { mr.stop(); } catch (e) { resolve(); }
+    });
+  };
+
   const onSubmit = async (ev?: React.FormEvent) => {
     if (ev) ev.preventDefault();
     setError(null);
-    if (!asset && !assetIdParam) return setError('Activo no especificado');
-    if (users.length > 0 && !selectedUser) return setError('Selecciona el usuario que reporta');
-    if (users.length === 0 && !reporterName) return setError('Escribe tu nombre para reportar');
+    setFieldErrors({});
+
+    if (!asset && !assetIdParam) {
+      setError('Activo no especificado');
+      return;
+    }
+
+    const errors: Record<string,string> = {};
+    if (users.length > 0 && !selectedUser) errors.selectedUser = 'Selecciona el usuario que reporta';
+    if (users.length === 0 && !reporterName) errors.reporterName = 'Escribe tu nombre para reportar';
+    if (!reporterEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reporterEmail)) errors.reporterEmail = 'Introduce un correo válido';
+    if (!description || !description.trim()) errors.description = 'Describe el problema';
+    if (!anydesk || !anydesk.trim()) errors.anydesk = 'Indica el ID de Anydesk';
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
 
     const fd = new FormData();
     if (token) fd.append('token', token);
@@ -164,9 +334,10 @@ const PublicReportPage: React.FC = () => {
     files.forEach((f,i) => fd.append('attachments', f, f.name));
 
     try {
-      setSubmitting(true); setProgress(0); setReportStatus('enviado');
+      // set status to "enviado" immediately after successful validation
+      setReportStatus('enviado');
+      setSubmitting(true); setProgress(0);
       const res = await submitPublicReport(fd, (p) => {
-        // update progress and set status to 'en-progreso' once upload starts
         setProgress(p);
         if (p > 0) setReportStatus('en-progreso');
       });
@@ -279,13 +450,18 @@ const PublicReportPage: React.FC = () => {
                   <option value="">-- Seleccionar --</option>
                   {users.map(u => <option key={u.value} value={u.value}>{u.nombre}</option>)}
                 </select>
-                <input type="email" value={reporterEmail} onChange={e => setReporterEmail(e.target.value)} placeholder="Correo electrónico" className="mt-3 md:mt-0 md:w-1/2 p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]" />
+                {fieldErrors.selectedUser && <div className="text-sm text-red-600 mt-1">{fieldErrors.selectedUser}</div>}
+                <div className="md:w-1/2">
+                    <input type="email" value={reporterEmail} onChange={e => { setReporterEmail(e.target.value); setFieldErrors(prev => { const c = {...prev}; delete c.reporterEmail; return c; }); }} placeholder="Correo electrónico" className="mt-3 md:mt-0 w-full p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]" />
+                    {fieldErrors.reporterEmail && <div className="text-sm text-red-600 mt-1">{fieldErrors.reporterEmail}</div>}
+                  </div>
               </div>
             ) : (
               <div className="mt-1 flex flex-col md:flex-row md:gap-4">
                 <div className="flex-1">
                   <div className="text-sm text-gray-600 mb-2">No hay usuarios asignados al activo. Escribe tu nombre para reportar.</div>
-                  <input value={reporterName} onChange={e => setReporterName(e.target.value)} placeholder="Tu nombre" className="block w-full p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]" />
+                  <input value={reporterName} onChange={e => { setReporterName(e.target.value); setFieldErrors(prev => { const c = {...prev}; delete c.reporterName; return c; }); }} placeholder="Tu nombre" className="block w-full p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]" />
+                  {fieldErrors.reporterName && <div className="text-sm text-red-600 mt-1">{fieldErrors.reporterName}</div>}
                 </div>
                 <input type="email" value={reporterEmail} onChange={e => setReporterEmail(e.target.value)} placeholder="Correo electrónico (opcional)" className="mt-3 md:mt-0 md:w-1/2 p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]" />
               </div>
@@ -294,11 +470,12 @@ const PublicReportPage: React.FC = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">Describe tu problema</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} className="mt-1 block w-full p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]" />
+              <textarea value={description} onChange={e => { setDescription(e.target.value); setFieldErrors(prev => { const c = {...prev}; delete c.description; return c; }); }} rows={4} className="mt-1 block w-full p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]" />
+              {fieldErrors.description && <div className="text-sm text-red-600 mt-1">{fieldErrors.description}</div>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Adjuntar imágenes o video (jpg/png/mp4, máx 10MB por archivo)</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Adjuntar imágenes o video (jpg/png/mp4, máx 10MB por archivo) o capturar desde tu cámara</label>
             <div
               onDrop={handleDrop}
               onDragOver={handleDragOver}
@@ -312,13 +489,56 @@ const PublicReportPage: React.FC = () => {
                 <div className="text-xs text-slate-400 mt-2">JPG, PNG, MP4 — hasta 10MB por archivo</div>
               </div>
             </div>
+
+            <div className="flex gap-2 mt-3">
+              <button type="button" onClick={() => openCamera('photo')} className="px-3 py-2 bg-white border border-gray-200 rounded shadow-sm text-sm hover:bg-sky-50">📷 Tomar foto</button>
+              <button type="button" onClick={() => openCamera('video')} className="px-3 py-2 bg-white border border-gray-200 rounded shadow-sm text-sm hover:bg-sky-50">🎥 Grabar video</button>
+            </div>
+
             <div className="flex gap-2 mt-3 flex-wrap">
               {previews.map((p,i) => (
                 <div key={i} className="w-28 h-28 border p-1 bg-gray-50 flex items-center justify-center rounded">
-                  {files[i] && files[i].type.startsWith('image') ? <img src={p} className="max-w-full max-h-full rounded" alt="preview" /> : <div className="text-xs">Video</div>}
+                  {files[i] && files[i].type.startsWith('image') ? <img src={p} className="max-w-full max-h-full rounded" alt="preview" /> : <video src={p} className="max-w-full max-h-full rounded" />}
                 </div>
               ))}
             </div>
+
+            {isCameraOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                <div className="bg-white rounded-lg overflow-hidden max-w-3xl w-full">
+                        <div className="p-4 border-b flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="font-medium">{cameraMode === 'photo' ? 'Tomar foto' : 'Grabar video'}</div>
+                            <div className="text-sm text-slate-500">(Cámara: <strong className="text-slate-700">{cameraFacing === 'environment' ? 'Trasera' : 'Frontal'}</strong>)</div>
+                            <div className="flex items-center gap-1 ml-3">
+                              <button type="button" onClick={() => restartCameraWithFacing('environment')} className={`px-2 py-1 rounded text-sm ${cameraFacing==='environment' ? 'bg-sky-100' : 'bg-white border'}`}>Trasera</button>
+                              <button type="button" onClick={() => restartCameraWithFacing('user')} className={`px-2 py-1 rounded text-sm ${cameraFacing==='user' ? 'bg-sky-100' : 'bg-white border'}`}>Frontal</button>
+                            </div>
+                          </div>
+                          <button onClick={closeCamera} className="text-sm text-gray-600">Cerrar</button>
+                        </div>
+                  <div className="p-4 flex flex-col items-center">
+                    <video ref={videoRef} className="w-full max-h-[60vh] bg-black" playsInline muted />
+                    <div className="mt-3 flex items-center gap-3">
+                      {cameraMode === 'photo' ? (
+                        <button onClick={takePhoto} className="px-4 py-2 bg-[#0ea5e9] text-white rounded">Tomar foto</button>
+                      ) : (
+                        <>
+                              {!isRecording ? (
+                                <>
+                                  <button onClick={startRecording} className="px-4 py-2 bg-red-600 text-white rounded">Iniciar grabación</button>
+                                </>
+                              ) : (
+                                <button onClick={stopRecording} className="px-4 py-2 bg-gray-800 text-white rounded">Detener grabación</button>
+                              )}
+                          {isRecording && <div className="ml-2 text-sm text-red-500">● Grabando...</div>}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -332,7 +552,8 @@ const PublicReportPage: React.FC = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">Anydesk</label>
-            <input value={anydesk} onChange={e => setAnydesk(e.target.value)} className="mt-1 block w-full p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]" />
+            <input value={anydesk} onChange={e => { setAnydesk(e.target.value); setFieldErrors(prev => { const c = {...prev}; delete c.anydesk; return c; }); }} className="mt-1 block w-full p-3 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] focus:border-[#0ea5e9]" />
+            {fieldErrors.anydesk && <div className="text-sm text-red-600 mt-1">{fieldErrors.anydesk}</div>}
           </div>
 
           {progress > 0 && submitting && (
@@ -343,7 +564,7 @@ const PublicReportPage: React.FC = () => {
 
           <div className="flex items-center justify-between">
             <div className="text-sm text-red-600">{error}</div>
-            <button type="submit" disabled={submitting} className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-sky-500 hover:scale-[0.995] transform text-white rounded-md shadow-lg focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] transition-transform" onClick={onSubmit}>{submitting ? 'Enviando...' : 'Enviar Ticket'}</button>
+            <button type="submit" disabled={submitting} className="px-5 py-2 bg-linear-to-r from-cyan-500 to-sky-500 hover:scale-[0.995] transform text-white rounded-md shadow-lg focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] transition-transform" onClick={onSubmit}>{submitting ? 'Enviando...' : 'Enviar Ticket'}</button>
           </div>
         </form>
       )}

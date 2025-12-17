@@ -10,6 +10,7 @@ function getToken(): string | null {
 // Crear sede
 export async function createSede(empresaId: string | number, sedeData: {
   nombre: string;
+  codigoInterno?: string;
   direccion: string;
   ciudad?: string;
   provincia?: string;
@@ -20,6 +21,11 @@ export async function createSede(empresaId: string | number, sedeData: {
   telefonoResponsable?: string;
   emailResponsable?: string;
   tipo?: string;
+  horarioAtencion?: string;
+  observaciones?: string;
+  responsables?: Array<{ nombre: string; cargo: string; telefono: string; email: string }>;
+  autorizaIngresoTecnico?: boolean;
+  autorizaMantenimientoFueraHorario?: boolean;
 }) {
   const url = `${API_BASE}/api/empresas/${empresaId}/sedes`;
   
@@ -49,8 +55,9 @@ export async function createSede(empresaId: string | number, sedeData: {
 }
 
 // Obtener sedes de una empresa
-export async function getSedesByEmpresa(empresaId: string | number) {
-  const url = `${API_BASE}/api/empresas/${empresaId}/sedes`;
+export async function getSedesByEmpresa(empresaId: string | number, incluirInactivas?: boolean) {
+  const qs = incluirInactivas ? "?incluirInactivas=true" : "";
+  const url = `${API_BASE}/api/empresas/${empresaId}/sedes${qs}`;
   
   const token = getToken();
   console.log("🔍 Obteniendo sedes de empresa:", url);
@@ -79,6 +86,7 @@ export async function getSedesByEmpresa(empresaId: string | number) {
 // Actualizar sede
 export async function updateSede(empresaId: string | number, sedeId: string | number, sedeData: {
   nombre?: string;
+  codigoInterno?: string;
   direccion?: string;
   ciudad?: string;
   provincia?: string;
@@ -89,6 +97,11 @@ export async function updateSede(empresaId: string | number, sedeId: string | nu
   telefonoResponsable?: string;
   emailResponsable?: string;
   tipo?: string;
+  horarioAtencion?: string;
+  observaciones?: string;
+  responsables?: Array<{ nombre: string; cargo: string; telefono: string; email: string }>;
+  autorizaIngresoTecnico?: boolean;
+  autorizaMantenimientoFueraHorario?: boolean;
 }, motivo?: string) {
   const url = `${API_BASE}/api/empresas/${empresaId}/sedes/${sedeId}`;
   
@@ -120,16 +133,16 @@ export async function updateSede(empresaId: string | number, sedeId: string | nu
 }
 
 // Eliminar sede
-export async function deleteSede(empresaId: string | number, sedeId: string | number, motivo?: string) {
+export async function toggleSedeActivo(empresaId: string | number, sedeId: string | number, activo: boolean, motivo: string) {
   const url = `${API_BASE}/api/empresas/${empresaId}/sedes/${sedeId}`;
   
   const token = getToken();
-  console.log("🗑️ Eliminando sede:", sedeId, motivo ? `(motivo: ${motivo})` : "");
+  console.log("🔁 Toggle sede:", sedeId, "activo:", activo, "motivo:", motivo);
 
-  const body = motivo ? { motivo } : {};
+  const body = { activo, motivo };
 
   const res = await fetch(url, {
-    method: "DELETE",
+    method: "PATCH",
     headers: { 
       "Content-Type": "application/json",
       ...(token && { "Authorization": `Bearer ${token}` })
@@ -142,10 +155,10 @@ export async function deleteSede(empresaId: string | number, sedeId: string | nu
   if (!res.ok) {
     const text = await res.text();
     console.error("❌ Error:", text);
-    throw new Error(`Error deleting sede: ${res.status} ${res.statusText} - ${text}`);
+    throw new Error(`Error toggling sede: ${res.status} ${res.statusText} - ${text}`);
   }
 
   const data = await res.json();
-  console.log("✅ Sede eliminada:", data);
+  console.log("✅ Sede actualizada (activo):", data);
   return data;
 }

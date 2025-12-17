@@ -43,6 +43,8 @@ interface Sede {
   id?: number;
   _id?: string;
   nombre?: string;
+  activo?: boolean;
+  motivo?: string;
   [key: string]: unknown;
 }
 
@@ -68,6 +70,7 @@ const InventarioPage = () => {
   // removed unused local modal state (view handled via `currentView` + `viewItem`)
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [sedeName, setSedeName] = useState<string | null>(null);
+  const [sedeActivo, setSedeActivo] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sedes, setSedes] = useState<Sede[]>([]);
@@ -96,6 +99,8 @@ const InventarioPage = () => {
     asset_id: string;
   }>>([]);
 
+  const isInactiveView = Boolean(sedeId && sedeActivo === false);
+
   useEffect(() => {
     if (!empresaId) return;
 
@@ -104,7 +109,7 @@ const InventarioPage = () => {
       setError(null);
       try {
         // Fetch empresa and sedes first
-        const [empresaData, sedesData] = await Promise.all([getEmpresaById(empresaId), getSedesByEmpresa(empresaId)]);
+        const [empresaData, sedesData] = await Promise.all([getEmpresaById(empresaId), getSedesByEmpresa(empresaId, true)]);
         setEmpresa(empresaData);
         const sedesList = Array.isArray(sedesData) ? sedesData : sedesData?.data ?? [];
         setSedes(sedesList);
@@ -144,7 +149,10 @@ const InventarioPage = () => {
           }
           setItems(itemList);
           const found = sedesList.find((s: Sede) => String(s._id ?? s.id) === String(sedeId));
-          if (found) setSedeName(found.nombre ?? "");
+          if (found) {
+            setSedeName(found.nombre ?? "");
+            setSedeActivo(found.activo ?? null);
+          }
         } else {
           if (!sedesList || sedesList.length === 0) {
             const inventarioData = await getInventarioByEmpresa(empresaId);
@@ -209,8 +217,13 @@ const InventarioPage = () => {
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-gray-900">Gestión de Inventario</h2>
-                    <p className="text-sm text-gray-600">
-                      {empresa?.nombre || "Cargando..."}{sedeName ? ` • ${sedeName}` : ""}
+                    <p className="text-sm text-gray-600 flex items-center gap-2 flex-wrap">
+                      <span>{empresa?.nombre || "Cargando..."}{sedeName ? ` • ${sedeName}` : ""}</span>
+                      {isInactiveView && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-700 border border-gray-300">
+                          Sede inactiva
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -520,13 +533,20 @@ const InventarioPage = () => {
 
             {/* Sedes Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {sedes.map((s, idx) => (
+              {sedes.map((s, idx) => {
+                const isSedeInactive = s.activo === false;
+
+                return (
                 <div 
                   key={s._id ?? s.id ?? idx} 
-                  className="group bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 hover:border-blue-300"
+                  className={`group rounded-xl shadow-md transition-all duration-300 overflow-hidden border ${
+                    isSedeInactive
+                      ? 'bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300'
+                      : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-xl'
+                  }`}
                 >
                   {/* Card Header with Gradient */}
-                  <div className="p-4 border-b border-gray-200 bg-subtle">
+                  <div className={`p-4 border-b border-gray-200 ${isSedeInactive ? 'bg-gray-100' : 'bg-subtle'}`}>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
@@ -536,15 +556,19 @@ const InventarioPage = () => {
                             </svg>
                           </div>
                           <div className="flex-1">
-                            <h4 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
+                            <h4 className={`text-lg font-bold transition-colors ${
+                              isSedeInactive ? 'text-gray-700' : 'text-gray-900 group-hover:text-blue-600'
+                            }`}>
                               {s.nombre ?? "Sin nombre"}
                             </h4>
                             <p className="text-xs text-gray-500">Sede #{idx + 1}</p>
                           </div>
                         </div>
                       </div>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
-                        Activa
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                        isSedeInactive ? 'bg-gray-200 text-gray-700 border-gray-300' : 'bg-green-100 text-green-800 border-green-200'
+                      }`}>
+                        {isSedeInactive ? 'Inactiva' : 'Activa'}
                       </span>
                     </div>
                   </div>
@@ -563,7 +587,11 @@ const InventarioPage = () => {
                     <div className="flex gap-3">
                       <button
                         onClick={() => navigate(`/admin/empresas/${empresaId}/sedes/${s._id ?? s.id}/inventario`)}
-                        className="flex-1 flex items-center justify-center gap-2 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:shadow-lg transform hover:scale-[1.02] transition-all duration-200"
+                        className={`flex-1 flex items-center justify-center gap-2 font-semibold py-3 px-4 rounded-lg transition-all duration-200 ${
+                          isSedeInactive
+                            ? 'bg-gray-200 text-gray-700 border border-gray-300 hover:bg-gray-200 hover:shadow-md'
+                            : 'bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transform hover:scale-[1.02]'
+                        }`}
                       >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
@@ -572,7 +600,9 @@ const InventarioPage = () => {
                       </button>
                       <button
                         onClick={() => navigate(`/admin/empresas/${empresaId}/sedes/${s._id ?? s.id}/etiquetas`)}
-                        className="flex-none inline-flex items-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-sm transition-all text-sm"
+                        className={`flex-none inline-flex items-center gap-2 px-4 py-3 font-medium rounded-lg shadow-sm transition-all text-sm ${
+                          isSedeInactive ? 'bg-gray-200 text-gray-700 border border-gray-300 hover:bg-gray-200' : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                        }`}
                       >
                         📇 Generar Etiquetas
                       </button>
@@ -594,7 +624,8 @@ const InventarioPage = () => {
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
 
             {/* Company-level inventory button */}
@@ -672,15 +703,21 @@ const InventarioPage = () => {
             </div>
           </div>
         ) : currentView === 'main' ? (
-          <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-slate-50 to-gray-50">
+          <div className={`rounded-xl shadow-md overflow-hidden border ${isInactiveView ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'}`}>
+            <div className={`flex justify-between items-center p-6 border-b border-gray-200 ${
+              isInactiveView ? 'bg-gray-100' : 'bg-linear-to-r from-slate-50 to-gray-50'
+            }`}>
               <div>
-                <h3 className="text-xl font-bold text-gray-900">Activos Registrados</h3>
-                <p className="text-sm text-gray-600 mt-1">{items.length} {items.length === 1 ? 'activo encontrado' : 'activos encontrados'}</p>
+                <h3 className={`text-xl font-bold ${isInactiveView ? 'text-gray-800' : 'text-gray-900'}`}>Activos Registrados</h3>
+                <p className={`text-sm mt-1 ${isInactiveView ? 'text-gray-600' : 'text-gray-600'}`}>{items.length} {items.length === 1 ? 'activo encontrado' : 'activos encontrados'}</p>
               </div>
               <button
                 onClick={() => setShowRegisterModal(true)}
-                className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-medium py-2.5 px-5 rounded-lg shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200"
+                className={`flex items-center gap-2 font-medium py-2.5 px-5 rounded-lg shadow-md transition-all duration-200 ${
+                  isInactiveView
+                    ? 'bg-gray-300 text-gray-700 border border-gray-400 hover:bg-gray-300'
+                    : 'bg-linear-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white hover:shadow-lg transform hover:scale-105'
+                }`}
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -690,7 +727,7 @@ const InventarioPage = () => {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full table-auto">
-                <thead className="bg-gradient-to-r from-slate-100 to-gray-100 border-b-2 border-gray-300">
+                <thead className="bg-linear-to-r from-slate-100 to-gray-100 border-b-2 border-gray-300">
                   <tr>
                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">Código</th>
                     <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">Usuario Asignado</th>
@@ -714,12 +751,16 @@ const InventarioPage = () => {
                     <tr 
                       key={item.id ?? item._id ?? idx} 
                       className={`transition-colors duration-150 ${
-                        isTrasladado 
-                          ? 'bg-gray-100 opacity-60' 
-                          : 'hover:bg-slate-50'
+                        isTrasladado
+                          ? 'bg-gray-100 opacity-60'
+                          : isInactiveView
+                            ? 'bg-gray-50'
+                            : 'hover:bg-slate-50'
                       }`}
                     >
-                      <td className={`px-6 py-4 text-sm font-semibold ${isTrasladado ? 'text-gray-400' : 'text-gray-900'}`}>
+                      <td className={`px-6 py-4 text-sm font-semibold ${
+                        isTrasladado ? 'text-gray-400' : isInactiveView ? 'text-gray-800' : 'text-gray-900'
+                      }`}>
                         {formatAssetCode(String(item.assetId ?? item.codigo ?? item._id ?? item.id ?? ""))}
                         {isTrasladado && (
                           <span className="ml-2 inline-flex items-center px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-600 rounded">
@@ -727,7 +768,9 @@ const InventarioPage = () => {
                           </span>
                         )}
                       </td>
-                      <td className={`px-6 py-4 text-sm ${isTrasladado ? 'text-gray-400' : 'text-gray-700'}`}>
+                      <td className={`px-6 py-4 text-sm ${
+                        isTrasladado ? 'text-gray-400' : isInactiveView ? 'text-gray-700' : 'text-gray-700'
+                      }`}>
                       {(() => {
                         const usuarios = item.usuariosAsignados || item.usuario_asignado;
                         const usuariosArray = Array.isArray(usuarios) ? usuarios : 
@@ -745,7 +788,7 @@ const InventarioPage = () => {
                           <div className="flex items-center gap-2">
                             <span>{usuariosArray[0].nombre || '-'}</span>
                             <span className={`inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white rounded-full shadow-sm ${
-                              isTrasladado ? 'bg-gray-400' : 'bg-gradient-to-br from-blue-500 to-blue-600'
+                              isTrasladado ? 'bg-gray-400' : 'bg-linear-to-br from-blue-500 to-blue-600'
                             }`}>
                               +{usuariosArray.length - 1}
                             </span>
@@ -753,21 +796,27 @@ const InventarioPage = () => {
                         );
                       })()}
                       </td>
-                      <td className={`px-6 py-4 text-sm ${isTrasladado ? 'text-gray-400' : 'text-gray-700'}`}>
+                      <td className={`px-6 py-4 text-sm ${
+                        isTrasladado ? 'text-gray-400' : isInactiveView ? 'text-gray-700' : 'text-gray-700'
+                      }`}>
                         {String(item.categoria ?? '-')}
                       </td>
-                      <td className={`px-6 py-4 text-sm ${isTrasladado ? 'text-gray-400' : 'text-gray-700'}`}>
+                      <td className={`px-6 py-4 text-sm ${
+                        isTrasladado ? 'text-gray-400' : isInactiveView ? 'text-gray-700' : 'text-gray-700'
+                      }`}>
                         {String(item.area ?? '-')}
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${
                           isTrasladado
                             ? 'bg-gray-200 text-gray-500 border border-gray-300'
-                            : item.estadoActivo === 'activo' 
-                              ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border border-green-200' 
-                              : (item.estadoActivo === 'inactivo' || item.estadoActivo === 'mantenimiento')
-                                ? 'bg-gradient-to-r from-yellow-100 to-amber-100 text-yellow-800 border border-yellow-200' 
-                                : 'bg-gradient-to-r from-red-100 to-rose-100 text-red-800 border border-red-200'
+                            : isInactiveView
+                              ? 'bg-gray-200 text-gray-700 border border-gray-300'
+                              : item.estadoActivo === 'activo' 
+                                ? 'bg-linear-to-r from-green-100 to-emerald-100 text-green-800 border border-green-200'
+                                : (item.estadoActivo === 'inactivo' || item.estadoActivo === 'mantenimiento')
+                                  ? 'bg-linear-to-r from-yellow-100 to-amber-100 text-yellow-800 border border-yellow-200'
+                                  : 'bg-linear-to-r from-red-100 to-rose-100 text-red-800 border border-red-200'
                         }`}>
                           {String(item.estadoActivo ?? '-').replace(/_/g, ' ').toUpperCase()}
                         </span>
@@ -799,7 +848,11 @@ const InventarioPage = () => {
                                 setViewItem(item); 
                                 setCurrentView('viewAsset'); 
                               }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-800 font-medium rounded-lg border border-blue-200 hover:border-blue-300 transition-all duration-200"
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 font-medium rounded-lg border transition-all duration-200 ${
+                                  isInactiveView
+                                    ? 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 hover:text-gray-800'
+                                    : 'bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-800 border-blue-200 hover:border-blue-300'
+                                }`}
                               title="Ver detalles"
                             >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -813,7 +866,11 @@ const InventarioPage = () => {
                                 setAssetToTransfer(item);
                                 setShowTrasladarModal(true);
                               }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 font-medium rounded-lg border border-indigo-200 hover:border-indigo-300 transition-all duration-200"
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 font-medium rounded-lg border transition-all duration-200 ${
+                                isInactiveView
+                                  ? 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 hover:text-gray-800'
+                                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 border-indigo-200 hover:border-indigo-300'
+                              }`}
                               title="Trasladar activo"
                             >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -884,7 +941,7 @@ const InventarioPage = () => {
       {currentView === 'viewAsset' && viewItem && (
         <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
           {/* Header */}
-          <div className="bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 text-white p-8">
+          <div className="bg-linear-to-r from-slate-800 via-slate-700 to-slate-600 text-white p-8">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <button
@@ -896,7 +953,7 @@ const InventarioPage = () => {
                   </svg>
                 </button>
                 <div className="flex items-center gap-4">
-                  <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-4 rounded-xl shadow-lg">
+                  <div className="bg-linear-to-br from-blue-500 to-indigo-600 p-4 rounded-xl shadow-lg">
                     <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
@@ -994,12 +1051,12 @@ const InventarioPage = () => {
             </div>
           </div>
 
-            <div className="p-8 space-y-6 bg-gradient-to-br from-gray-50 to-slate-50">
+            <div className="p-8 space-y-6 bg-linear-to-br from-gray-50 to-slate-50">
               {/* Información Básica */}
               <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-blue-100">
+                <div className="bg-linear-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-blue-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                    <div className="w-10 h-10 bg-linear-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
                       <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
@@ -1009,27 +1066,27 @@ const InventarioPage = () => {
                 </div>
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                    <div className="bg-linear-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Código</p>
                       <p className="font-bold text-lg text-gray-900">{formatAssetCode(String(viewItem.assetId ?? viewItem.codigo ?? ""))}</p>
                     </div>
-                    <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                    <div className="bg-linear-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Categoría</p>
                       <p className="font-bold text-lg text-gray-900">{String(viewItem.categoria ?? '-')}</p>
                     </div>
-                    <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                    <div className="bg-linear-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Área</p>
                       <p className="font-bold text-lg text-gray-900">{String(viewItem.area ?? '-')}</p>
                     </div>
-                    <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                    <div className="bg-linear-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Fabricante</p>
                       <p className="font-bold text-lg text-gray-900">{String(viewItem.fabricante ?? '-')}</p>
                     </div>
-                    <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                    <div className="bg-linear-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Modelo</p>
                       <p className="font-bold text-lg text-gray-900">{String(viewItem.modelo ?? '-')}</p>
                     </div>
-                    <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                    <div className="bg-linear-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Serie</p>
                       <p className="font-bold text-lg text-gray-900">{String(viewItem.serie ?? '-')}</p>
                     </div>
@@ -1039,9 +1096,9 @@ const InventarioPage = () => {
 
               {/* Estados */}
               <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
-                <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-6 py-4 border-b border-green-100">
+                <div className="bg-linear-to-r from-green-50 to-emerald-50 px-6 py-4 border-b border-green-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
+                    <div className="w-10 h-10 bg-linear-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
                       <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
@@ -1051,22 +1108,22 @@ const InventarioPage = () => {
                 </div>
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-5 rounded-lg border border-gray-200">
+                    <div className="bg-linear-to-br from-gray-50 to-slate-50 p-5 rounded-lg border border-gray-200">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Estado Activo</p>
                       <span className={`inline-flex items-center px-4 py-2 rounded-lg text-base font-bold shadow-sm ${
-                        viewItem.estadoActivo === 'activo' ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border-2 border-green-300' : 
-                        (viewItem.estadoActivo === 'inactivo' || viewItem.estadoActivo === 'mantenimiento') ? 'bg-gradient-to-r from-yellow-100 to-amber-100 text-yellow-800 border-2 border-yellow-300' : 
-                        'bg-gradient-to-r from-red-100 to-rose-100 text-red-800 border-2 border-red-300'
+                        viewItem.estadoActivo === 'activo' ? 'bg-linear-to-r from-green-100 to-emerald-100 text-green-800 border-2 border-green-300' : 
+                        (viewItem.estadoActivo === 'inactivo' || viewItem.estadoActivo === 'mantenimiento') ? 'bg-linear-to-r from-yellow-100 to-amber-100 text-yellow-800 border-2 border-yellow-300' : 
+                        'bg-linear-to-r from-red-100 to-rose-100 text-red-800 border-2 border-red-300'
                       }`}>
                         {String(viewItem.estadoActivo ?? '-').replace(/_/g, ' ').toUpperCase()}
                       </span>
                     </div>
-                    <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-5 rounded-lg border border-gray-200">
+                    <div className="bg-linear-to-br from-gray-50 to-slate-50 p-5 rounded-lg border border-gray-200">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Estado Operativo</p>
                       <span className={`inline-flex items-center px-4 py-2 rounded-lg text-base font-bold shadow-sm ${
-                        viewItem.estadoOperativo === 'operativo' ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border-2 border-green-300' : 
-                        viewItem.estadoOperativo === 'mantenimiento' ? 'bg-gradient-to-r from-yellow-100 to-amber-100 text-yellow-800 border-2 border-yellow-300' : 
-                        'bg-gradient-to-r from-red-100 to-rose-100 text-red-800 border-2 border-red-300'
+                        viewItem.estadoOperativo === 'operativo' ? 'bg-linear-to-r from-green-100 to-emerald-100 text-green-800 border-2 border-green-300' : 
+                        viewItem.estadoOperativo === 'mantenimiento' ? 'bg-linear-to-r from-yellow-100 to-amber-100 text-yellow-800 border-2 border-yellow-300' : 
+                        'bg-linear-to-r from-red-100 to-rose-100 text-red-800 border-2 border-red-300'
                       }`}>
                         {String(viewItem.estadoOperativo ?? '-').replace(/_/g, ' ').toUpperCase()}
                       </span>
@@ -1082,9 +1139,9 @@ const InventarioPage = () => {
                                      typeof usuarios === 'string' ? JSON.parse(usuarios || '[]') : [];
                 return usuariosArray.length > 0 ? (
                   <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
-                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 px-6 py-4 border-b border-purple-100">
+                    <div className="bg-linear-to-r from-purple-50 to-pink-50 px-6 py-4 border-b border-purple-100">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                        <div className="w-10 h-10 bg-linear-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
                           <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                           </svg>
@@ -1095,7 +1152,7 @@ const InventarioPage = () => {
                     <div className="p-6">
                       <div className="space-y-4">
                         {usuariosArray.map((usuario: UsuarioItem, idx: number) => (
-                          <div key={idx} className="bg-gradient-to-br from-purple-50 to-pink-50 p-5 rounded-lg border-2 border-purple-200 hover:shadow-md transition-shadow">
+                          <div key={idx} className="bg-linear-to-br from-purple-50 to-pink-50 p-5 rounded-lg border-2 border-purple-200 hover:shadow-md transition-shadow">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                               <div>
                                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Nombre</p>
@@ -1120,9 +1177,9 @@ const InventarioPage = () => {
 
               {/* Información Adicional */}
               <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
-                <div className="bg-gradient-to-r from-orange-50 to-amber-50 px-6 py-4 border-b border-orange-100">
+                <div className="bg-linear-to-r from-orange-50 to-amber-50 px-6 py-4 border-b border-orange-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-lg flex items-center justify-center">
+                    <div className="w-10 h-10 bg-linear-to-br from-orange-500 to-amber-600 rounded-lg flex items-center justify-center">
                       <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                       </svg>
@@ -1145,13 +1202,13 @@ const InventarioPage = () => {
                       </div>
                     )}
                     {String(viewItem.numeroDocumentoCompra ?? viewItem.numero_documento_compra ?? viewItem.numero_documento ?? '') !== '' && (
-                      <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                      <div className="bg-linear-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Número de documento</p>
                         <p className="font-bold text-gray-900">{String(viewItem.numeroDocumentoCompra ?? viewItem.numero_documento_compra ?? viewItem.numero_documento)}</p>
                       </div>
                     )}
                     {String(viewItem.fechaCompra ?? '') !== '' && (
-                      <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                      <div className="bg-linear-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Fecha de Compra</p>
                         <p className="font-bold text-gray-900">
                           {new Date(String(viewItem.fechaCompra)).toLocaleDateString('es-ES', { 
@@ -1171,7 +1228,7 @@ const InventarioPage = () => {
 
                       {/* Documento de compra */}
                       {String(viewItem.purchaseDocumentUrl ?? viewItem.purchase_document_url ?? viewItem.purchaseDocument ?? viewItem.purchase_document ?? '') !== '' && (
-                        <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                        <div className="bg-linear-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Documento de compra</p>
                           <p className="font-bold text-gray-900">{String(viewItem.purchaseDocumentName ?? viewItem.purchase_document_name ?? viewItem.purchaseDocument ?? viewItem.purchase_document ?? '').split('/').pop()}</p>
                           <div className="mt-2">
@@ -1342,13 +1399,13 @@ const InventarioPage = () => {
                     }
                     {/* Duración de Garantía: eliminado porque ya existe el campo 'Garantía' */}
                     {String(viewItem.ip ?? '') !== '' && (
-                      <div className="bg-gradient-to-br from-cyan-50 to-blue-50 p-4 rounded-lg border border-cyan-200 hover:shadow-md transition-shadow">
+                      <div className="bg-linear-to-br from-cyan-50 to-blue-50 p-4 rounded-lg border border-cyan-200 hover:shadow-md transition-shadow">
                         <p className="text-xs font-semibold text-cyan-600 uppercase tracking-wide mb-2">Dirección IP</p>
                         <p className="font-bold text-gray-900 font-mono text-lg">{String(viewItem.ip)}</p>
                       </div>
                     )}
                     {String(viewItem.mac ?? '') !== '' && (
-                      <div className="bg-gradient-to-br from-violet-50 to-purple-50 p-4 rounded-lg border border-violet-200 hover:shadow-md transition-shadow">
+                      <div className="bg-linear-to-br from-violet-50 to-purple-50 p-4 rounded-lg border border-violet-200 hover:shadow-md transition-shadow">
                         <p className="text-xs font-semibold text-violet-600 uppercase tracking-wide mb-2">MAC Address</p>
                         <p className="font-bold text-gray-900 font-mono text-lg">{String(viewItem.mac)}</p>
                       </div>
@@ -1387,9 +1444,9 @@ const InventarioPage = () => {
 
                 return Object.keys(simpleCampos).length > 0 ? (
                   <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
-                    <div className="bg-gradient-to-r from-yellow-50 to-amber-50 px-6 py-4 border-b border-yellow-100">
+                    <div className="bg-linear-to-r from-yellow-50 to-amber-50 px-6 py-4 border-b border-yellow-100">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-yellow-500 to-amber-600 rounded-lg flex items-center justify-center">
+                        <div className="w-10 h-10 bg-linear-to-br from-yellow-500 to-amber-600 rounded-lg flex items-center justify-center">
                           <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
                           </svg>
@@ -1400,7 +1457,7 @@ const InventarioPage = () => {
                     <div className="p-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {Object.entries(simpleCampos).map(([key, value]) => (
-                          <div key={key} className="bg-gradient-to-br from-yellow-50 to-amber-50 p-4 rounded-lg border-2 border-yellow-200 hover:shadow-md transition-shadow">
+                          <div key={key} className="bg-linear-to-br from-yellow-50 to-amber-50 p-4 rounded-lg border-2 border-yellow-200 hover:shadow-md transition-shadow">
                             <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-2">{key}</p>
                             <p className="font-bold text-gray-900">{String(value)}</p>
                           </div>
@@ -1451,9 +1508,9 @@ const InventarioPage = () => {
                 // Finalmente, renderizamos si hay al menos una entrada
                 return campos && Object.keys(campos).length > 0 ? (
                 <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
-                  <div className="bg-gradient-to-r from-blue-50 to-cyan-50 px-6 py-4 border-b border-blue-100">
+                  <div className="bg-linear-to-r from-blue-50 to-cyan-50 px-6 py-4 border-b border-blue-100">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
+                      <div className="w-10 h-10 bg-linear-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
                         <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                         </svg>
@@ -1465,7 +1522,7 @@ const InventarioPage = () => {
                     {Object.entries(campos).map(([key, items]) => (
                       <div key={key} className="mb-6 last:mb-0">
                         <div className="flex items-center gap-2 mb-3">
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
+                          <div className="w-8 h-8 bg-linear-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
                             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                             </svg>
@@ -1474,7 +1531,7 @@ const InventarioPage = () => {
                         </div>
                         <div className="space-y-3">
                           {(items as Array<Record<string, string>>).map((item, idx) => (
-                            <div key={idx} className="bg-gradient-to-br from-blue-50 to-cyan-50 p-4 rounded-lg border-2 border-blue-200 hover:shadow-md transition-shadow">
+                            <div key={idx} className="bg-linear-to-br from-blue-50 to-cyan-50 p-4 rounded-lg border-2 border-blue-200 hover:shadow-md transition-shadow">
                               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 {Object.entries(item).map(([subKey, subValue]) => (
                                   <div key={subKey}>
@@ -1496,9 +1553,9 @@ const InventarioPage = () => {
               {/* Observaciones */}
               {String(viewItem.observaciones ?? '') !== '' && (
                 <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
-                  <div className="bg-gradient-to-r from-gray-50 to-slate-50 px-6 py-4 border-b border-gray-200">
+                  <div className="bg-linear-to-r from-gray-50 to-slate-50 px-6 py-4 border-b border-gray-200">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-gray-600 to-slate-700 rounded-lg flex items-center justify-center">
+                      <div className="w-10 h-10 bg-linear-to-br from-gray-600 to-slate-700 rounded-lg flex items-center justify-center">
                         <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
@@ -1507,7 +1564,7 @@ const InventarioPage = () => {
                     </div>
                   </div>
                   <div className="p-6">
-                    <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-5 rounded-lg border-2 border-gray-200">
+                    <div className="bg-linear-to-br from-gray-50 to-slate-50 p-5 rounded-lg border-2 border-gray-200">
                       <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{String(viewItem.observaciones)}</p>
                     </div>
                   </div>
@@ -1554,9 +1611,9 @@ const InventarioPage = () => {
                 
                 return fotosArray.length > 0 ? (
                   <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
-                    <div className="bg-gradient-to-r from-pink-50 to-rose-50 px-6 py-4 border-b border-pink-100">
+                    <div className="bg-linear-to-r from-pink-50 to-rose-50 px-6 py-4 border-b border-pink-100">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-600 rounded-lg flex items-center justify-center">
+                        <div className="w-10 h-10 bg-linear-to-br from-pink-500 to-rose-600 rounded-lg flex items-center justify-center">
                           <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
@@ -1570,7 +1627,7 @@ const InventarioPage = () => {
                         <div key={idx} className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden hover:shadow-xl hover:scale-105 transition-all duration-300">
                           {/* Preview de la imagen */}
                           {foto.url && (
-                            <div className="relative h-48 bg-gradient-to-br from-gray-100 to-slate-200 overflow-hidden">
+                            <div className="relative h-48 bg-linear-to-br from-gray-100 to-slate-200 overflow-hidden">
                               <img 
                                 src={foto.url} 
                                 alt={foto.description || foto.name}
@@ -1586,9 +1643,9 @@ const InventarioPage = () => {
                             </div>
                           )}
                           
-                          <div className="p-4 bg-gradient-to-br from-gray-50 to-slate-50">
+                          <div className="p-4 bg-linear-to-br from-gray-50 to-slate-50">
                             <div className="flex items-center gap-2 mb-2">
-                              <svg className="w-4 h-4 text-pink-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-4 h-4 text-pink-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
                               <p className="text-xs font-bold text-gray-900 truncate">{foto.name}</p>
@@ -1600,7 +1657,7 @@ const InventarioPage = () => {
                               href={foto.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white text-xs font-bold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
+                              className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-linear-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white text-xs font-bold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
                             >
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -1620,7 +1677,7 @@ const InventarioPage = () => {
               <div className="mt-6">
                 <button
                   onClick={() => setShowSupportReportModal(true)}
-                  className="w-full text-left flex items-center justify-center gap-3 px-4 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-semibold rounded-lg shadow-md"
+                  className="w-full text-left flex items-center justify-center gap-3 px-4 py-3 bg-linear-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-semibold rounded-lg shadow-md"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 0v4m0-4h4m-4 0H8" />
@@ -1637,7 +1694,7 @@ const InventarioPage = () => {
       {currentView === 'historialAsset' && viewItem && (
         <div className="bg-white rounded-lg shadow">
           {/* Header */}
-          <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-6">
+          <div className="bg-linear-to-r from-purple-600 to-purple-700 text-white p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <button
@@ -1871,7 +1928,7 @@ const InventarioPage = () => {
         <div className="space-y-4">
           {/* Header Section - Diseño Corporativo */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <div className="border-l-4 border-purple-600 bg-gradient-to-r from-slate-50 to-gray-50 p-6">
+            <div className="border-l-4 border-purple-600 bg-linear-to-r from-slate-50 to-gray-50 p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <button
@@ -1883,7 +1940,7 @@ const InventarioPage = () => {
                     </svg>
                   </button>
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center shadow-md">
+                    <div className="w-12 h-12 bg-linear-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center shadow-md">
                       <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                       </svg>

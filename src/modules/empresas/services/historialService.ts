@@ -15,6 +15,17 @@ export interface HistorialEntry {
   userName?: string;
   accion?: string;
   tipo?: string;
+  destino?: string;
+  sedeId?: string | number;
+  [key: string]: unknown;
+}
+
+export interface HistorialCreatePayload {
+  accion: string;
+  motivo?: string;
+  tipo?: string;
+  destino?: string;
+  sedeId?: string | number;
   [key: string]: unknown;
 }
 
@@ -43,4 +54,32 @@ export async function getHistorialEmpresa(empresaId: string | number): Promise<H
   const data = await res.json();
   console.log("✅ Historial obtenido:", data);
   return Array.isArray(data) ? data : data.data || [];
+}
+
+export async function addHistorialEmpresa(empresaId: string | number, payload: HistorialCreatePayload): Promise<HistorialEntry | null> {
+  const url = `${API_BASE}/api/empresas/${empresaId}/historial`;
+  const token = getToken();
+
+  console.log("📝 Registrando historial de empresa:", url, payload);
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token && { "Authorization": `Bearer ${token}` }),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  console.log("📊 Respuesta historial status:", res.status);
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("❌ Error al registrar historial:", text);
+    return null;
+  }
+
+  const data = await res.json();
+  console.log("✅ Historial registrado:", data);
+  return (data as { data?: HistorialEntry }).data ?? (data as HistorialEntry);
 }

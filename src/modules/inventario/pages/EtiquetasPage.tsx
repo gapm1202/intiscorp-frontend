@@ -159,7 +159,7 @@ const EtiquetasPage = () => {
       }
 
       // Build public URL that the QR will point to. The backend expects a token parameter.
-      const FRONTEND_BASE = (import.meta.env.VITE_FRONTEND_URL as string) || 'http://localhost:5174';
+      const FRONTEND_BASE = (import.meta.env.VITE_FRONTEND_URL as string) || 'http://localhost:5173';
       const publicUrl = token
         ? `${FRONTEND_BASE}/public/activos?token=${encodeURIComponent(token)}`
         : `${FRONTEND_BASE}/public/activos`;

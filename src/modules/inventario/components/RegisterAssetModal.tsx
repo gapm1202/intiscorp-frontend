@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getWarrantyInfo } from "@/modules/inventario/utils/warranty";
-import { formatAssetCode } from "@/utils/helpers";
+import { formatAssetCode, getCompanyPrefix, getCategoryPrefix } from "@/utils/helpers";
 import type { Category } from "@/modules/inventario/services/categoriasService";
 import { createActivo, updateActivo } from "@/modules/inventario/services/inventarioService";
 
@@ -984,8 +984,13 @@ const RegisterAssetModal = ({
               <input value={serie} onChange={e => setSerie(e.target.value)} className="w-full mt-1 p-2 border rounded text-sm" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600">Código (preview)</label>
-              <input value={categoria ? `Se generará: ${categoria === 'Laptop' ? 'LPT' : categoria === 'PC' ? 'PC' : categoria === 'Servidor' ? 'SRV' : categoria.substring(0,3).toUpperCase()}-XXX` : ''} readOnly className="w-full mt-1 p-2 border rounded bg-gray-50 text-sm italic text-gray-500" />
+              <label className="block text-xs font-semibold text-gray-600">Código</label>
+              <input
+                value={categoria ? `${getCompanyPrefix(empresaNombre ?? empresa?.nombre ?? String(empresaId ?? ''))}-${getCategoryPrefix(categoria)}XXXX` : ''}
+                readOnly
+                className="w-full mt-1 p-2 border rounded bg-gray-50 text-sm italic text-gray-500"
+                placeholder="Se asignará automáticamente"
+              />
             </div>
           </section>
 

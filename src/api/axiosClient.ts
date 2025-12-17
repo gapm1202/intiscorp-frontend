@@ -24,11 +24,16 @@ axiosClient.interceptors.request.use(
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Si recibimos 401, limpiar token y redirigir a login
+    const status = error.response?.status;
+    const requestUrl: string = error.config?.url ?? "";
+    const isLoginRequest = requestUrl.includes("/api/auth/login");
+
+    // Solo forzamos logout/redirección en 401 que no sea del login
+    if (status === 401 && !isLoginRequest) {
       localStorage.clear();
-      window.location.href = '/login';
+      window.location.href = "/login";
     }
+
     return Promise.reject(error);
   }
 );
