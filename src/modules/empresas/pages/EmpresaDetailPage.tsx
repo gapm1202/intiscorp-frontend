@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getEmpresaById } from "@/modules/empresas/services/empresasService";
 import { getSedesByEmpresa, toggleSedeActivo } from "@/modules/empresas/services/sedesService";
@@ -6,6 +7,47 @@ import { getContratoActivo, createContrato, updateContratoDatos, updateContratoS
 import CreateSedeModal from "@/modules/empresas/components/CreateSedeModal";
 import CreateEmpresaModal from "@/modules/empresas/components/CreateEmpresaModal";
 import DeleteSedeModal from "./../components/DeleteSedeModal";
+import { AlcanceSLAForm } from "@/modules/sla/components/AlcanceSLAForm";
+import { GestionIncidentesForm } from "@/modules/sla/components/GestionIncidentesForm";
+import { GestionTiemposForm } from "@/modules/sla/components/GestionTiemposForm";
+import { GestionRequisitosForm } from "@/modules/sla/components/GestionRequisitosForm";
+import { GestionHorariosForm } from "@/modules/sla/components/GestionHorariosForm";
+import { GestionExclusionesForm } from "@/modules/sla/components/GestionExclusionesForm";
+import { GestionAlertasForm } from "@/modules/sla/components/GestionAlertasForm";
+import { slaService } from "@/modules/sla/services/slaService";
+import { useNavGuard } from "@/context/NavGuardContext";
+
+const SLA_SECCIONES: Array<keyof typeof INITIAL_SLA_MODES> = ['alcance', 'incidentes', 'tiempos', 'horarios', 'requisitos', 'exclusiones', 'alertas'];
+const SLA_CONFIG_KEY: Record<string, string> = {
+  alcance: 'alcance',
+  incidentes: 'gestion_incidentes',
+  tiempos: 'tiempos',
+  horarios: 'horarios',
+  requisitos: 'requisitos',
+  exclusiones: 'exclusiones',
+  alertas: 'alertas',
+};
+
+const INITIAL_SLA_MODES = {
+  alcance: true,
+  incidentes: true,
+  tiempos: true,
+  horarios: true,
+  requisitos: true,
+  exclusiones: true,
+  alertas: true,
+};
+
+// Para detectar cuando se hizo clic en "Editar" sobre una sección ya guardada
+const INITIAL_SLA_IS_EDITING = {
+  alcance: false,
+  incidentes: false,
+  tiempos: false,
+  horarios: false,
+  requisitos: false,
+  exclusiones: false,
+  alertas: false,
+};
 
 interface Sede {
   id?: number;
@@ -77,6 +119,15 @@ interface Empresa {
   [key: string]: unknown;
 }
 
+interface HistorialSLAItem {
+  campo: string;
+  valorAnterior: string;
+  valorNuevo: string;
+  usuario: string;
+  fecha: string;
+  motivo: string;
+}
+
 const EmpresaDetailPage = () => {
   const { empresaId } = useParams<{ empresaId: string }>();
   const navigate = useNavigate();
@@ -89,7 +140,13 @@ const EmpresaDetailPage = () => {
   const [showEditEmpresaModal, setShowEditEmpresaModal] = useState(false);
   const [sedeToDelete, setSedeToDelete] = useState<Sede | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'sedes' | 'contactos' | 'contrato' | 'sla' | 'mantenimientos' | 'historial'>('general');
+  // Restaurar activeTab desde sessionStorage para mantener la pestaña después de reload
+  const [activeTab, setActiveTab] = useState<'general' | 'sedes' | 'contactos' | 'contrato' | 'sla' | 'mantenimientos' | 'historial'>(
+    () => {
+      const saved = sessionStorage.getItem(`empresaTab_${empresaId}`);
+      return (saved as any) || 'general';
+    }
+  );
   
   // Estados de contrato
   const [contractId, setContractId] = useState<string | null>(null);
@@ -100,6 +157,22 @@ const EmpresaDetailPage = () => {
   const [savingContrato, setSavingContrato] = useState(false);
   const [contratoSuccess, setContratoSuccess] = useState<string | null>(null);
   const [savingContratoTotal, setSavingContratoTotal] = useState(false);
+
+  // SLA UI states
+  const [slaEditModes, setSlaEditModes] = useState({ ...INITIAL_SLA_MODES });
+  const [slaIsEditing, setSlaIsEditing] = useState({ ...INITIAL_SLA_IS_EDITING }); // Track si dio clic en "Editar"
+  const [historialSLA, setHistorialSLA] = useState<HistorialSLAItem[]>([]);
+  const [slaConfiguracion, setSlaConfiguracion] = useState<any>(null);
+  
+  // Normaliza la configuración SLA para asegurar claves esperadas
+  const normalizeSLAConfig = (cfg: any) => {
+    if (!cfg) return null;
+    return {
+      ...cfg,
+      // Algunos backends podrían devolver 'incidentes' en lugar de 'gestion_incidentes'
+      gestion_incidentes: cfg?.gestion_incidentes ?? cfg?.incidentes ?? cfg?.gestionIncidentes ?? null,
+    };
+  };
   
   // Estados para modal de documentos
   const [showDocumentosModal, setShowDocumentosModal] = useState(false);
@@ -109,6 +182,20 @@ const EmpresaDetailPage = () => {
   const [showMotivoModal, setShowMotivoModal] = useState(false);
   const [motivoInput, setMotivoInput] = useState('');
   const [motivoCallback, setMotivoCallback] = useState<((motivo: string) => void) | null>(null);
+  
+  // Estados para toast notification
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
+
+  // Confirmación de salida sin guardar en SLA
+  const [showUnsavedConfirmModal, setShowUnsavedConfirmModal] = useState(false);
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
+  const [slaLoading, setSlaLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false); // Distinguir entre refrescar vs cambiar tab
+  
+
   
   // Estados para modo edición/visualización de cada sección
   // Por defecto, mostrar formularios para que el usuario pueda rellenarlos y guardar.
@@ -264,7 +351,71 @@ const EmpresaDetailPage = () => {
     fetchEmpresa();
   }, [empresaId]);
 
+  // Guardar activeTab en sessionStorage para restaurarlo después de reload
+  useEffect(() => {
+    sessionStorage.setItem(`empresaTab_${empresaId}`, activeTab);
+  }, [activeTab, empresaId]);
+
   // Cargar contrato activo al cambiar a tab contrato
+  // Cargar configuración SLA cuando la pestaña SLA se activa
+  useEffect(() => {
+    if (!empresaId || activeTab !== 'sla') return;
+
+    const fetchSLAConfig = async () => {
+      setSlaLoading(true);
+      try {
+        console.log('[DEBUG] Cargando configuración SLA para empresa:', empresaId);
+        const rawConfig = await slaService.getConfiguracion(empresaId);
+        console.log('[DEBUG] Configuración SLA recibida (raw):', rawConfig);
+        const config = normalizeSLAConfig(rawConfig);
+        console.log('[DEBUG] Configuración SLA normalizada:', config);
+        
+        if (config) {
+          setSlaConfiguracion(config);
+          console.error('🔵 [SLA CONFIG LOADED]:', JSON.stringify(config, null, 2));
+          
+          // Cargar historial
+          const historial = await slaService.getHistorial(empresaId);
+          if (historial?.items) {
+            setHistorialSLA(mapHistorialItems(historial.items));
+          }
+          // Cada formulario se muestra si NO está guardado, o se oculta si SÍ está guardado
+          // Backend devuelve {} para no guardados, así que debemos verificar si tiene propiedades
+          const isEmptyObject = (obj: any) => {
+            if (!obj || typeof obj !== 'object') return true;
+            return Object.keys(obj).length === 0;
+          };
+          
+          const editModes = {
+            alcance: isEmptyObject(config.alcance),        // true si vacío → muestra formulario
+            incidentes: isEmptyObject(config.gestion_incidentes),
+            tiempos: isEmptyObject(config.tiempos),
+            horarios: isEmptyObject(config.horarios),
+            requisitos: isEmptyObject(config.requisitos),
+            exclusiones: isEmptyObject(config.exclusiones),
+            alertas: isEmptyObject(config.alertas),
+          };
+          console.error('🔵 [EDIT MODES]:', editModes);
+          setSlaEditModes(editModes);
+          // Resetear flags de "editando" porque es carga inicial o post-refresh
+          setSlaIsEditing({ ...INITIAL_SLA_IS_EDITING });
+        } else {
+          // No hay configuración → todos los formularios en modo edición (primera vez)
+          console.log('[DEBUG] Config es null - seteando todos los formularios en modo edición');
+          setSlaConfiguracion(null);
+          setSlaEditModes({ ...INITIAL_SLA_MODES });
+          setSlaIsEditing({ ...INITIAL_SLA_IS_EDITING });
+        }
+      } catch (error) {
+        console.error('Error al cargar configuración SLA:', error);
+      } finally {
+        setSlaLoading(false);
+      }
+    };
+
+    fetchSLAConfig();
+  }, [empresaId, activeTab]);
+
   useEffect(() => {
     if (!empresaId || activeTab !== 'contrato') return;
 
@@ -351,6 +502,160 @@ const EmpresaDetailPage = () => {
     fetchContratoActivo();
   }, [empresaId, activeTab]);
 
+  // Helpers SLA
+  const mapHistorialItems = (items: any[]) =>
+    items.map((item: any) => {
+      const rawDate = item?.createdAt || item?.fecha || item?.timestamp;
+      const fecha = rawDate ? new Date(rawDate).toLocaleString('es-PE') : '—';
+      return {
+        campo: item?.campo || item?.seccion || 'SLA',
+        valorAnterior: item?.valorAnterior || item?.valor_anterior || '—',
+        valorNuevo: item?.valorNuevo || item?.valor_nuevo || '—',
+        motivo: item?.motivo || 'Guardado',
+        usuario: item?.usuario || item?.user || item?.usuarioNombre || 'sistema',
+        fecha,
+      };
+    });
+
+  const getSeccionesGuardadas = () => {
+    if (!slaConfiguracion) return [] as string[];
+    // Devolver las claves normales - el backend las mapea a columnas de BD
+    const guardadas = SLA_SECCIONES.filter((sec) => {
+      const clave = SLA_CONFIG_KEY[sec];
+      const valor = slaConfiguracion?.[clave];
+      console.log(`[DEBUG getSeccionesGuardadas] ${sec} -> ${clave}: ${valor ? 'existe' : 'NO existe'}`);
+      return Boolean(valor);
+    });
+    console.log('[DEBUG getSeccionesGuardadas] Total guardadas:', guardadas.length, 'de', SLA_SECCIONES.length);
+    return guardadas;
+  };
+
+  const hasUnsavedChangesInSLA = () => {
+    if (activeTab !== 'sla') return false;
+
+    // NO bloquear mientras se carga la configuración SLA
+    if (slaLoading) {
+      console.log('[DEBUG hasUnsavedChanges] SLA aún cargando → NO bloquear');
+      return false;
+    }
+
+    // Contar secciones guardadas en el backend
+    // Backend devuelve {} para no guardadas, así que debemos verificar si tienen propiedades
+    const cfg = normalizeSLAConfig(slaConfiguracion);
+    const isEmptyObject = (obj: any) => {
+      if (!obj || typeof obj !== 'object') return true;
+      return Object.keys(obj).length === 0;
+    };
+    
+    const seccionesGuardadas = cfg ? SLA_SECCIONES.filter(
+      (s) => !isEmptyObject(cfg[SLA_CONFIG_KEY[s]])
+    ).length : 0;
+
+    // Solo bloquear si hay 1-6 secciones guardadas (incompleto)
+    const bloquear = seccionesGuardadas >= 1 && seccionesGuardadas < 7;
+    
+    console.log('[DEBUG hasUnsavedChanges]', {
+      seccionesGuardadas,
+      bloquear,
+    });
+
+    return bloquear;
+  };
+
+  const handleTabChange = (newTab: string) => {
+    if (activeTab === 'sla' && newTab !== 'sla' && hasUnsavedChangesInSLA()) {
+      console.warn('[NAV GUARD] SLA incompleto → pedir confirmación');
+      setPendingTab(newTab);
+      setShowUnsavedConfirmModal(true);
+      return;
+    }
+    setActiveTab(newTab as typeof activeTab);
+  };
+
+  const handleConfirmUnsavedExit = async () => {
+    try {
+      if (empresaId) {
+        // SIEMPRE enviar las 7 secciones para forzar eliminación completa (soft delete)
+        const todasLasSecciones = [...SLA_SECCIONES];
+        console.log('[DEBUG] Limpiando todas las secciones SLA:', todasLasSecciones);
+        
+        await slaService.limpiarSecciones(empresaId, todasLasSecciones);
+        console.log('[DEBUG] Todas las secciones eliminadas del backend (soft delete)');
+        
+        // Recargar configuración desde el backend (debería ser null)
+        const rawConfig = await slaService.getConfiguracion(empresaId);
+        const config = normalizeSLAConfig(rawConfig);
+        console.log('[DEBUG] Config recargada después de limpiar (normalizada):', config);
+        setSlaConfiguracion(config);
+        
+        if (!config) {
+          // Si es null, setear todos en modo edición (primera vez)
+          setSlaEditModes({ ...INITIAL_SLA_MODES });
+          setSlaIsEditing({ alcance: false, incidentes: false, tiempos: false, horarios: false, requisitos: false, exclusiones: false, alertas: false });
+        }
+      }
+    } catch (error) {
+      console.error('Error al eliminar secciones SLA:', error);
+    } finally {
+      // Si es refrescar, permitir reload y hacerlo
+      if (isRefreshing) {
+        setIsRefreshing(false);
+        setShowUnsavedConfirmModal(false);
+        console.log('[DEBUG handleConfirmUnsavedExit] Llamando window.location.reload()');
+        window.location.reload();
+      } else {
+        // Cambiar a la pestaña o ruta que el usuario quería
+        if (pendingPath) {
+          navigate(pendingPath);
+        } else if (pendingTab) {
+          setActiveTab(pendingTab as typeof activeTab);
+        }
+        setPendingTab(null);
+        setPendingPath(null);
+        setShowUnsavedConfirmModal(false);
+      }
+    }
+  };
+
+  const handleCancelUnsavedExit = () => {
+    setShowUnsavedConfirmModal(false);
+    setPendingTab(null);
+    setPendingPath(null);
+    setIsRefreshing(false); // Reset the flag si cancela
+  };
+  // Registrar guard global de navegación cuando estamos en la pestaña SLA
+  const { registerGuard, clearGuard, getGuard } = useNavGuard();
+
+  // Navegación que respeta el guard de SLA (para botones dentro de esta página)
+  const handleGuardedNavigation = (path: string) => {
+    const guard = getGuard();
+    if (guard.shouldBlock && guard.onBlock && guard.shouldBlock(path)) {
+      guard.onBlock(path);
+      return;
+    }
+    navigate(path);
+  };
+  useEffect(() => {
+    if (activeTab === 'sla') {
+      registerGuard(
+        () => hasUnsavedChangesInSLA(),
+        (nextPath) => {
+          setPendingPath(nextPath);
+          setShowUnsavedConfirmModal(true);
+        }
+      );
+    } else {
+      clearGuard();
+    }
+    return () => {
+      clearGuard();
+    };
+  }, [activeTab, slaEditModes, slaConfiguracion, slaLoading]);
+
+  // NO hay beforeunload ni auto-cleanup
+  // Simplemente: cargar la config al entrar a SLA y mostrar los formularios
+  // Los guardados muestran datos, los no guardados se muestran vacíos
+
   const handleToggleSede = async (motivo: string) => {
     const sedeId = sedeToDelete?._id ?? sedeToDelete?.id;
     if (!empresaId || !sedeId) return;
@@ -390,6 +695,114 @@ const EmpresaDetailPage = () => {
     setShowMotivoModal(false);
     setMotivoInput('');
     setMotivoCallback(null);
+  };
+
+  const addHistorialSLA = (campo: string, motivo: string, valorAnterior = '—', valorNuevo = 'Actualizado') => {
+    const fecha = new Date();
+    const formatted = `${fecha.toLocaleDateString()} ${fecha.toLocaleTimeString()}`;
+    setHistorialSLA((prev) => [
+      {
+        campo,
+        valorAnterior,
+        valorNuevo,
+        usuario: 'Usuario',
+        fecha: formatted,
+        motivo,
+      },
+      ...prev,
+    ]);
+  };
+
+  const handleSlaEdit = (section: keyof typeof slaEditModes, label: string) => {
+    // Marcar que está editando algo ya guardado
+    setSlaEditModes((prev) => ({ ...prev, [section]: true }));
+    setSlaIsEditing((prev) => ({ ...prev, [section]: true }));
+  };
+
+  const handleSlaCancel = (section: keyof typeof slaEditModes) => {
+    // Salir del modo edición sin guardar
+    setSlaEditModes((prev) => ({ ...prev, [section]: false }));
+    setSlaIsEditing((prev) => ({ ...prev, [section]: false }));
+  };
+
+  const handleSlaSave = async (section: keyof typeof slaEditModes, label: string, data: unknown) => {
+    if (!empresaId) return;
+    
+    // Verificar si está editando algo ya guardado (dio clic en botón "Editar")
+    const isEditando = slaIsEditing[section];
+    
+    if (!isEditando) {
+      // Primera vez o rellenando inicial: Guardar directamente sin pedir motivo
+      try {
+        console.log('[SLA Save] Primera vez guardando:', { section, data: JSON.stringify(data) });
+        
+        // Guardar la sección
+        await slaService.guardarSeccion(empresaId, section, data);
+        
+        // Salir del modo edición
+        setSlaEditModes((prev) => ({ ...prev, [section]: false }));
+        // Al guardar por primera vez, no es una edición posterior
+        setSlaIsEditing((prev) => ({ ...prev, [section]: false }));
+        
+        // Recargar configuración
+        const rawConfig = await slaService.getConfiguracion(empresaId);
+        const config = normalizeSLAConfig(rawConfig);
+        setSlaConfiguracion(config);
+        
+        setToastMessage('✅ Sección guardada exitosamente');
+        setToastType('success');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
+      } catch (error: any) {
+        console.error('Error al guardar SLA:', error);
+        console.error('Response data:', error?.response?.data);
+        console.error('Response status:', error?.response?.status);
+        const errorMsg = error?.response?.data?.message || 'Error al guardar la sección. Por favor intente nuevamente.';
+        setToastMessage('❌ ' + errorMsg);
+        setToastType('error');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 4000);
+      }
+    } else {
+      // Es una edición: Pedir motivo
+      setMotivoInput('');
+      setMotivoCallback(() => async (motivo: string) => {
+        try {
+          console.log('[SLA Save] Editando:', { section, data: JSON.stringify(data), motivo });
+          
+          // Guardar la sección enviando el motivo en la misma llamada
+          await slaService.guardarSeccion(empresaId!, section, data, motivo);
+          
+          // Salir del modo edición
+          setSlaEditModes((prev) => ({ ...prev, [section]: false }));
+          setSlaIsEditing((prev) => ({ ...prev, [section]: false }));
+          
+          // Recargar historial
+          const historial = await slaService.getHistorial(empresaId!);
+          if (historial?.items) {
+            setHistorialSLA(mapHistorialItems(historial.items));
+          }
+          
+          setShowMotivoModal(false);
+          setMotivoInput('');
+          setMotivoCallback(null);
+          setToastMessage('✅ Sección guardada exitosamente');
+          setToastType('success');
+          setShowToast(true);
+          setTimeout(() => setShowToast(false), 3000);
+        } catch (error: any) {
+          console.error('Error al guardar SLA:', error);
+          console.error('Response data:', error?.response?.data);
+          console.error('Response status:', error?.response?.status);
+          const errorMsg = error?.response?.data?.message || 'Error al guardar la sección. Por favor intente nuevamente.';
+          setToastMessage('❌ ' + errorMsg);
+          setToastType('error');
+          setShowToast(true);
+          setTimeout(() => setShowToast(false), 4000);
+        }
+      });
+      setShowMotivoModal(true);
+    }
   };
 
   // Handlers para guardar cambios en contrato
@@ -928,7 +1341,7 @@ const EmpresaDetailPage = () => {
       <div className="p-6">
         <div className="max-w-4xl mx-auto">
           <button
-            onClick={() => navigate("/admin/empresas")}
+            onClick={() => handleGuardedNavigation("/admin/empresas")}
             className="text-blue-600 hover:text-blue-800 font-medium mb-4"
           >
             ← Volver
@@ -979,7 +1392,7 @@ const EmpresaDetailPage = () => {
 
       <div className="max-w-6xl mx-auto">
         <button
-          onClick={() => navigate("/admin/empresas")}
+          onClick={() => handleGuardedNavigation("/admin/empresas")}
           className="text-blue-600 hover:text-blue-800 font-medium text-sm mb-8 flex items-center gap-1 hover:gap-2 transition-all"
         >
           ← Volver a Empresas
@@ -1045,7 +1458,7 @@ const EmpresaDetailPage = () => {
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => handleTabChange(tab.id)}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'bg-blue-600 text-white shadow-md scale-105'
@@ -1372,7 +1785,6 @@ const EmpresaDetailPage = () => {
           {/* TAB: Contrato - Placeholder */}
           {activeTab === 'contrato' && (
             <div className="space-y-8">
-              {console.log('[DEBUG] Renderizando pestaña Contrato')}
               {/* Header */}
               <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-8">
                 <div className="flex items-center gap-3">
@@ -2307,22 +2719,281 @@ const EmpresaDetailPage = () => {
             </div>
           )}
 
-          {/* TAB: SLA - Placeholder */}
-          {activeTab === 'sla' && (
+          {/* TAB: SLA */}
+          {activeTab === 'sla' && empresa && sedes && (
             <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-8">
-              <div className="flex items-center gap-3 mb-8 pb-6 border-b border-slate-100">
-                <div className="p-2.5 bg-amber-100 rounded-lg">
-                  <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
+              {slaLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="text-center">
+                    <div className="inline-block p-4 bg-blue-50 rounded-full mb-4">
+                      <svg className="w-8 h-8 text-blue-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    </div>
+                    <p className="text-slate-600 font-semibold">Cargando configuración SLA...</p>
+                  </div>
                 </div>
-                <h2 className="text-2xl font-bold text-slate-900">SLA</h2>
+              ) : (
+              <div className="space-y-8">
+                {/* Alcance */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg text-xl">📋</div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Alcance del SLA</p>
+                        <p className="text-xs text-slate-500">{slaEditModes.alcance ? 'Modo edición' : 'Guardado · ver únicamente'}</p>
+                      </div>
+                    </div>
+                    {!slaEditModes.alcance && (
+                      <button
+                        onClick={() => handleSlaEdit('alcance', 'Alcance del SLA')}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow-sm"
+                      >
+                        Editar
+                      </button>
+                    )}
+                  </div>
+                  {slaEditModes.alcance && (
+                  <div className="relative">
+                    <AlcanceSLAForm
+                      initialData={slaConfiguracion?.alcance}
+                      sedes={sedes.map((s) => ({
+                        id: String(s._id || s.id || ''),
+                        nombre: s.nombre || '',
+                      }))}
+                      onSave={(data) => handleSlaSave('alcance', 'Alcance del SLA', data)}
+                      onCancel={() => handleSlaCancel('alcance')}
+                    />
+                  </div>
+                  )}
+                </div>
+
+                {/* Gestión de Incidentes */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-xl">⚡</div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Gestión de Incidentes</p>
+                        <p className="text-xs text-slate-500">{slaEditModes.incidentes ? 'Modo edición' : 'Guardado · ver únicamente'}</p>
+                      </div>
+                    </div>
+                    {!slaEditModes.incidentes && (
+                      <button
+                        onClick={() => handleSlaEdit('incidentes', 'Gestión de Incidentes')}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow-sm"
+                      >
+                        Editar
+                      </button>
+                    )}
+                  </div>
+                  {slaEditModes.incidentes && (
+                  <div className="relative">
+                    <GestionIncidentesForm
+                      initialData={slaConfiguracion?.gestion_incidentes}
+                      onSave={(data) => handleSlaSave('incidentes', 'Gestión de Incidentes', data)}
+                      onCancel={() => handleSlaCancel('incidentes')}
+                    />
+                  </div>
+                  )}
+                </div>
+
+                {/* Tiempos */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-cyan-50 border border-cyan-200 rounded-lg text-xl">⏱️</div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Tiempos de Respuesta y Resolución</p>
+                        <p className="text-xs text-slate-500">{slaEditModes.tiempos ? 'Modo edición' : 'Guardado · ver únicamente'}</p>
+                      </div>
+                    </div>
+                    {!slaEditModes.tiempos && (
+                      <button
+                        onClick={() => handleSlaEdit('tiempos', 'Tiempos de Respuesta/Resolución')}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow-sm"
+                      >
+                        Editar
+                      </button>
+                    )}
+                  </div>
+                  {slaEditModes.tiempos && (
+                  <div className="relative">
+                    <GestionTiemposForm
+                      initialData={slaConfiguracion?.tiempos}
+                      onSave={(data) => handleSlaSave('tiempos', 'Tiempos de Respuesta/Resolución', data)}
+                      onCancel={() => handleSlaCancel('tiempos')}
+                    />
+                  </div>
+                  )}
+                </div>
+
+                {/* Horarios */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-indigo-50 border border-indigo-200 rounded-lg text-xl">🕒</div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Horarios de Atención</p>
+                        <p className="text-xs text-slate-500">{slaEditModes.horarios ? 'Modo edición' : 'Guardado · ver únicamente'}</p>
+                      </div>
+                    </div>
+                    {!slaEditModes.horarios && (
+                      <button
+                        onClick={() => handleSlaEdit('horarios', 'Horarios de Atención')}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow-sm"
+                      >
+                        Editar
+                      </button>
+                    )}
+                  </div>
+                  {slaEditModes.horarios && (
+                  <div className="relative">
+                    <GestionHorariosForm
+                      initialData={slaConfiguracion?.horarios}
+                      showFueraHorarioOptions={slaConfiguracion?.tiempos?.medicionSLA === 'horasCalendario'}
+                      onSave={(data) => handleSlaSave('horarios', 'Horarios de Atención', data)}
+                      onCancel={() => handleSlaCancel('horarios')}
+                    />
+                  </div>
+                  )}
+                </div>
+
+                {/* Requisitos */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-purple-50 border border-purple-200 rounded-lg text-xl">✅</div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Requisitos del SLA</p>
+                        <p className="text-xs text-slate-500">{slaEditModes.requisitos ? 'Modo edición' : 'Guardado · ver únicamente'}</p>
+                      </div>
+                    </div>
+                    {!slaEditModes.requisitos && (
+                      <button
+                        onClick={() => handleSlaEdit('requisitos', 'Requisitos del SLA')}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow-sm"
+                      >
+                        Editar
+                      </button>
+                    )}
+                  </div>
+                  {slaEditModes.requisitos && (
+                  <div className="relative">
+                    <GestionRequisitosForm
+                      initialData={slaConfiguracion?.requisitos}
+                      onSave={(data) => handleSlaSave('requisitos', 'Requisitos del SLA', data)}
+                      onCancel={() => handleSlaCancel('requisitos')}
+                    />
+                  </div>
+                  )}
+                </div>
+
+                {/* Exclusiones */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-xl">⏸️</div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Exclusiones</p>
+                        <p className="text-xs text-slate-500">{slaEditModes.exclusiones ? 'Modo edición' : 'Guardado · ver únicamente'}</p>
+                      </div>
+                    </div>
+                    {!slaEditModes.exclusiones && (
+                      <button
+                        onClick={() => handleSlaEdit('exclusiones', 'Exclusiones')}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow-sm"
+                      >
+                        Editar
+                      </button>
+                    )}
+                  </div>
+                  {slaEditModes.exclusiones && (
+                  <div className="relative">
+                    <GestionExclusionesForm
+                      initialData={slaConfiguracion?.exclusiones}
+                      onSave={(data) => handleSlaSave('exclusiones', 'Exclusiones', data)}
+                      onCancel={() => handleSlaCancel('exclusiones')}
+                    />
+                  </div>
+                  )}
+                </div>
+
+                {/* Alertas y Control */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-xl">🚨</div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Alertas y Control</p>
+                        <p className="text-xs text-slate-500">{slaEditModes.alertas ? 'Modo edición' : 'Guardado · ver únicamente'}</p>
+                      </div>
+                    </div>
+                    {!slaEditModes.alertas && (
+                      <button
+                        onClick={() => handleSlaEdit('alertas', 'Alertas y Control')}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow-sm"
+                      >
+                        Editar
+                      </button>
+                    )}
+                  </div>
+                  {slaEditModes.alertas && (
+                  <div className="relative">
+                    <GestionAlertasForm
+                      initialData={slaConfiguracion?.alertas}
+                      onSave={(data) => handleSlaSave('alertas', 'Alertas y Control', data)}
+                      onCancel={() => handleSlaCancel('alertas')}
+                    />
+                  </div>
+                  )}
+                </div>
+
+                {/* Historial del SLA */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-slate-100 border border-slate-200 rounded-lg text-xl">📜</div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Historial del SLA</p>
+                        <p className="text-xs text-slate-500">Registra cada edición con su motivo</p>
+                      </div>
+                    </div>
+                  </div>
+                  {historialSLA.length === 0 ? (
+                    <div className="p-6 text-sm text-slate-500">Aún no hay cambios registrados.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-50 border-b border-slate-200 text-left">
+                          <tr>
+                            <th className="px-4 py-3 font-semibold text-slate-700">Campo</th>
+                            <th className="px-4 py-3 font-semibold text-slate-700">Valor anterior</th>
+                            <th className="px-4 py-3 font-semibold text-slate-700">Valor nuevo</th>
+                            <th className="px-4 py-3 font-semibold text-slate-700">Motivo</th>
+                            <th className="px-4 py-3 font-semibold text-slate-700">Usuario</th>
+                            <th className="px-4 py-3 font-semibold text-slate-700">Fecha</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {historialSLA.map((item, index) => (
+                            <tr key={`${item.campo}-${index}`} className="border-b border-slate-200 last:border-0">
+                              <td className="px-4 py-3 font-medium text-slate-900">{item.campo}</td>
+                              <td className="px-4 py-3 text-slate-700">{item.valorAnterior}</td>
+                              <td className="px-4 py-3 text-slate-700">{item.valorNuevo}</td>
+                              <td className="px-4 py-3 text-slate-700">{item.motivo}</td>
+                              <td className="px-4 py-3 text-slate-700">{item.usuario}</td>
+                              <td className="px-4 py-3 text-slate-500 text-xs">{item.fecha}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="py-16 text-center">
-                <div className="text-slate-300 text-6xl mb-4">⚡</div>
-                <p className="text-slate-500 font-medium text-lg">Acuerdos de nivel de servicio</p>
-                <p className="text-slate-400 text-sm mt-2">Próximamente estará disponible la gestión de SLA</p>
-              </div>
+              )}
             </div>
           )}
 
@@ -2359,7 +3030,7 @@ const EmpresaDetailPage = () => {
               <div className="flex flex-col gap-4">
                 <p className="text-slate-600 mb-4">Visualiza el historial completo de cambios y eventos de la empresa.</p>
                 <button
-                  onClick={() => navigate(`/admin/empresas/${empresaId}/historial`)}
+                  onClick={() => handleGuardedNavigation(`/admin/empresas/${empresaId}/historial`)}
                   className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors shadow-md flex items-center justify-center gap-2 w-full sm:w-auto"
                 >
                   📊 Ir al Historial Completo
@@ -2430,7 +3101,7 @@ const EmpresaDetailPage = () => {
                         ✏️ Editar
                       </button>
                       <button
-                        onClick={() => navigate(`/admin/empresas/${empresaId}/sedes/${sede._id ?? sede.id}/inventario`)}
+                        onClick={() => handleGuardedNavigation(`/admin/empresas/${empresaId}/sedes/${sede._id ?? sede.id}/inventario`)}
                         disabled={sede.activo === false}
                         className={`inline-flex items-center gap-1.5 font-semibold py-1.5 px-3 rounded-lg transition-all text-xs ${sede.activo === false ? "text-slate-400 bg-slate-200 cursor-not-allowed" : "text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100"}`}
                       >
@@ -2575,6 +3246,82 @@ const EmpresaDetailPage = () => {
           onConfirm={handleToggleSede}
           isProcessing={isDeleting}
         />
+
+        {/* Modal de confirmación para cambios SLA sin guardar */}
+        {showUnsavedConfirmModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={handleCancelUnsavedExit} />
+            <div className="relative bg-white rounded-xl shadow-2xl p-8 max-w-sm mx-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                  <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4v2m0-10a9 9 0 110 18 9 9 0 010-18z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">¿Estás seguro de salir?</h3>
+                  <p className="text-sm text-slate-600 mt-1">Los formularios SLA se reiniciarán y las secciones guardadas se eliminarán.</p>
+                </div>
+              </div>
+
+              <p className="text-slate-700 text-sm mb-6">Si continúas, se borrarán de la base de datos las secciones SLA ya guardadas para que todo quede vacío al volver.</p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCancelUnsavedExit}
+                  className="flex-1 px-4 py-2.5 bg-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-300 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmUnsavedExit}
+                  className="flex-1 px-4 py-2.5 bg-amber-500 text-white rounded-lg font-medium hover:bg-amber-600 transition-colors"
+                >
+                  Sí, salir y limpiar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Toast Notification */}
+        {showToast && (
+          <div className="fixed top-4 right-4 z-50 animate-fade-in-down">
+            <div
+              className={`
+                flex items-center gap-3 px-6 py-4 rounded-lg shadow-lg
+                ${toastType === 'success' 
+                  ? 'bg-green-500 text-white' 
+                  : 'bg-red-500 text-white'
+                }
+                min-w-[300px] max-w-md
+              `}
+            >
+              <div className="flex-shrink-0">
+                {toastType === 'success' ? (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </div>
+              <div className="flex-1 font-medium">
+                {toastMessage}
+              </div>
+              <button
+                onClick={() => setShowToast(false)}
+                className="flex-shrink-0 hover:opacity-80 transition-opacity"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

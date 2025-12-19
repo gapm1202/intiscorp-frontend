@@ -1,4 +1,5 @@
 import { useAuth } from "@/context/authHelpers";
+import { useNavGuard } from "@/context/NavGuardContext";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import type { ReactElement } from 'react';
@@ -11,6 +12,7 @@ interface SidebarProps {
 
 const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
   const { user, logout } = useAuth();
+  const navGuard = useNavGuard();
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -64,10 +66,25 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
   const [empresasError, setEmpresasError] = useState<string | null>(null);
 
   const handleNavigation = (path: string) => {
+    const guard = navGuard.getGuard();
+    if (guard.shouldBlock && guard.onBlock && guard.shouldBlock(path)) {
+      guard.onBlock(path);
+      return;
+    }
     navigate(path);
     if (window.innerWidth < 768) {
       toggleSidebar();
     }
+  };
+
+  const guardedNavigate = (path: string) => {
+    const guard = navGuard.getGuard();
+    if (guard.shouldBlock && guard.onBlock && guard.shouldBlock(path)) {
+      guard.onBlock(path);
+      return;
+    }
+    navigate(path);
+    if (window.innerWidth < 768) toggleSidebar();
   };
 
   const toggleInventario = async () => {
@@ -187,10 +204,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                             {empresas.map((e: EmpresaItem) => (
                               <li key={e.id ?? e._id}>
                                 <button
-                                  onClick={() => {
-                                    navigate(`/admin/empresas/${e.id ?? e._id}/inventario`);
-                                    if (window.innerWidth < 768) toggleSidebar();
-                                  }}
+                                  onClick={() => guardedNavigate(`/admin/empresas/${e.id ?? e._id}/inventario`)}
                                   className="w-full text-left text-xs py-2 px-3 rounded-md hover:bg-subtle transition-colors text-slate-700"
                                 >
                                   {e.nombre ?? "(sin nombre)"}
