@@ -16,6 +16,7 @@ import { GestionExclusionesForm } from "@/modules/sla/components/GestionExclusio
 import { GestionAlertasForm } from "@/modules/sla/components/GestionAlertasForm";
 import { slaService } from "@/modules/sla/services/slaService";
 import { useNavGuard } from "@/context/NavGuardContext";
+import MantenimientoSubTabs from "@/modules/mantenimiento/components/MantenimientoSubTabs";
 
 const SLA_SECCIONES: Array<keyof typeof INITIAL_SLA_MODES> = ['alcance', 'incidentes', 'tiempos', 'horarios', 'requisitos', 'exclusiones', 'alertas'];
 const SLA_CONFIG_KEY: Record<string, string> = {
@@ -1453,20 +1454,24 @@ const EmpresaDetailPage = () => {
               { id: 'contactos', label: 'Contactos', icon: '👥' },
               { id: 'contrato', label: 'Contrato', icon: '📄' },
               { id: 'sla', label: 'SLA', icon: '⚡' },
-              { id: 'mantenimientos', label: 'Mantenimientos', icon: '🔧' },
+              { id: 'mantenimientos', label: 'Mantenimientos', icon: '🔧', disabled: !preventivoData.incluyePreventivo },
               { id: 'historial', label: 'Historial', icon: '📊' },
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
+                disabled={tab.disabled}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 whitespace-nowrap ${
-                  activeTab === tab.id
+                  tab.disabled
+                    ? 'text-slate-300 cursor-not-allowed bg-slate-50'
+                    : activeTab === tab.id
                     ? 'bg-blue-600 text-white shadow-md scale-105'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 {tab.icon} {tab.label}
                 {tab.badge && <span className="ml-1 px-2 py-0.5 bg-white/30 rounded-full text-xs font-bold">{tab.badge}</span>}
+                {tab.disabled && <span className="ml-2 text-xs" title="Habilitar en Contrato">🔒</span>}
               </button>
             ))}
           </div>
@@ -2997,22 +3002,26 @@ const EmpresaDetailPage = () => {
             </div>
           )}
 
-          {/* TAB: Mantenimientos Preventivos - Placeholder */}
+          {/* TAB: Mantenimientos Preventivos */}
           {activeTab === 'mantenimientos' && (
             <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-8">
-              <div className="flex items-center gap-3 mb-8 pb-6 border-b border-slate-100">
-                <div className="p-2.5 bg-red-100 rounded-lg">
-                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+                <div className="p-2.5 bg-indigo-100 rounded-lg">
+                  <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h2 className="text-2xl font-bold text-slate-900">Mantenimientos Preventivos</h2>
+                <h2 className="text-2xl font-bold text-slate-900">Mantenimiento Preventivo</h2>
               </div>
-              <div className="py-16 text-center">
-                <div className="text-slate-300 text-6xl mb-4">🔧</div>
-                <p className="text-slate-500 font-medium text-lg">Plan de mantenimiento preventivo</p>
-                <p className="text-slate-400 text-sm mt-2">Próximamente estará disponible la programación de mantenimientos</p>
-              </div>
+
+              {/* Sub-tabs */}
+              <MantenimientoSubTabs
+                empresa={empresa}
+                empresaId={empresaId!}
+                frecuencia={preventivoData.frecuencia}
+                modalidad={preventivoData.modalidad}
+                contractStatus={empresa?.estadoContrato}
+              />
             </div>
           )}
 

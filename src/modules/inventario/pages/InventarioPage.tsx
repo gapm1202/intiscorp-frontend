@@ -2460,21 +2460,42 @@ const InventarioPage = () => {
                         } else {
                           // CREAR nueva categoría
                           console.log('➕ CREANDO nueva categoría:', categoryPreview.nombre);
-                          const finalCampos = (categoryPreview.campos || []).map((f) => ({
-                            ...f,
-                            nombre: String(f.nombre || '').trim(),
-                            opciones: (f.opciones || []).map(s => String(s || '').trim()).filter(Boolean),
-                            subcampos: (f.subcampos || []).map((sf) => ({
-                              ...sf,
-                              nombre: String(sf.nombre || '').trim(),
-                              opciones: (sf.opciones || []).map(s => String(s || '').trim()).filter(Boolean)
-                            }))
-                          }));
-                          const created = await createCategoria({
-                            nombre: categoryPreview.nombre,
-                            subcategorias: categoryPreview.subcategorias,
-                            campos: finalCampos
+                          
+                          // Validar nombre
+                          if (!categoryPreview.nombre || !categoryPreview.nombre.trim()) {
+                            throw new Error('El nombre de la categoría es obligatorio');
+                          }
+                          
+                          const finalCampos = (categoryPreview.campos || [])
+                            .filter(f => f.nombre && String(f.nombre).trim().length > 0)
+                            .map((f) => ({
+                              ...f,
+                              nombre: String(f.nombre || '').trim(),
+                              tipo: f.tipo || 'text',
+                              requerido: Boolean(f.requerido),
+                              opciones: (f.opciones || []).map(s => String(s || '').trim()).filter(Boolean),
+                              subcampos: (f.subcampos || []).map((sf) => ({
+                                ...sf,
+                                nombre: String(sf.nombre || '').trim(),
+                                tipo: sf.tipo || 'text',
+                                opciones: (sf.opciones || []).map(s => String(s || '').trim()).filter(Boolean)
+                              }))
+                            }));
+                          
+                          const payload = {
+                            nombre: categoryPreview.nombre.trim(),
+                            ...(categoryPreview.subcategorias && categoryPreview.subcategorias.length > 0 && { subcategorias: categoryPreview.subcategorias }),
+                            ...(finalCampos.length > 0 && { campos: finalCampos })
+                          };
+                          
+                          console.log('📦 Payload completo para crear categoría:', JSON.stringify(payload, null, 2));
+                          console.log('📦 Tipos de datos en payload:', {
+                            nombre: typeof payload.nombre,
+                            subcategorias: payload.subcategorias ? Array.isArray(payload.subcategorias) : 'no incluido',
+                            campos: payload.campos ? Array.isArray(payload.campos) : 'no incluido'
                           });
+                          
+                          const created = await createCategoria(payload as any);
                           setCategories(prev => [created, ...prev]);
                           alert('✅ Categoría creada exitosamente');
                         }

@@ -15,18 +15,35 @@ axiosClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    const logData = {
+      method: config.method?.toUpperCase(),
+      url: config.url,
+      data: config.data,
+      dataString: typeof config.data === 'string' ? config.data : JSON.stringify(config.data, null, 2)
+    };
+    console.log(`[axios] 📤 ${logData.method} ${logData.url}`, logData);
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Interceptor para manejar errores globales
+// Interceptor para manejar errores globales + logging detallado
 axiosClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`[axios] ✅ ${response.status} ${response.config.url}`, response.data);
+    return response;
+  },
   (error) => {
     const status = error.response?.status;
     const requestUrl: string = error.config?.url ?? "";
     const isLoginRequest = requestUrl.includes("/api/auth/login");
+
+    console.error(`[axios] ❌ ${status} ${requestUrl}`, {
+      status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      headers: error.response?.headers,
+    });
 
     // Solo forzamos logout/redirección en 401 que no sea del login
     if (status === 401 && !isLoginRequest) {

@@ -12,6 +12,7 @@ import HistorialEmpresaPage from "../modules/empresas/pages/HistorialEmpresaPage
 import InventarioPage from "../modules/inventario/pages/InventarioPage";
 import EtiquetasPage from "../modules/inventario/pages/EtiquetasPage";
 import PublicReportPage from "../modules/public/pages/PublicReportPage";
+import CatalogoCategoriasPage from "../modules/catalogo/pages/CatalogoCategoriasPage";
 
 const AppRouter = () => {
   return (
@@ -95,6 +96,16 @@ const AppRouter = () => {
             <RoleRoute role="admin">
               <AdminLayout>
                 <EtiquetasPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/catalogo-categorias"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <CatalogoCategoriasPage />
               </AdminLayout>
             </RoleRoute>
           }
