@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import type { CatalogCategory } from "../types";
 
 interface Props {
@@ -7,6 +7,7 @@ interface Props {
   onClear: () => void;
   customTypes: string[];
   onAddCustomType: (type: string) => void;
+  onRequestDeactivate?: (id: string) => void;
 }
 
 const categoryDefaults: Omit<CatalogCategory, "id"> = {
@@ -32,7 +33,7 @@ const buildCategoryCode = (name: string) => {
   return token ? `CAT-${token}` : "";
 };
 
-export const CategoryForm = ({ initial, onSubmit, onClear, customTypes, onAddCustomType }: Props) => {
+export const CategoryForm = ({ initial, onSubmit, onClear, customTypes, onAddCustomType, onRequestDeactivate }: Props) => {
   const [form, setForm] = useState(() =>
     initial
       ? {
@@ -48,6 +49,37 @@ export const CategoryForm = ({ initial, onSubmit, onClear, customTypes, onAddCus
   );
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customValue, setCustomValue] = useState("");
+
+  // Si la lista de tipos disponible cambia y el tipo actual no está presente, reasignar uno válido
+  useEffect(() => {
+    const normalized = Array.from(new Set(["incidente", "solicitud", ...customTypes.map((ct) => String(ct).trim().toLowerCase())]));
+    if (!normalized.includes(String(form.tipoTicket).toLowerCase())) {
+      setForm((prev) => ({ ...prev, tipoTicket: normalized[0] }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customTypes]);
+
+  // Sincronizar el formulario cuando cambia `initial` (al entrar en modo edición)
+  useEffect(() => {
+    if (!initial) {
+      setForm(categoryDefaults);
+      setShowCustomInput(false);
+      setCustomValue("");
+      return;
+    }
+
+    setForm({
+      codigo: initial.codigo,
+      nombre: initial.nombre,
+      descripcion: initial.descripcion ?? "",
+      tipoTicket: initial.tipoTicket,
+      activo: initial.activo,
+      visibleEnTickets: initial.visibleEnTickets,
+      createdAt: initial.createdAt ?? new Date().toISOString(),
+    });
+    setShowCustomInput(false);
+    setCustomValue("");
+  }, [initial]);
 
   const handleChange = (key: keyof typeof form, value: string | boolean) => {
     if (key === "nombre") {
@@ -136,13 +168,15 @@ export const CategoryForm = ({ initial, onSubmit, onClear, customTypes, onAddCus
             className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
             required
           >
-            <option value="incidente">Incidente</option>
-            <option value="solicitud">Solicitud</option>
-            {customTypes.map((t) => (
-              <option key={t} value={t}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </option>
-            ))}
+            {(() => {
+              const normalized = Array.from(new Set(["incidente", "solicitud", ...customTypes.map((ct) => String(ct).trim().toLowerCase())]));
+              return normalized.map((t) => (
+                <option key={t} value={t}>
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </option>
+              ));
+            })()}
+
             <option value="otro">Otro…</option>
           </select>
           {showCustomInput && (
@@ -202,7 +236,7 @@ export const CategoryForm = ({ initial, onSubmit, onClear, customTypes, onAddCus
         {initial && (
           <button
             type="button"
-            onClick={() => onSubmit({ ...form, activo: false }, initial.id)}
+            onClick={() => onRequestDeactivate ? onRequestDeactivate(initial.id) : onSubmit({ ...form, activo: false }, initial.id)}
             className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2.5 rounded-lg shadow-md transition"
           >
             <span className="text-lg">❌</span>

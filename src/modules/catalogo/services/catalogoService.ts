@@ -156,10 +156,91 @@ export const toggleCatalogSubcategory = async (
   activo: boolean,
 ): Promise<CatalogSubcategory> => updateCatalogSubcategory(id, { activo });
 
-export const ticketTypeLabel = (tipo: TicketType) => {
-  if (tipo === "incidente") return "Incidente";
-  if (tipo === "solicitud") return "Solicitud";
-  if (!tipo) return "";
-  const clean = String(tipo).trim();
+export const ticketTypeLabel = (tipo: string | TicketType) => {
+  const clean = String(tipo || "").trim();
+  if (clean === "incidente") return "Incidente";
+  if (clean === "solicitud") return "Solicitud";
+  if (!clean) return "";
   return clean.charAt(0).toUpperCase() + clean.slice(1);
+};
+
+// Persistencia de tipos personalizados: intenta usar backend, si no existe usa localStorage
+export const LOCAL_TYPES_KEY = "catalogo:tipos";
+
+export const getCatalogTypes = async (): Promise<string[]> => {
+  try {
+    const res = await axiosClient.get("/api/catalogo/tipos");
+    const data = res.data;
+    if (data && typeof data === "object" && Array.isArray(data.data)) return data.data;
+    if (Array.isArray(data)) return data;
+  } catch (err) {
+    console.warn("[catalogoService] /tipos endpoint no disponible, usando localStorage si existe", err);
+  }
+
+  try {
+    const stored = localStorage.getItem(LOCAL_TYPES_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch {
+    /* noop */
+  }
+
+  return ["incidente", "solicitud"];
+};
+
+export const createCatalogType = async (tipo: string): Promise<string> => {
+  const normalized = String(tipo).trim().toLowerCase();
+  try {
+    const res = await axiosClient.post("/api/catalogo/tipos", { tipo: normalized });
+    const data = res.data;
+    // backend puede devolver { data: ['a','b'] } o directamente la cadena
+    if (data && typeof data === "object" && Array.isArray(data.data)) {
+      localStorage.setItem(LOCAL_TYPES_KEY, JSON.stringify(data.data));
+      return normalized;
+    }
+    if (typeof data === "string") {
+      const list = await getCatalogTypes();
+      const merged = Array.from(new Set([...list, data]));
+      localStorage.setItem(LOCAL_TYPES_KEY, JSON.stringify(merged));
+      return data;
+    }
+    // fallback: persistir en localStorage
+    const list = await getCatalogTypes();
+    const merged = Array.from(new Set([...list, normalized]));
+    localStorage.setItem(LOCAL_TYPES_KEY, JSON.stringify(merged));
+    return normalized;
+  } catch (err) {
+    console.warn("[catalogoService] createCatalogType fallo backend, guardando en localStorage", err);
+    const list = await getCatalogTypes();
+    const merged = Array.from(new Set([...list, normalized]));
+    localStorage.setItem(LOCAL_TYPES_KEY, JSON.stringify(merged));
+    return normalized;
+  }
+};
+
+export const deleteCatalogType = async (tipo: string): Promise<boolean> => {
+  const normalized = String(tipo).trim().toLowerCase();
+  try {
+    // Backend: DELETE /api/catalogo/tipos/:tipo
+    const res = await axiosClient.delete(`/api/catalogo/tipos/${encodeURIComponent(normalized)}`);
+    const data = res.data;
+    // Si backend devuelve una lista actualizada la persistimos
+    if (data && typeof data === "object" && Array.isArray(data.data)) {
+      localStorage.setItem(LOCAL_TYPES_KEY, JSON.stringify(data.data));
+      return true;
+    }
+    // Si no, eliminamos localmente del listado
+    try {
+      const list = await getCatalogTypes();
+      const updated = list.filter((t) => t !== normalized);
+      localStorage.setItem(LOCAL_TYPES_KEY, JSON.stringify(updated));
+    } catch {
+      /* noop */
+    }
+    return true;
+  } catch (err) {
+    console.warn("[catalogoService] deleteCatalogType fallo backend, eliminando de localStorage", err);
+    const list = (await getCatalogTypes()).filter((t) => t !== normalized);
+    localStorage.setItem(LOCAL_TYPES_KEY, JSON.stringify(list));
+    return true;
+  }
 };

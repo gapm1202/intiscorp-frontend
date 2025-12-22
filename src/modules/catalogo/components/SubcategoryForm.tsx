@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import type { CatalogCategory, CatalogSubcategory, TicketType } from "../types";
 
 interface Props {
@@ -7,6 +7,7 @@ interface Props {
   onSubmit: (payload: Omit<CatalogSubcategory, "id" | "createdAt">, id?: string) => void;
   onClear: () => void;
   customTypes: string[];
+  onRequestDeactivate?: (id: string) => void;
 }
 
 const subDefaults: Omit<CatalogSubcategory, "id"> = {
@@ -37,7 +38,7 @@ const buildSubCode = (categoriaNombre: string, subNombre: string) => {
   return `SUB-${catToken || subToken}`;
 };
 
-export const SubcategoryForm = ({ categories, initial, onSubmit, onClear, customTypes }: Props) => {
+export const SubcategoryForm = ({ categories, initial, onSubmit, onClear, customTypes, onRequestDeactivate }: Props) => {
   const [form, setForm] = useState(() =>
     initial
       ? {
@@ -70,10 +71,53 @@ export const SubcategoryForm = ({ categories, initial, onSubmit, onClear, custom
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!form.categoriaId || !form.codigo.trim() || !form.nombre.trim()) return;
-    onSubmit(form, initial?.id);
+    const payload: Omit<CatalogSubcategory, "id" | "createdAt"> = {
+      categoriaId: form.categoriaId,
+      codigo: form.codigo,
+      nombre: form.nombre,
+      descripcion: form.descripcion,
+      tipoTicket: form.heredaTipo && selectedCategory ? selectedCategory.tipoTicket : form.tipoTicket,
+      requiereValidacion: form.requiereValidacion,
+      activo: form.activo,
+      heredaTipo: form.heredaTipo,
+    };
+    onSubmit(payload, initial?.id);
     setForm(subDefaults);
     onClear();
   };
+
+  // Sincronizar el formulario cuando cambia `initial` (al entrar en modo edición)
+  useEffect(() => {
+    if (!initial) {
+      // Evitar setState sincrónico dentro del efecto para no disparar renders en cascada
+      setTimeout(() => setForm(subDefaults), 0);
+      return;
+    }
+    setTimeout(
+      () =>
+        setForm({
+          categoriaId: initial.categoriaId,
+          codigo: initial.codigo,
+          nombre: initial.nombre,
+          descripcion: initial.descripcion ?? "",
+          tipoTicket: initial.tipoTicket,
+          requiereValidacion: initial.requiereValidacion,
+          activo: initial.activo,
+          heredaTipo: Boolean(initial.heredaTipo),
+          createdAt: initial.createdAt ?? new Date().toISOString(),
+        }),
+      0,
+    );
+  }, [initial]);
+
+  // Si se activa herencia o cambia la categoría padre, sincronizamos el tipoTicket con la categoría
+  useEffect(() => {
+    if (!form.heredaTipo) return;
+    const cat = categories.find((c) => c.id === form.categoriaId);
+    if (cat && cat.tipoTicket !== form.tipoTicket) {
+      setForm((prev) => ({ ...prev, tipoTicket: cat.tipoTicket }));
+    }
+  }, [form.categoriaId, form.heredaTipo, categories]);
 
   const canSubmit = Boolean(form.categoriaId && form.codigo.trim() && form.nombre.trim());
 
@@ -141,7 +185,8 @@ export const SubcategoryForm = ({ categories, initial, onSubmit, onClear, custom
                 type="checkbox"
                 checked={form.heredaTipo}
                 onChange={(e) => handleChange("heredaTipo", e.target.checked)}
-                className="w-5 h-5 text-purple-600 border-slate-300 rounded"
+                disabled={!form.categoriaId}
+                className="w-5 h-5 text-purple-600 border-slate-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <span>Heredar de la categoría ({selectedCategory?.tipoTicket ?? "--"})</span>
             </label>
@@ -208,7 +253,7 @@ export const SubcategoryForm = ({ categories, initial, onSubmit, onClear, custom
         {initial && (
           <button
             type="button"
-            onClick={() => onSubmit({ ...form, activo: false }, initial.id)}
+            onClick={() => onRequestDeactivate ? onRequestDeactivate(initial.id) : onSubmit({ ...form, activo: false }, initial.id)}
             className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2.5 rounded-lg shadow-md transition"
           >
             <span className="text-lg">❌</span>
