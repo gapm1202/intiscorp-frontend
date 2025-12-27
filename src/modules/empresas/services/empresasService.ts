@@ -19,8 +19,6 @@ export async function getEmpresas(filters?: Record<string, string | number | und
   const url = `${API_BASE}/api/empresas/${qs ? `?${qs}` : ""}`;
   
   const token = getToken();
-  console.log("🔍 Solicitando empresas de:", url);
-  console.log("🔑 Token:", token ? "✓ Presente" : "✗ No encontrado");
 
   const res = await fetch(url, {
     method: "GET",
@@ -30,8 +28,6 @@ export async function getEmpresas(filters?: Record<string, string | number | und
     },
   });
 
-  console.log("📊 Respuesta status:", res.status);
-
   if (!res.ok) {
     const text = await res.text();
     console.error("❌ Error:", text);
@@ -39,7 +35,6 @@ export async function getEmpresas(filters?: Record<string, string | number | und
   }
 
   const data = await res.json();
-  console.log("✅ Datos recibidos:", data);
   return data;
 }
 
@@ -69,7 +64,6 @@ export async function createEmpresa(empresaData: {
   const url = `${API_BASE}/api/empresas/`;
   
   const token = getToken();
-  console.log("➕ Creando empresa:", empresaData);
 
   const res = await fetch(url, {
     method: "POST",
@@ -80,8 +74,6 @@ export async function createEmpresa(empresaData: {
     body: JSON.stringify(empresaData),
   });
 
-  console.log("📊 Respuesta status:", res.status);
-
   if (!res.ok) {
     const text = await res.text();
     console.error("❌ Error:", text);
@@ -89,7 +81,6 @@ export async function createEmpresa(empresaData: {
   }
 
   const data = await res.json();
-  console.log("✅ Empresa creada:", data);
   return data;
 }
 
@@ -98,7 +89,6 @@ export async function getEmpresaById(empresaId: string | number) {
   const url = `${API_BASE}/api/empresas/${empresaId}`;
   
   const token = getToken();
-  console.log("🔍 Obteniendo empresa:", url);
 
   const res = await fetch(url, {
     method: "GET",
@@ -115,7 +105,6 @@ export async function getEmpresaById(empresaId: string | number) {
   }
 
   const data = await res.json();
-  console.log("✅ Empresa obtenida:", data);
   return data;
 }
 
@@ -144,7 +133,6 @@ export async function updateEmpresa(empresaId: string | number, empresaData: {
 }, motivo?: string) {
   const url = `${API_BASE}/api/empresas/${empresaId}`;
   const token = getToken();
-  console.log("🔁 Actualizando empresa:", empresaId, empresaData, motivo ? `(motivo: ${motivo})` : "");
 
   const body = motivo ? { ...empresaData, motivo } : empresaData;
 
@@ -157,8 +145,6 @@ export async function updateEmpresa(empresaId: string | number, empresaData: {
     body: JSON.stringify(body),
   });
 
-  console.log("📊 Respuesta status:", res.status);
-
   if (!res.ok) {
     const text = await res.text();
     console.error("❌ Error:", text);
@@ -166,6 +152,5 @@ export async function updateEmpresa(empresaId: string | number, empresaData: {
   }
 
   const data = await res.json();
-  console.log("✅ Empresa actualizada:", data);
   return data;
 }

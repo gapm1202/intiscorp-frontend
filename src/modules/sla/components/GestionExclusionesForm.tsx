@@ -7,6 +7,7 @@ interface ExclusionesData {
     esperandoProveedorExterno: boolean;
     fueraDeAlcance: boolean;
     fuerzaMayor: boolean;
+    fueraDeHorario: boolean;
   };
 }
 
@@ -23,6 +24,7 @@ const defaultData: ExclusionesData = {
     esperandoProveedorExterno: false,
     fueraDeAlcance: false,
     fuerzaMayor: false,
+    fueraDeHorario: false,
   },
 };
 
@@ -58,6 +60,7 @@ export function GestionExclusionesForm({ initialData, onSave, onCancel }: Gestio
     { key: 'esperandoProveedorExterno', label: 'Esperando proveedor externo' },
     { key: 'fueraDeAlcance', label: 'Incidente fuera de alcance' },
     { key: 'fuerzaMayor', label: 'Fuerza mayor' },
+    { key: 'fueraDeHorario', label: 'Fuera de horario' },
   ];
 
   return (

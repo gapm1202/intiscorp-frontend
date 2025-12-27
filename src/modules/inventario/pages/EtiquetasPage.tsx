@@ -112,7 +112,6 @@ const EtiquetasPage = () => {
       } else {
         tokensMap = batch || {};
       }
-      console.log('Batch tokensMap keys sample:', Object.keys(tokensMap).slice(0,10));
     } catch (err) {
       console.warn('Batch token request falló, se intentará individualmente:', err);
       tokensMap = {};
@@ -167,7 +166,6 @@ const EtiquetasPage = () => {
       if (!token) {
         console.warn('No token encontrado para activo', { candidateKeys, idx, it });
       } else {
-        console.log('Token matched for', matchedKey, token?.slice?.(0,8) ?? token);
       }
 
       let qrDataUrl: string | null = null;

@@ -197,7 +197,6 @@ const PublicReportPage: React.FC = () => {
         const t0 = tracks[0];
         const settings = t0?.getSettings ? t0.getSettings() : undefined;
         setStreamInfo(JSON.stringify({ tracks: tracks.length, label: t0?.label ?? null, settings }, null, 2));
-        console.debug('Camera stream info', { tracks: tracks.length, label: t0?.label, settings });
       } catch (dErr) {
         setStreamInfo(null);
       }

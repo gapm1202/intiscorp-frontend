@@ -20,6 +20,7 @@ interface ContactoTecnico {
   horarioDisponible: string;
   autorizaCambiosCriticos: boolean;
   nivelAutorizacion: string;
+  supervisionCoordinacion: boolean;
 }
 
 interface CreateEmpresaModalProps {
@@ -58,7 +59,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
     provincia: "",
     sector: "",
     paginaWeb: "",
-    estadoContrato: "activo",
+    estadoContrato: "",
     observacionesGenerales: "",
     
     // Contactos administrativos
@@ -66,7 +67,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
     autorizacionFacturacion: false,
     
     // Contactos técnicos
-    contactosTecnicos: [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "" }],
+    contactosTecnicos: [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "", supervisionCoordinacion: true }],
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,7 +137,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
   const addContactoTecnico = () => {
     setFormData(prev => ({
       ...prev,
-      contactosTecnicos: [...prev.contactosTecnicos, { nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "" }],
+      contactosTecnicos: [...prev.contactosTecnicos, { nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "", supervisionCoordinacion: true }],
     }));
   };
 
@@ -152,6 +153,17 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
     setLoading(true);
     setError(null);
 
+    // Lógica para asignar estado automáticamente según fecha de fin
+    let estadoContrato = formData.estadoContrato || 'activo';
+    // Si el estado NO es suspendido, se determina automáticamente
+    if (formData.estadoContrato !== 'suspendido') {
+      // Buscar si hay una fecha de fin en el contrato activo (esto normalmente vendría de la pestaña Contrato)
+      // Aquí solo simulamos: si existe una fecha de fin y ya venció, es 'vencido', si no, 'activo'.
+      // NOTA: En este formulario no hay campo de fecha de fin, así que solo se puede dejar como 'activo' por defecto.
+      // Si se integra con la pestaña Contrato, aquí se debería consultar esa fecha.
+      estadoContrato = 'activo';
+    }
+
     const empresaData = {
       nombre: formData.nombre,
       ruc: formData.ruc,
@@ -162,14 +174,12 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
       provincia: formData.provincia,
       sector: formData.sector,
       paginaWeb: formData.paginaWeb,
-      estadoContrato: formData.estadoContrato,
+      estadoContrato,
       observacionesGenerales: formData.observacionesGenerales,
       contactosAdmin: formData.contactosAdmin,
       autorizacionFacturacion: formData.autorizacionFacturacion,
       contactosTecnicos: formData.contactosTecnicos,
     };
-
-    console.log("📤 Datos siendo enviados al backend:", empresaData);
 
     try {
       if (empresaId) {
@@ -180,7 +190,6 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
         return;
       } else {
         const response = await createEmpresa(empresaData);
-        console.log("✅ Respuesta del servidor:", response);
       }
       
       setFormData({
@@ -193,11 +202,11 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
         provincia: "",
         sector: "",
         paginaWeb: "",
-        estadoContrato: "activo",
+        estadoContrato: "",
         observacionesGenerales: "",
         contactosAdmin: [{ nombre: "", cargo: "", telefono: "", email: "" }],
         autorizacionFacturacion: false,
-        contactosTecnicos: [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "" }],
+        contactosTecnicos: [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "", supervisionCoordinacion: true }],
       });
       onSuccess();
       onClose();
@@ -216,7 +225,6 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
     setError(null);
     try {
       const resp = await updateEmpresa(empresaId, pendingEmpresaData, motivo);
-      console.log("✅ Empresa actualizada con motivo:", resp);
       setPendingEmpresaData(null);
       onSuccess();
       onClose();
@@ -241,7 +249,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
         provincia: initialData.provincia ?? "",
         sector: initialData.sector ?? "",
         paginaWeb: initialData.paginaWeb ?? "",
-        estadoContrato: initialData.estadoContrato ?? "activo",
+        estadoContrato: initialData.estadoContrato ?? "",
         observacionesGenerales: initialData.observacionesGenerales ?? "",
         contactosAdmin: initialData.contactosAdmin ?? [{ nombre: "", cargo: "", telefono: "", email: "" }],
         autorizacionFacturacion: initialData.autorizacionFacturacion ?? false,
@@ -259,11 +267,11 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
         provincia: "",
         sector: "",
         paginaWeb: "",
-        estadoContrato: "activo",
+        estadoContrato: "",
         observacionesGenerales: "",
         contactosAdmin: [{ nombre: "", cargo: "", telefono: "", email: "" }],
         autorizacionFacturacion: false,
-        contactosTecnicos: [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "" }],
+        contactosTecnicos: [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "", supervisionCoordinacion: true }],
       });
     }
   }, [initialData, empresaId, isOpen]);
@@ -433,12 +441,16 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
                     value={formData.estadoContrato}
                     onChange={handleChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
+                    disabled
                   >
+                    <option value="">--- Se definirá en la pestaña Contrato ---</option>
                     <option value="activo">Activo</option>
                     <option value="suspendido">Suspendido</option>
-                    <option value="no_renovado">No renovado</option>
+                    <option value="vencido">Vencido</option>
                   </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    El estado del contrato se definirá automáticamente en la pestaña Contrato según las fechas configuradas.
+                  </p>
                 </div>
 
                 <div className="md:col-span-2">
@@ -642,7 +654,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
                         onChange={(e) => handleContactoTecnicoChange(idx, 'contactoPrincipal', e.target.checked)}
                         className="w-4 h-4"
                       />
-                      Contacto principal de soporte
+                      Contacto de cuenta y soporte
                     </label>
                     <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                       <input
@@ -652,6 +664,15 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
                         className="w-4 h-4"
                       />
                       ¿Autoriza cambios críticos?
+                    </label>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={contacto.supervisionCoordinacion}
+                        onChange={(e) => handleContactoTecnicoChange(idx, 'supervisionCoordinacion', e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                      Supervisión y coordinación
                     </label>
                   </div>
 

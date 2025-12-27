@@ -86,7 +86,6 @@ const TrasladarAssetModal = ({
       }
 
       const codigoActual = formatAssetCode(String(asset.assetId || asset.codigo || ""));
-      console.log("🔍 Verificando código", codigoActual, "en sede destino:", sedeDestino);
 
       try {
         const token = localStorage.getItem("token");
@@ -99,7 +98,6 @@ const TrasladarAssetModal = ({
             },
           }
         );
-        console.log("🔍 Verificando duplicados con soloSedeActual=true");
 
         if (response.ok) {
           const data = await response.json();
@@ -136,16 +134,12 @@ const TrasladarAssetModal = ({
               // Sugerir el siguiente número disponible
               const numeroSugerido = numeroMaximo + 1;
               const codigoSugerido = `${prefijo}-${String(numeroSugerido).padStart(4, "0")}`;
-              
-              console.log("⚠️ Código duplicado detectado. Sugerencia:", codigoSugerido);
               setCodigoConflicto({ existe: true, sugerencia: codigoSugerido });
             } else {
               // Si el código no tiene formato estándar, solo notificar conflicto
-              console.log("⚠️ Código duplicado sin formato estándar");
               setCodigoConflicto({ existe: true, sugerencia: codigoActual + "-NEW" });
             }
           } else {
-            console.log("✅ Código disponible en sede destino");
             setCodigoConflicto(null);
           }
         }
@@ -162,17 +156,13 @@ const TrasladarAssetModal = ({
   useEffect(() => {
     const fetchAreas = async () => {
       if (!empresaId || !isOpen) {
-        console.log("🔴 TrasladarModal: No hay empresaId o modal cerrado");
         setAreasDestino([]);
         return;
       }
-
-      console.log("🔵 TrasladarModal: Cargando áreas para empresa:", empresaId);
       setLoadingAreas(true);
       try {
         const token = localStorage.getItem("token");
         const url = `http://localhost:4000/api/empresas/${empresaId}/areas`;
-        console.log("🔵 TrasladarModal: Fetching desde:", url);
         
         const response = await fetch(url, {
           headers: {
@@ -181,15 +171,10 @@ const TrasladarAssetModal = ({
           },
         });
 
-        console.log("🔵 TrasladarModal: Response status:", response.status);
-
         if (response.ok) {
           const data = await response.json();
-          console.log("🔵 TrasladarModal: Data recibida:", data);
           
           const areas = Array.isArray(data) ? data : data?.data ?? [];
-          console.log("🔵 TrasladarModal: Áreas parseadas:", areas);
-          console.log("🔵 TrasladarModal: Total áreas:", areas.length);
           
           // Cargar TODAS las áreas de la empresa (no filtrar por sede)
           setAreasDestino(areas);
@@ -271,15 +256,6 @@ const TrasladarAssetModal = ({
         formData.append(`fotoDescriptions[${index}]`, foto.description || "");
       });
 
-      console.log("🚀 Enviando traslado al backend:", {
-        activoId,
-        empresaId,
-        sedeOrigenId,
-        sedeDestino,
-        areaDestino,
-        motivo,
-      });
-
       const response = await fetch(
         `http://localhost:4000/api/activos/${activoId}/trasladar`,
         {
@@ -298,7 +274,6 @@ const TrasladarAssetModal = ({
       }
 
       const data = await response.json();
-      console.log("✅ Traslado exitoso:", data);
 
       alert(
         `✅ Traslado registrado exitosamente\n\nEl activo ha sido trasladado a ${sedes?.find((s) => String(s._id ?? s.id) === sedeDestino)?.nombre || "la nueva sede"}`

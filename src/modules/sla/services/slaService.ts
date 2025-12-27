@@ -23,13 +23,11 @@ export const slaService = {
   // Guardar sección específica
   async guardarSeccion(empresaId: string, seccion: string, data: unknown, motivo?: string) {
     try {
-      console.log('[slaService] guardarSeccion request:', { seccion, dataType: typeof data, data, motivo });
       const response = await axiosClient.post(`${BASE_URL}/seccion/${empresaId}`, {
         seccion,
         data,
         ...(motivo ? { motivo } : {}),
       });
-      console.log('[slaService] guardarSeccion response:', response.data);
       return response.data;
     } catch (error: any) {
       console.error('[slaService] guardarSeccion error:', {

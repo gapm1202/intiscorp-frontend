@@ -149,13 +149,6 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
       clearCanvas();
       // Debug: log warranty-related raw fields to help diagnose missing display
       try {
-        console.debug('InitialSupportReportModal open - warranty fields', {
-          estado_garantia: asset?.estado_garantia ?? asset?.estadoGarantia,
-          warranty_expires_at: asset?.warranty_expires_at ?? asset?.warrantyExpiresAt,
-          fechaFinGarantia: asset?.fechaFinGarantia ?? asset?.fecha_fin_garantia,
-          garantiaDuracion: asset?.garantia ?? asset?.garantiaDuracion ?? asset?.garantia_duracion,
-          fechaCompra: asset?.fechaCompra ?? asset?.fecha_compra ?? asset?.fechaCompraAprox
-        });
       } catch {
         // noop
       }
@@ -1124,7 +1117,6 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
     try {
       const reachable = await checkServerReachable(serverUrl, 2500);
       if (!reachable) {
-        console.info('[PDF SERVER] No reachable at', serverUrl, '- skipping server upload and falling back to client print.');
       } else {
         // proceed to attempt sending
         // Prepare metadata payload that includes html + asset + user/tech info + anexos metadata

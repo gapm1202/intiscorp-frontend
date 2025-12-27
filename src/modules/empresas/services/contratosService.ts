@@ -5,6 +5,28 @@ function getToken(): string | null {
   return localStorage.getItem("token");
 }
 
+// GET contratos próximos a vencer
+export async function getContratosProximosAVencer(diasAnticipacion: number = 30) {
+  const url = `${API_BASE}/api/contratos/proximos-a-vencer?dias=${diasAnticipacion}`;
+  const token = getToken();
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+  });
+
+  if (!res.ok) {
+    console.error('Error al obtener contratos próximos a vencer:', res.status);
+    return [];
+  }
+
+  const data = await res.json();
+  return data;
+}
+
 // Helper para agregar timeout a fetch
 async function fetchWithTimeout(url: string, options: RequestInit, timeout = 30000): Promise<Response> {
   const controller = new AbortController();
@@ -29,7 +51,6 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeout = 300
 // GET contrato activo
 export async function getContratoActivo(empresaId: string | number) {
   const url = `${API_BASE}/api/empresas/${empresaId}/contratos/activo`;
-  console.log('[contratosService] GET', url);
   const token = getToken();
 
   const res = await fetch(url, {
@@ -52,6 +73,27 @@ export async function getContratoActivo(empresaId: string | number) {
   return await res.json();
 }
 
+// GET contrato por ID específico
+export async function getContratoById(contratoId: string | number) {
+  const url = `${API_BASE}/api/contratos/${contratoId}`;
+  const token = getToken();
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Error fetching contrato: ${res.status} - ${text}`);
+  }
+
+  return await res.json();
+}
+
 // POST crear contrato
 export async function createContrato(empresaId: string | number, data: {
   tipoContrato: string;
@@ -65,7 +107,6 @@ export async function createContrato(empresaId: string | number, data: {
 }) {
   const url = `${API_BASE}/api/empresas/${empresaId}/contratos`;
   const token = getToken();
-  console.log('[contratosService] POST', url, data);
 
   const res = await fetch(url, {
     method: "POST",
@@ -87,6 +128,7 @@ export async function createContrato(empresaId: string | number, data: {
 // PATCH datos generales del contrato
 export async function updateContratoDatos(empresaId: string | number, contractId: string | number, data: {
   tipoContrato?: string;
+  estadoContrato?: string;
   fechaInicio?: string;
   fechaFin?: string;
   renovacionAutomatica?: boolean;
@@ -96,7 +138,6 @@ export async function updateContratoDatos(empresaId: string | number, contractId
 }) {
   const url = `${API_BASE}/api/empresas/${empresaId}/contratos/${contractId}`;
   const token = getToken();
-  console.log('[contratosService] PATCH', url, data);
 
   const res = await fetchWithTimeout(url, {
     method: "PATCH",
@@ -106,8 +147,6 @@ export async function updateContratoDatos(empresaId: string | number, contractId
     },
     body: JSON.stringify(data),
   }, 15000); // 15 segundos timeout
-
-  console.log('[contratosService] PATCH response status:', res.status);
 
   if (!res.ok) {
     const text = await res.text();
@@ -133,7 +172,6 @@ export async function updateContratoServicios(empresaId: string | number, contra
 }) {
   const url = `${API_BASE}/api/empresas/${empresaId}/contratos/${contractId}/servicios`;
   const token = getToken();
-  console.log('[contratosService] PATCH', url, data);
 
   const res = await fetchWithTimeout(url, {
     method: "PATCH",
@@ -143,8 +181,6 @@ export async function updateContratoServicios(empresaId: string | number, contra
     },
     body: JSON.stringify(data),
   }, 15000); // 15 segundos timeout
-
-  console.log('[contratosService] PATCH response status:', res.status);
 
   if (!res.ok) {
     const text = await res.text();
@@ -165,7 +201,6 @@ export async function updateContratoPreventivo(empresaId: string | number, contr
 }) {
   const url = `${API_BASE}/api/empresas/${empresaId}/contratos/${contractId}/preventivo`;
   const token = getToken();
-  console.log('[contratosService] PATCH', url, data);
 
   const res = await fetchWithTimeout(url, {
     method: "PATCH",
@@ -175,8 +210,6 @@ export async function updateContratoPreventivo(empresaId: string | number, contr
     },
     body: JSON.stringify(data),
   }, 15000); // 15 segundos timeout
-
-  console.log('[contratosService] PATCH response status:', res.status);
 
   if (!res.ok) {
     const text = await res.text();
@@ -197,7 +230,6 @@ export async function updateContratoEconomicos(empresaId: string | number, contr
 }) {
   const url = `${API_BASE}/api/empresas/${empresaId}/contratos/${contractId}/economicos`;
   const token = getToken();
-  console.log('[contratosService] PATCH', url, data);
 
   const res = await fetchWithTimeout(url, {
     method: "PATCH",
@@ -207,8 +239,6 @@ export async function updateContratoEconomicos(empresaId: string | number, contr
     },
     body: JSON.stringify(data),
   }, 15000); // 15 segundos timeout
-
-  console.log('[contratosService] PATCH response status:', res.status);
 
   if (!res.ok) {
     const text = await res.text();
@@ -228,7 +258,6 @@ export async function uploadContratoDocumentos(
 ) {
   const url = `${API_BASE}/api/empresas/${empresaId}/contratos/${contractId}/documentos`;
   const token = getToken();
-  console.log('[contratosService] POST', url, { tipo, motivo, filesCount: Array.from(files).length });
 
   const formData = new FormData();
   Array.from(files).forEach((file) => formData.append("files", file));
@@ -260,7 +289,6 @@ export async function deleteContratoDocumento(
 ) {
   const url = `${API_BASE}/api/empresas/${empresaId}/contratos/${contractId}/documentos/${docId}`;
   const token = getToken();
-  console.log('[contratosService] DELETE', url, { motivo });
 
   const res = await fetch(url, {
     method: "DELETE",

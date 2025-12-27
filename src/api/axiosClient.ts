@@ -21,7 +21,6 @@ axiosClient.interceptors.request.use(
       data: config.data,
       dataString: typeof config.data === 'string' ? config.data : JSON.stringify(config.data, null, 2)
     };
-    console.log(`[axios] 📤 ${logData.method} ${logData.url}`, logData);
     return config;
   },
   (error) => Promise.reject(error)
@@ -30,7 +29,6 @@ axiosClient.interceptors.request.use(
 // Interceptor para manejar errores globales + logging detallado
 axiosClient.interceptors.response.use(
   (response) => {
-    console.log(`[axios] ✅ ${response.status} ${response.config.url}`, response.data);
     return response;
   },
   (error) => {

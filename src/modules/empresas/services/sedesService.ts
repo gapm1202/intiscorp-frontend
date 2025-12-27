@@ -30,7 +30,6 @@ export async function createSede(empresaId: string | number, sedeData: {
   const url = `${API_BASE}/api/empresas/${empresaId}/sedes`;
   
   const token = getToken();
-  console.log("➕ Creando sede:", sedeData);
 
   const res = await fetch(url, {
     method: "POST",
@@ -41,8 +40,6 @@ export async function createSede(empresaId: string | number, sedeData: {
     body: JSON.stringify(sedeData),
   });
 
-  console.log("📊 Respuesta status:", res.status);
-
   if (!res.ok) {
     const text = await res.text();
     console.error("❌ Error:", text);
@@ -50,7 +47,6 @@ export async function createSede(empresaId: string | number, sedeData: {
   }
 
   const data = await res.json();
-  console.log("✅ Sede creada:", data);
   return data;
 }
 
@@ -60,7 +56,6 @@ export async function getSedesByEmpresa(empresaId: string | number, incluirInact
   const url = `${API_BASE}/api/empresas/${empresaId}/sedes${qs}`;
   
   const token = getToken();
-  console.log("🔍 Obteniendo sedes de empresa:", url);
 
   const res = await fetch(url, {
     method: "GET",
@@ -70,8 +65,6 @@ export async function getSedesByEmpresa(empresaId: string | number, incluirInact
     },
   });
 
-  console.log("📊 Respuesta status:", res.status);
-
   if (!res.ok) {
     const text = await res.text();
     console.error("❌ Error:", text);
@@ -79,8 +72,24 @@ export async function getSedesByEmpresa(empresaId: string | number, incluirInact
   }
 
   const data = await res.json();
-  console.log("✅ Sedes obtenidas:", data);
-  return data;
+  
+  // Normalizar datos: agregar valores por defecto para campos que puedan no existir en el backend
+  const normalizedData = Array.isArray(data) 
+    ? data.map((sede: any) => ({
+        ...sede,
+        autorizaSupervisionCoordinacion: sede.autorizaSupervisionCoordinacion ?? true
+      }))
+    : {
+        ...data,
+        data: Array.isArray(data.data)
+          ? data.data.map((sede: any) => ({
+              ...sede,
+              autorizaSupervisionCoordinacion: sede.autorizaSupervisionCoordinacion ?? true
+            }))
+          : data.data
+      };
+  
+  return normalizedData;
 }
 
 // Actualizar sede
@@ -106,7 +115,6 @@ export async function updateSede(empresaId: string | number, sedeId: string | nu
   const url = `${API_BASE}/api/empresas/${empresaId}/sedes/${sedeId}`;
   
   const token = getToken();
-  console.log("✏️ Actualizando sede:", sedeData, motivo ? `(motivo: ${motivo})` : "");
 
   const body = motivo ? { ...sedeData, motivo } : sedeData;
 
@@ -119,8 +127,6 @@ export async function updateSede(empresaId: string | number, sedeId: string | nu
     body: JSON.stringify(body),
   });
 
-  console.log("📊 Respuesta status:", res.status);
-
   if (!res.ok) {
     const text = await res.text();
     console.error("❌ Error:", text);
@@ -128,7 +134,6 @@ export async function updateSede(empresaId: string | number, sedeId: string | nu
   }
 
   const data = await res.json();
-  console.log("✅ Sede actualizada:", data);
   return data;
 }
 
@@ -137,7 +142,6 @@ export async function toggleSedeActivo(empresaId: string | number, sedeId: strin
   const url = `${API_BASE}/api/empresas/${empresaId}/sedes/${sedeId}`;
   
   const token = getToken();
-  console.log("🔁 Toggle sede:", sedeId, "activo:", activo, "motivo:", motivo);
 
   const body = { activo, motivo };
 
@@ -150,8 +154,6 @@ export async function toggleSedeActivo(empresaId: string | number, sedeId: strin
     body: JSON.stringify(body),
   });
 
-  console.log("📊 Respuesta status:", res.status);
-
   if (!res.ok) {
     const text = await res.text();
     console.error("❌ Error:", text);
@@ -159,6 +161,5 @@ export async function toggleSedeActivo(empresaId: string | number, sedeId: strin
   }
 
   const data = await res.json();
-  console.log("✅ Sede actualizada (activo):", data);
   return data;
 }

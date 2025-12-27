@@ -14,8 +14,6 @@ export async function getInventarioByEmpresa(empresaId: string | number) {
   const url = `${API_BASE}/api/empresas/${empresaId}/inventario`;
   
   const token = getToken();
-  console.log("🔍 Solicitando inventario de:", url);
-  console.log("🔑 Token:", token ? "✓ Presente" : "✗ No encontrado");
 
   const res = await fetch(url, {
     method: "GET",
@@ -24,8 +22,6 @@ export async function getInventarioByEmpresa(empresaId: string | number) {
       ...(token && { "Authorization": `Bearer ${token}` })
     },
   });
-
-  console.log("📊 Respuesta status:", res.status);
 
   if (!res.ok) {
     const text = await res.text();
@@ -37,7 +33,6 @@ export async function getInventarioByEmpresa(empresaId: string | number) {
   }
 
   const data = await res.json();
-  console.log("✅ Datos recibidos:", data);
   return data;
 }
 
@@ -49,8 +44,6 @@ export async function getInventarioBySede(
   const queryParam = soloSedeActual ? '?soloSedeActual=true' : '';
   const url = `${API_BASE}/api/empresas/${empresaId}/sedes/${sedeId}/inventario${queryParam}`;
   const token = getToken();
-  console.log("🔍 Solicitando inventario de sede:", url);
-  console.log("📌 Parámetro soloSedeActual:", soloSedeActual);
 
   const res = await fetch(url, {
     method: "GET",
@@ -59,8 +52,6 @@ export async function getInventarioBySede(
       ...(token && { "Authorization": `Bearer ${token}` })
     },
   });
-
-  console.log("📊 Respuesta status:", res.status);
 
   if (!res.ok) {
     const text = await res.text();
@@ -72,16 +63,12 @@ export async function getInventarioBySede(
   }
 
   const data = await res.json();
-  console.log("✅ Datos de inventario (sede) recibidos:", data);
-  console.log("🔍 Primer item completo:", data?.data?.[0] || data?.[0]);
   return data;
 }
 
 export async function createActivo(empresaId: string | number, sedeId: string | number, activoData: ActivoPayload) {
   const url = `${API_BASE}/api/empresas/${empresaId}/sedes/${sedeId}/inventario`;
   const token = getToken();
-  console.log("📝 Creando activo en:", url);
-  console.log("📦 Datos del activo:", activoData);
 
   const payload = activoData as ActivoPayload;
 
@@ -140,7 +127,6 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
     // Adjuntar los archivos específicos de compra/garantía si vienen como File
     if (purchaseDocumentFile && (purchaseDocumentFile as FileLike).name) {
       formData.append('purchaseDocument', purchaseDocumentFile as unknown as File);
-      console.log('📤 Adjuntando purchaseDocument file:', (purchaseDocumentFile as FileLike).name);
       // Compat: añadir variantes de key que el backend podría esperar
       formData.append('purchase_document', purchaseDocumentFile as unknown as File);
       formData.append('purchaseDocumentFile', purchaseDocumentFile as unknown as File);
@@ -148,7 +134,6 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
     }
     if (warrantyDocumentFile && (warrantyDocumentFile as FileLike).name) {
       formData.append('warrantyDocument', warrantyDocumentFile as unknown as File);
-      console.log('📤 Adjuntando warrantyDocument file:', (warrantyDocumentFile as FileLike).name);
       // Compat: añadir variantes de key que el backend podría esperar
       formData.append('warranty_document', warrantyDocumentFile as unknown as File);
       formData.append('warrantyDocumentFile', warrantyDocumentFile as unknown as File);
@@ -167,23 +152,18 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
     }
 
     const jsonData = JSON.stringify(restData);
-    console.log('📤 JSON enviado en data (create, con fotos):', jsonData);
     // Añadir condicion_fisica también como campo top-level en FormData (compatibilidad)
     if (typeof restData['condicion_fisica'] !== 'undefined') {
       formData.append('condicion_fisica', String(restData['condicion_fisica']));
     }
     formData.append('data', jsonData);
-
-    console.log("📸 Enviando con FormData (con archivos)");
     // Mostrar las entradas de FormData para depuración (nombre, valor/file)
     try {
       for (const entry of (formData as unknown as FormData).entries()) {
         // Para archivos mostramos el nombre
         const value = entry[1] && (entry[1] as FileLike).name ? (entry[1] as FileLike).name : entry[1];
-        console.log('📤 FormData entry:', entry[0], value);
       }
     } catch (e) {
-      console.log('⚠️ No se pudo iterar FormData en este entorno', e);
     }
 
     const res = await fetch(url, {
@@ -195,8 +175,6 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
       body: formData
     });
 
-    console.log("📊 Respuesta status:", res.status);
-
     if (!res.ok) {
       const text = await res.text();
       console.error("❌ Error creando activo:", text);
@@ -207,7 +185,6 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
     }
 
     const data = await res.json();
-    console.log("✅ Activo creado:", data);
     return data;
   } else {
     // Sin fotos: si hay archivos de purchase/warranty, enviar FormData para no serializar File en JSON
@@ -254,7 +231,6 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
       }
 
       const jsonData2 = JSON.stringify(restCopy);
-      console.log('📤 JSON enviado en data (create, sin fotos, con docs):', jsonData2);
 
       if (purchaseDocumentFile && (purchaseDocumentFile as FileLike).name) {
         formData.append('purchaseDocument', purchaseDocumentFile as unknown as File);
@@ -287,8 +263,6 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
         body: formData
       });
 
-      console.log("📊 Respuesta status:", res.status);
-
       if (!res.ok) {
         const text = await res.text();
         console.error("❌ Error creando activo (con docs):", text);
@@ -299,7 +273,6 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
       }
 
       const data = await res.json();
-      console.log("✅ Activo creado:", data);
       return data;
     }
 
@@ -319,8 +292,6 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
       })())
     });
 
-    console.log("📊 Respuesta status:", res.status);
-
     if (!res.ok) {
       const text = await res.text();
       console.error("❌ Error creando activo:", text);
@@ -331,7 +302,6 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
     }
 
     const data = await res.json();
-    console.log("✅ Activo creado:", data);
     return data;
   }
 }
@@ -404,8 +374,6 @@ export async function getTokensForAssets(ids: Array<string | number>) {
 export async function updateActivo(empresaId: string | number, sedeId: string | number, activoId: string | number, activoData: ActivoPayload) {
   const url = `${API_BASE}/api/empresas/${empresaId}/sedes/${sedeId}/inventario/${activoId}`;
   const token = getToken();
-  console.log("✏️ Actualizando activo:", url);
-  console.log("📦 Datos a actualizar:", activoData);
 
   const payload = activoData as ActivoPayload;
 
@@ -463,21 +431,16 @@ export async function updateActivo(empresaId: string | number, sedeId: string | 
       formData.append('purchase_document', purchaseDocumentFile as unknown as File);
       formData.append('purchaseDocumentFile', purchaseDocumentFile as unknown as File);
       formData.append('purchase_document_file', purchaseDocumentFile as unknown as File);
-      console.log('📤 Adjuntando purchaseDocument file (update):', (purchaseDocumentFile as FileLike).name);
     }
     if (warrantyDocumentFile && (warrantyDocumentFile as FileLike).name) {
       formData.append('warrantyDocument', warrantyDocumentFile as unknown as File);
       formData.append('warranty_document', warrantyDocumentFile as unknown as File);
       formData.append('warrantyDocumentFile', warrantyDocumentFile as unknown as File);
       formData.append('warranty_document_file', warrantyDocumentFile as unknown as File);
-      console.log('📤 Adjuntando warrantyDocument file (update):', (warrantyDocumentFile as FileLike).name);
     }
 
     const jsonData3 = JSON.stringify(restData2);
-    console.log('📤 JSON enviado en data (update, con fotos):', jsonData3);
     formData.append('data', jsonData3);
-
-    console.log("📸 Enviando actualización con FormData (con archivos nuevos)");
 
     const res = await fetch(url, {
       method: "PUT",
@@ -498,7 +461,6 @@ export async function updateActivo(empresaId: string | number, sedeId: string | 
     }
 
     const data = await res.json();
-    console.log("✅ Activo actualizado:", data);
     return data;
   } else {
     // Sin fotos nuevas - si hay archivos de purchase/warranty, enviar FormData para no serializar File en JSON
@@ -544,7 +506,6 @@ export async function updateActivo(empresaId: string | number, sedeId: string | 
       }
 
       const jsonData4 = JSON.stringify(restCopy);
-      console.log('📤 JSON enviado en data (update, sin fotos, con docs):', jsonData4);
 
       if (purchaseDocumentFile && (purchaseDocumentFile as FileLike).name) {
         formData.append('purchaseDocument', purchaseDocumentFile as unknown as File);
@@ -562,10 +523,8 @@ export async function updateActivo(empresaId: string | number, sedeId: string | 
       try {
         for (const entry of (formData as unknown as FormData).entries()) {
           const value = entry[1] && (entry[1] as FileLike).name ? (entry[1] as FileLike).name : entry[1];
-          console.log('📤 FormData entry (update without photos):', entry[0], value);
         }
       } catch (e) {
-        console.log('⚠️ No se pudo iterar FormData en este entorno (update without photos)', e);
       }
 
       formData.append('data', jsonData4);
@@ -588,7 +547,6 @@ export async function updateActivo(empresaId: string | number, sedeId: string | 
       }
 
       const data = await res.json();
-      console.log("✅ Activo actualizado:", data);
       return data;
     }
 
@@ -611,7 +569,6 @@ export async function updateActivo(empresaId: string | number, sedeId: string | 
     }
 
     const data = await res.json();
-    console.log("✅ Activo actualizado:", data);
     return data;
   }
 }

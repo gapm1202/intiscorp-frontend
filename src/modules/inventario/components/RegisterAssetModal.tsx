@@ -259,7 +259,6 @@ const RegisterAssetModal = ({
   // Cargar datos cuando se está editando
   useEffect(() => {
     if (isOpen && editingAsset) {
-      console.log('📝 Cargando activo para editar:', editingAsset);
       Promise.resolve().then(() => {
         const asset = editingAsset as Record<string, unknown>;
         setCategoria(String(asset['categoria'] ?? ''));
@@ -383,7 +382,6 @@ const RegisterAssetModal = ({
         if (camposArrayRaw) {
           try {
             const camposArray = typeof camposArrayRaw === 'string' ? JSON.parse(String(camposArrayRaw)) : camposArrayRaw as unknown;
-            console.log('✅ Componentes Múltiples cargados:', camposArray);
             const mappedArr: Record<string, Array<Record<string, string>>> = {};
             Object.keys(camposArray || {}).forEach((origKey) => {
               const k = getFieldKey(origKey);
@@ -394,7 +392,6 @@ const RegisterAssetModal = ({
             console.error('❌ Error parsing campos_personalizados_array:', err);
           }
         } else {
-          console.log('⚠️ No se encontraron Componentes Múltiples en el activo');
           setDynamicArrayFields({});
         }
 
@@ -494,7 +491,6 @@ const RegisterAssetModal = ({
           try {
             const fotosData = typeof asset['fotos'] === 'string' ? JSON.parse(String(asset['fotos'])) : asset['fotos'];
             if (Array.isArray(fotosData)) {
-              console.log('📸 Fotos cargadas para edición:', fotosData);
               const fotosNormalizadas = (fotosData as Array<Record<string, unknown>>).map((foto) => {
                 const f = foto as Record<string, unknown>;
                 let url = String(f['url'] ?? '');
@@ -694,23 +690,14 @@ const RegisterAssetModal = ({
     };
 
     try {
-      console.log('✏️ Actualizando activo ID:', activoId);
-      console.log('📝 Motivo:', motivo);
-      console.log('📦 Datos a actualizar:', datosActualizados);
-      console.log('🏢 ÁREA SELECCIONADA:', area);
-      console.log('📸 Fotos existentes que se mantienen:', fotosExistentes);
-      console.log('📸 Fotos nuevas a subir:', fotos);
       
       // Agregar el motivo al objeto
       const payload = {
         ...datosActualizados,
         motivo: motivo,
       };
-      
-      console.log('📤 PAYLOAD COMPLETO ENVIADO AL BACKEND:', JSON.stringify(payload, null, 2));
 
       const response = await updateActivo(empresaId, sedeId, activoId, payload);
-      console.log('✅ Activo actualizado en la base de datos');
       
       const activoActualizado = response?.data || response;
       
@@ -846,26 +833,14 @@ const RegisterAssetModal = ({
     };
 
     try {
-      console.log('➕ Creando nuevo activo');
-      console.log('📤 Archivos de documento (antes de enviar):', {
-        purchaseDocumentFile: purchaseDocumentFile ? purchaseDocumentFile.name : null,
-        warrantyDocumentFile: warrantyDocumentFile ? warrantyDocumentFile.name : null,
-        fotosFiles: fotos.length > 0 ? fotos.map(f => f.file.name) : []
-      });
       const response = await createActivo(eId, sId, newItem);
-      console.log('✅ Activo guardado en la base de datos');
-      console.log('📦 Respuesta del servidor:', response);
       
       // Usar los datos del backend (incluye assetId y fotos con URLs)
       const activoCreado = response?.data || response;
-      console.log('🔄 Activo recibido del backend:', activoCreado);
-      console.log('📸 Fotos en respuesta:', activoCreado.fotos);
-      console.log('📊 Tipo de fotos:', typeof activoCreado.fotos, Array.isArray(activoCreado.fotos));
       
       // Si fotos viene como string JSON, parsearlo
       if (activoCreado.fotos && typeof activoCreado.fotos === 'string') {
         activoCreado.fotos = JSON.parse(activoCreado.fotos);
-        console.log('✅ Fotos parseadas:', activoCreado.fotos);
       }
       
       // Actualizar UI con los datos del backend (NO con newItem)

@@ -5,13 +5,6 @@ export type Urgencia = 'alta' | 'media' | 'baja';
 export type CategoriaITIL = 'usuario' | 'infraestructura' | 'aplicacion' | 'seguridad';
 
 interface GestionIncidentesData {
-  tipos: {
-    hardware: boolean;
-    software: boolean;
-    red: boolean;
-    accesos: boolean;
-    otros: boolean;
-  };
   categoriaITIL?: CategoriaITIL;
   impacto: Impacto;
   urgencia: Urgencia;
@@ -25,13 +18,6 @@ interface GestionIncidentesFormProps {
 }
 
 const defaultData: GestionIncidentesData = {
-  tipos: {
-    hardware: true,
-    software: true,
-    red: true,
-    accesos: true,
-    otros: false,
-  },
   categoriaITIL: undefined,
   impacto: 'medio',
   urgencia: 'media',
@@ -53,13 +39,12 @@ export function GestionIncidentesForm({ initialData, onSave, onCancel }: Gestion
   const getInitialData = (): GestionIncidentesData => {
     if (!initialData || Object.keys(initialData).length === 0) return defaultData;
     return {
-      tipos: initialData.tipos || defaultData.tipos,
       categoriaITIL: initialData.categoriaITIL,
       impacto: initialData.impacto || defaultData.impacto,
       urgencia: initialData.urgencia || defaultData.urgencia,
       prioridadCalculada: initialData.prioridadCalculada || defaultData.prioridadCalculada,
     };
-  };
+  }; 
 
   const [formData, setFormData] = useState<GestionIncidentesData>(getInitialData());
 
@@ -68,15 +53,7 @@ export function GestionIncidentesForm({ initialData, onSave, onCancel }: Gestion
     [formData.impacto, formData.urgencia]
   );
 
-  const toggleTipo = (key: keyof GestionIncidentesData['tipos']) => {
-    setFormData((prev) => ({
-      ...prev,
-      tipos: {
-        ...prev.tipos,
-        [key]: !prev.tipos[key],
-      },
-    }));
-  };
+
 
   const setImpacto = (impacto: Impacto) => {
     setFormData((prev) => ({ ...prev, impacto, prioridadCalculada: calcularPrioridad(impacto, prev.urgencia) }));
@@ -113,37 +90,7 @@ export function GestionIncidentesForm({ initialData, onSave, onCancel }: Gestion
       </div>
 
       <div className="p-8 space-y-8">
-        {/* Tipos de incidente */}
-        <div className="border-b pb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-sm font-semibold text-gray-900">Tipos de incidente</p>
-              <p className="text-xs text-gray-500 mt-1">Selecciona todos los que apliquen (múltiple)</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {[
-              { key: 'hardware', label: 'Hardware' },
-              { key: 'software', label: 'Software' },
-              { key: 'red', label: 'Red' },
-              { key: 'accesos', label: 'Accesos / credenciales' },
-              { key: 'otros', label: 'Otros' },
-            ].map((item) => (
-              <label
-                key={item.key}
-                className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-              >
-                <input
-                  type="checkbox"
-                  checked={formData.tipos[item.key as keyof GestionIncidentesData['tipos']]}
-                  onChange={() => toggleTipo(item.key as keyof GestionIncidentesData['tipos'])}
-                  className="w-5 h-5 text-blue-600 rounded"
-                />
-                <span className="text-sm text-gray-700">{item.label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+
 
         {/* Categoría ITIL */}
         <div className="border-b pb-6">

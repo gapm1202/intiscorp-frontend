@@ -28,6 +28,7 @@ interface CreateSedeModalProps {
     responsables: Responsable[];
     autorizaIngresoTecnico: boolean;
     autorizaMantenimientoFueraHorario: boolean;
+    autorizaSupervisionCoordinacion: boolean;
   }>;
   onClose: () => void;
   onSuccess: () => void;
@@ -48,6 +49,7 @@ const CreateSedeModal = ({ isOpen, empresaId, sedeId, initialData, onClose, onSu
     responsables: [{ nombre: "", cargo: "", telefono: "", email: "" }],
     autorizaIngresoTecnico: false,
     autorizaMantenimientoFueraHorario: false,
+    autorizaSupervisionCoordinacion: true,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,8 +145,6 @@ const CreateSedeModal = ({ isOpen, empresaId, sedeId, initialData, onClose, onSu
       autorizaMantenimientoFueraHorario: formData.autorizaMantenimientoFueraHorario,
     };
 
-    console.log("📤 Datos de sede siendo enviados:", sedeData);
-
     try {
       if (sedeId) {
         // editar: open confirm modal to require motivo
@@ -154,7 +154,6 @@ const CreateSedeModal = ({ isOpen, empresaId, sedeId, initialData, onClose, onSu
         return;
       } else {
         const created = await createSede(empresaId, sedeData);
-        console.log("✅ Sede creada exitosamente:", created);
       }
       
       setFormData({
@@ -187,7 +186,6 @@ const CreateSedeModal = ({ isOpen, empresaId, sedeId, initialData, onClose, onSu
     setError(null);
     try {
       const updated = await updateSede(empresaId, sedeId, pendingSedeData, motivo);
-      console.log("✅ Sede actualizada con motivo:", updated);
       setPendingSedeData(null);
       onSuccess();
       onClose();
@@ -512,6 +510,17 @@ const CreateSedeModal = ({ isOpen, empresaId, sedeId, initialData, onClose, onSu
                     className="w-5 h-5 text-blue-600 rounded border-gray-300"
                   />
                   <span className="text-gray-700 font-medium">¿Autoriza mantenimiento fuera de horario?</span>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="autorizaSupervisionCoordinacion"
+                    checked={formData.autorizaSupervisionCoordinacion}
+                    onChange={handleChange}
+                    className="w-5 h-5 text-blue-600 rounded border-gray-300"
+                  />
+                  <span className="text-gray-700 font-medium">Supervisión y Coordinación</span>
                 </label>
               </div>
             </div>

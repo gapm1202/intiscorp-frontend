@@ -220,7 +220,6 @@ export function PreventivePlanForm({ empresaId, empresa, contractStatus, frecuen
     setSaving(true);
     try {
       // Por ahora no hay backend; mostramos JSON y notificamos
-      console.log("[PreventivePlan] Guardar plan:", payload);
       setSuccess("✅ Plan guardado localmente (simulado). Integraremos API luego.");
       onSaved?.(payload);
       // resetForm(); // mantener datos tras guardar si prefieres comentar

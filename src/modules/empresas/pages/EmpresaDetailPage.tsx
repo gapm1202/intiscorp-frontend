@@ -3,7 +3,8 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getEmpresaById } from "@/modules/empresas/services/empresasService";
 import { getSedesByEmpresa, toggleSedeActivo } from "@/modules/empresas/services/sedesService";
-import { getContratoActivo, createContrato, updateContratoDatos, updateContratoServicios, updateContratoPreventivo, updateContratoEconomicos, uploadContratoDocumentos, deleteContratoDocumento } from "@/modules/empresas/services/contratosService";
+import { getContratoActivo, getContratoById, createContrato, updateContratoDatos, updateContratoServicios, updateContratoPreventivo, updateContratoEconomicos, uploadContratoDocumentos, deleteContratoDocumento } from "@/modules/empresas/services/contratosService";
+import { getUsuariosAdministrativos } from "@/modules/auth/services/userService";
 import CreateSedeModal from "@/modules/empresas/components/CreateSedeModal";
 import CreateEmpresaModal from "@/modules/empresas/components/CreateEmpresaModal";
 import DeleteSedeModal from "./../components/DeleteSedeModal";
@@ -151,6 +152,7 @@ const EmpresaDetailPage = () => {
   
   // Estados de contrato
   const [contractId, setContractId] = useState<string | null>(null);
+  const [contratoLoading, setContratoLoading] = useState(true);
   const [savingDatos, setSavingDatos] = useState(false);
   const [savingServicios, setSavingServicios] = useState(false);
   const [savingPreventivo, setSavingPreventivo] = useState(false);
@@ -195,9 +197,23 @@ const EmpresaDetailPage = () => {
   const [pendingPath, setPendingPath] = useState<string | null>(null);
   const [slaLoading, setSlaLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false); // Distinguir entre refrescar vs cambiar tab
-  
 
+  // Estado para modal de renovación de contrato
+  const [showRenovarModal, setShowRenovarModal] = useState(false);
+
+  // Estado para modal de ver detalles de contrato histórico
+  const [showDetallesModal, setShowDetallesModal] = useState(false);
+  const [contratoHistoricoId, setContratoHistoricoId] = useState<string | null>(null);
+  const [contratoHistorico, setContratoHistorico] = useState<any>(null);
+  const [loadingDetalles, setLoadingDetalles] = useState(false);
   
+  // Estados para usuarios administrativos
+  const [usuariosAdmin, setUsuariosAdmin] = useState<Array<{ id: string; nombre: string }>>([]);
+  const [loadingUsuarios, setLoadingUsuarios] = useState(false);
+  
+  // Estados para agregar servicios personalizados
+  const [nuevoServicioNombre, setNuevoServicioNombre] = useState('');
+  const [mostrarAgregarServicio, setMostrarAgregarServicio] = useState(false);
   // Estados para modo edición/visualización de cada sección
   // Por defecto, mostrar formularios para que el usuario pueda rellenarlos y guardar.
   const [editModoDatos, setEditModoDatos] = useState(true);
@@ -221,6 +237,84 @@ const EmpresaDetailPage = () => {
     observacionesContractuales: ''
   });
 
+  // Función para determinar si mostrar botón de renovar contrato
+  const mostrarBotonRenovar = () => {
+    if (!contractId) return false; // No mostrar si no existe contrato
+    
+    const estado = contratoData.estadoContrato?.toLowerCase();
+    if (estado === 'suspendido' || estado === 'vencido') return true;
+    
+    // Verificar si faltan 30 días o menos para que venza, o ya venció
+    if (contratoData.fechaFin) {
+      const hoy = new Date();
+      const fechaFin = new Date(contratoData.fechaFin);
+      hoy.setHours(0,0,0,0);
+      fechaFin.setHours(0,0,0,0);
+      
+      // Calcular días restantes
+      const diffTime = fechaFin.getTime() - hoy.getTime();
+      const diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      // Mostrar si faltan 30 días o menos (o ya venció)
+      return diasRestantes <= 30;
+    }
+    
+    return false;
+  };
+
+  // Función para calcular la vigencia del contrato
+  const calcularVigencia = (fechaInicio: string, fechaFin: string) => {
+    if (!fechaInicio || !fechaFin) return '—';
+    
+    const inicio = new Date(fechaInicio);
+    const fin = new Date(fechaFin);
+    
+    // Calcular diferencia en meses
+    const diffMonths = (fin.getFullYear() - inicio.getFullYear()) * 12 + (fin.getMonth() - inicio.getMonth());
+    
+    if (diffMonths >= 12) {
+      const years = Math.floor(diffMonths / 12);
+      const months = diffMonths % 12;
+      if (months === 0) {
+        return `${years} ${years === 1 ? 'año' : 'años'}`;
+      }
+      return `${years} ${years === 1 ? 'año' : 'años'} y ${months} ${months === 1 ? 'mes' : 'meses'}`;
+    } else if (diffMonths > 0) {
+      return `${diffMonths} ${diffMonths === 1 ? 'mes' : 'meses'}`;
+    } else {
+      // Calcular en días si es menos de un mes
+      const diffTime = fin.getTime() - inicio.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return `${diffDays} ${diffDays === 1 ? 'día' : 'días'}`;
+    }
+  };
+
+  // Actualiza automáticamente el estado del contrato al cambiar la fecha de fin
+  useEffect(() => {
+    if (!contratoData.fechaFin) {
+      // Si no hay fecha de fin, deja el estado vacío
+      setContratoData(prev => ({ ...prev, estadoContrato: '' }));
+      return;
+    }
+    // Solo actualizar si no está en modo suspendido
+    if (contratoData.estadoContrato !== 'suspendido') {
+      const hoy = new Date();
+      const fechaFin = new Date(contratoData.fechaFin);
+      // Limpiar horas para comparar solo fechas
+      hoy.setHours(0,0,0,0);
+      fechaFin.setHours(0,0,0,0);
+      let nuevoEstado = '';
+      if (fechaFin >= hoy) {
+        nuevoEstado = 'activo';
+      } else {
+        nuevoEstado = 'vencido';
+      }
+      if (contratoData.estadoContrato !== nuevoEstado) {
+        setContratoData(prev => ({ ...prev, estadoContrato: nuevoEstado }));
+      }
+    }
+  }, [contratoData.fechaFin, contratoData.estadoContrato]);
+
   // Estado para Servicios Incluidos
   const [serviciosIncluidos, setServiciosIncluidos] = useState({
     soporteRemoto: false,
@@ -233,6 +327,8 @@ const EmpresaDetailPage = () => {
     gestionAccesos: false,
     horasMensualesIncluidas: '',
     excesoHorasFacturable: false,
+    showHorasError: false,
+    serviciosPersonalizados: [] as Array<{ id: string; nombre: string; activo: boolean }>,
   });
 
   // Estado para Mantenimientos Preventivos
@@ -284,6 +380,81 @@ const EmpresaDetailPage = () => {
     return (first + last).toUpperCase() || name.slice(0, 2).toUpperCase();
   };
 
+  // Función para formatear nombres de campos técnicos a nombres legibles
+  const formatearNombreCampo = (campo: string): string => {
+    // Primero verificar si hay un mapeo específico
+    const mapa: Record<string, string> = {
+      'estado_contrato': 'Estado del contrato',
+      'estadocontrato': 'Estado del contrato',
+      'tipo_contrato': 'Tipo de contrato',
+      'tipocontrato': 'Tipo de contrato',
+      'fecha_inicio': 'Fecha de inicio',
+      'fechainicio': 'Fecha de inicio',
+      'fecha_fin': 'Fecha de fin',
+      'fechafin': 'Fecha de fin',
+      'auto_renovacion': 'Auto renovación',
+      'autorenovacion': 'Auto renovación',
+      'renovacion_automatica': 'Renovación automática',
+      'renovacionautomatica': 'Renovación automática',
+      'numero_contrato': 'Número de contrato',
+      'numerocontrato': 'Número de contrato',
+      'responsable_comercial': 'Responsable comercial',
+      'responsablecomercial': 'Responsable comercial',
+      'observaciones_contractuales': 'Observaciones contractuales',
+      'observacionescontractuales': 'Observaciones contractuales',
+      'soporte_remoto': 'Soporte remoto',
+      'soporteremoto': 'Soporte remoto',
+      'soporte_presencial': 'Soporte presencial',
+      'soportepresencial': 'Soporte presencial',
+      'mantenimiento_preventivo': 'Mantenimiento preventivo',
+      'mantenimientopreventivo': 'Mantenimiento preventivo',
+      'gestion_inventario': 'Gestión de inventario',
+      'gestioninventario': 'Gestión de inventario',
+      'gestion_credenciales': 'Gestión de credenciales',
+      'gestioncredenciales': 'Gestión de credenciales',
+      'gestion_accesos': 'Gestión de accesos',
+      'gestionaccesos': 'Gestión de accesos',
+      'informes_mensuales': 'Informes mensuales',
+      'informesmensuales': 'Informes mensuales',
+      'horas_mensuales_incluidas': 'Horas mensuales incluidas',
+      'horasmensualesincluidas': 'Horas mensuales incluidas',
+      'exceso_horas_facturable': 'Exceso horas facturable',
+      'excesohorasfacturable': 'Exceso horas facturable',
+      'incluye_preventivo': 'Incluye mantenimiento preventivo',
+      'incluyepreventivo': 'Incluye mantenimiento preventivo',
+      'monto_referencial': 'Monto referencial',
+      'montoreferencial': 'Monto referencial',
+      'moneda': 'Moneda',
+      'tipo_facturacion': 'Tipo de facturación',
+      'tipofacturacion': 'Tipo de facturación',
+      'dia_facturacion': 'Día de facturación',
+      'diafacturacion': 'Día de facturación',
+      'forma_pago': 'Forma de pago',
+      'formapago': 'Forma de pago',
+      'dia_pago': 'Día de pago',
+      'diapago': 'Día de pago',
+      'incluye_igv': 'Incluye IGV',
+      'incluyeigv': 'Incluye IGV',
+      'frecuencia': 'Frecuencia',
+      'modalidad': 'Modalidad',
+      'aplica': 'Aplica a',
+      'observaciones': 'Observaciones',
+    };
+    
+    // Si existe en el mapa, retornar el valor mapeado
+    if (mapa[campo.toLowerCase()]) {
+      return mapa[campo.toLowerCase()];
+    }
+    
+    // Si no está en el mapa, formatear automáticamente:
+    // responsable_comercial -> Responsable comercial
+    // estado_contrato -> Estado contrato
+    return campo
+      .split('_')
+      .map(palabra => palabra.charAt(0).toUpperCase() + palabra.slice(1).toLowerCase())
+      .join(' ');
+  };
+
   const mapHistorialContrato = (history: any[]) => {
     setHistorialContrato(history.map((h: any) => {
       let tipoAccion = 'EDICION';
@@ -291,10 +462,14 @@ const EmpresaDetailPage = () => {
       const campo = campoRaw.toLowerCase();
       const valorNuevo = (h.valorNuevo || h.newValue || '').toLowerCase();
 
-      if (typeof h.tipoAccion === 'string' && h.tipoAccion.trim()) {
-        tipoAccion = h.tipoAccion.trim().toUpperCase();
-      } else if (campoRaw === 'Creación del Contrato') {
+      // Buscar tipoAccion en varias variantes (camelCase y snake_case)
+      const tipoAccionBackend = h.tipoAccion || h.tipo_accion || h.tipoAccion;
+      if (typeof tipoAccionBackend === 'string' && tipoAccionBackend.trim()) {
+        tipoAccion = tipoAccionBackend.trim().toUpperCase();
+      } else if (campoRaw === 'Creación del Contrato' || campo.includes('creación del contrato')) {
         tipoAccion = 'CREACION';
+      } else if (campo.includes('renovación') || campo.includes('renovacion')) {
+        tipoAccion = 'RENOVACION';
       } else if (
         campo.includes('eliminación') ||
         campo.includes('eliminado') ||
@@ -306,13 +481,14 @@ const EmpresaDetailPage = () => {
       }
 
       return {
-        campo: campoRaw,
+        campo: formatearNombreCampo(campoRaw),
         valorAnterior: h.valorAnterior || h.oldValue || '—',
         valorNuevo: h.valorNuevo || h.newValue || '—',
         motivo: h.motivo || h.reason,
         fecha: new Date(h.fecha || h.timestamp).toLocaleString('es-PE'),
         usuario: h.usuario || h.user || 'Sistema',
         tipoAccion,
+        contractId: h.contractId || h.contract_id || h.contratoId,
       };
     }));
   };
@@ -329,6 +505,141 @@ const EmpresaDetailPage = () => {
     }
   };
 
+  // Función para manejar la renovación del contrato
+  const handleRenovarContrato = async () => {
+    setShowRenovarModal(false);
+    setSavingContrato(true);
+    
+    try {
+      if (!empresaId) throw new Error('No se encontró el ID de la empresa');
+      
+      // Resetear todos los datos del contrato para nueva creación
+      setContractId(null);
+      setContratoData({
+        tipoContrato: '',
+        estadoContrato: '',
+        fechaInicio: '',
+        fechaFin: '',
+        renovacionAutomatica: true,
+        responsableComercial: '',
+        observacionesContractuales: ''
+      });
+      
+      setServiciosIncluidos({
+        soporteRemoto: false,
+        soportePresencial: false,
+        mantenimientoPreventivo: false,
+        gestionInventario: false,
+        gestionCredenciales: false,
+        monitoreo: false,
+        informesMensuales: false,
+        gestionAccesos: false,
+        horasMensualesIncluidas: '',
+        excesoHorasFacturable: false,
+        showHorasError: false,
+        serviciosPersonalizados: [],
+      });
+      
+      setPreventivoData({
+        incluyePreventivo: false,
+        frecuencia: '',
+        modalidad: '',
+        aplica: '',
+        observaciones: '',
+      });
+      
+      setEconomicasData({
+        tipoFacturacion: '',
+        montoReferencial: '',
+        moneda: '',
+        diaFacturacion: '',
+        observaciones: '',
+      });
+      
+      setDocumentosContrato([]);
+      
+      // Resetear flags de guardado
+      setServiciosGuardados(false);
+      setPreventivoGuardado(false);
+      setEconomicosGuardados(false);
+      
+      // Habilitar modo edición en todas las secciones
+      setEditModoDatos(true);
+      setEditModoServicios(true);
+      setEditModoPreventivo(true);
+      setEditModoEconomicos(true);
+      
+      setContratoSuccess('🔄 Contrato renovado. Complete los datos del nuevo contrato.');
+      setTimeout(() => setContratoSuccess(null), 5000);
+      
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Error al renovar contrato';
+      alert('❌ ' + errorMsg);
+    } finally {
+      setSavingContrato(false);
+    }
+  };
+
+  // Función para cargar detalles de un contrato histórico
+  const handleVerDetalles = async (contratoId: string) => {
+    setLoadingDetalles(true);
+    setContratoHistoricoId(contratoId);
+    setShowDetallesModal(true);
+    
+    try {
+      const contrato = await getContratoById(contratoId);
+      
+      // Mapear TODOS los campos del contrato histórico al formato que espera el modal
+      const contratoMapeado = {
+        // Datos del Contrato
+        tipoContrato: contrato.tipoContrato || contrato.tipo_contrato || '',
+        estadoContrato: contrato.estadoContrato || contrato.estado_contrato || '',
+        fechaInicio: contrato.fechaInicio || contrato.fecha_inicio || '',
+        fechaFin: contrato.fechaFin || contrato.fecha_fin || '',
+        vigencia: calcularVigencia(
+          contrato.fechaInicio || contrato.fecha_inicio,
+          contrato.fechaFin || contrato.fecha_fin
+        ),
+        renovacionAutomatica: contrato.renovacionAutomatica ?? contrato.renovacion_automatica ?? false,
+        responsableComercial: contrato.responsableComercial || contrato.responsable_comercial || '',
+        observacionesContractuales: contrato.observaciones || contrato.observaciones_contractuales || '',
+        
+        // Servicios Incluidos
+        soporteRemoto: contrato.services?.soporteRemoto || contrato.services?.soporte_remoto || false,
+        soportePresencial: contrato.services?.soportePresencial || contrato.services?.soporte_presencial || false,
+        mantenimientoPreventivo: contrato.services?.mantenimientoPreventivo || contrato.services?.mantenimiento_preventivo || false,
+        gestionInventario: contrato.services?.gestionInventario || contrato.services?.gestion_inventario || false,
+        gestionCredenciales: contrato.services?.gestionCredenciales || contrato.services?.gestion_credenciales || false,
+        monitoreo: contrato.services?.monitoreo || false,
+        informesMensuales: contrato.services?.informesMensuales || contrato.services?.informes_mensuales || false,
+        gestionAccesos: contrato.services?.gestionAccesos || contrato.services?.gestion_accesos || false,
+        horasMensualesIncluidas: contrato.services?.horasMensualesIncluidas || contrato.services?.horas_mensuales_incluidas || '',
+        excesoHorasFacturable: contrato.services?.excesoHorasFacturable ?? contrato.services?.exceso_horas_facturable ?? false,
+        
+        // Mantenimientos Preventivos
+        incluyePreventivo: contrato.preventivePolicy?.incluyePreventivo ?? contrato.preventive_policy?.incluye_preventivo ?? false,
+        frecuencia: contrato.preventivePolicy?.frecuencia || contrato.preventive_policy?.frecuencia || '',
+        modalidad: contrato.preventivePolicy?.modalidad || contrato.preventive_policy?.modalidad || '',
+        aplica: contrato.preventivePolicy?.aplica || contrato.preventive_policy?.aplica || '',
+        observaciones: contrato.preventivePolicy?.observaciones || contrato.preventive_policy?.observaciones || '',
+        
+        // Condiciones Económicas
+        tipoFacturacion: contrato.economics?.tipoFacturacion || contrato.economics?.tipo_facturacion || '',
+        montoReferencial: contrato.economics?.montoReferencial || contrato.economics?.monto_referencial || '',
+        moneda: contrato.economics?.moneda || '',
+        diaFacturacion: contrato.economics?.diaFacturacion || contrato.economics?.dia_facturacion || '',
+        observacionesEconomicas: contrato.economics?.observaciones || '',
+      };
+      setContratoHistorico(contratoMapeado);
+    } catch (err) {
+      console.error('Error al cargar contrato histórico:', err);
+      alert('❌ Error al cargar los detalles del contrato');
+      setShowDetallesModal(false);
+    } finally {
+      setLoadingDetalles(false);
+    }
+  };
+
   useEffect(() => {
     if (!empresaId) return;
 
@@ -342,8 +653,15 @@ const EmpresaDetailPage = () => {
         setSedes(Array.isArray(sedesData) ? sedesData : sedesData.data || []);
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : "Error al cargar empresa";
-        console.error(err);
-        setError(errorMsg);
+        console.error('[ERROR] Al cargar empresa/sedes:', err);
+        
+        // Si el error es de sedes pero la empresa se cargó, mostrar warning en lugar de error completo
+        if (empresa) {
+          console.warn('[WARNING] Error al cargar sedes, pero empresa cargada. Continuando...');
+          setSedes([]);
+        } else {
+          setError(errorMsg);
+        }
       } finally {
         setLoading(false);
       }
@@ -351,6 +669,25 @@ const EmpresaDetailPage = () => {
 
     fetchEmpresa();
   }, [empresaId]);
+
+  // Cargar usuarios administrativos al abrir la pestaña de contrato
+  useEffect(() => {
+    if (activeTab !== 'contrato') return;
+
+    const fetchUsuariosAdmin = async () => {
+      setLoadingUsuarios(true);
+      try {
+        const usuarios = await getUsuariosAdministrativos();
+        setUsuariosAdmin(usuarios);
+      } catch (err) {
+        console.error('Error al cargar usuarios administrativos:', err);
+      } finally {
+        setLoadingUsuarios(false);
+      }
+    };
+
+    fetchUsuariosAdmin();
+  }, [activeTab]);
 
   // Guardar activeTab en sessionStorage para restaurarlo después de reload
   useEffect(() => {
@@ -365,11 +702,8 @@ const EmpresaDetailPage = () => {
     const fetchSLAConfig = async () => {
       setSlaLoading(true);
       try {
-        console.log('[DEBUG] Cargando configuración SLA para empresa:', empresaId);
         const rawConfig = await slaService.getConfiguracion(empresaId);
-        console.log('[DEBUG] Configuración SLA recibida (raw):', rawConfig);
         const config = normalizeSLAConfig(rawConfig);
-        console.log('[DEBUG] Configuración SLA normalizada:', config);
         
         if (config) {
           setSlaConfiguracion(config);
@@ -402,7 +736,6 @@ const EmpresaDetailPage = () => {
           setSlaIsEditing({ ...INITIAL_SLA_IS_EDITING });
         } else {
           // No hay configuración → todos los formularios en modo edición (primera vez)
-          console.log('[DEBUG] Config es null - seteando todos los formularios en modo edición');
           setSlaConfiguracion(null);
           setSlaEditModes({ ...INITIAL_SLA_MODES });
           setSlaIsEditing({ ...INITIAL_SLA_IS_EDITING });
@@ -418,33 +751,47 @@ const EmpresaDetailPage = () => {
   }, [empresaId, activeTab]);
 
   useEffect(() => {
-    if (!empresaId || activeTab !== 'contrato') return;
+    if (!empresaId) return;
 
     const fetchContratoActivo = async () => {
+      setContratoLoading(true);
       try {
         const contratoActivo = await getContratoActivo(empresaId);
         if (contratoActivo) {
-          setContractId(contratoActivo._id || contratoActivo.id);
-          // Si existe un contrato activo, por defecto mostrar vista resumida con botón Editar
-          setEditModoDatos(false);
-          setEditModoServicios(false);
-          setEditModoPreventivo(false);
-          setEditModoEconomicos(false);
-          // Marcar como guardados si ya existen
-          setServiciosGuardados(true);
-          setPreventivoGuardado(true);
-          setEconomicosGuardados(true);
-          setContratoData({
-            tipoContrato: contratoActivo.tipoContrato || '',
-            estadoContrato: contratoActivo.estadoContrato || '',
-            fechaInicio: contratoActivo.fechaInicio ? contratoActivo.fechaInicio.split('T')[0] : '',
-            fechaFin: contratoActivo.fechaFin ? contratoActivo.fechaFin.split('T')[0] : '',
-            renovacionAutomatica: contratoActivo.renovacionAutomatica ?? true,
-            responsableComercial: contratoActivo.responsableComercial || '',
-            observacionesContractuales: contratoActivo.observaciones || '',
-          });
+          // Detectar guardado de cada sección usando null como no guardado
+          const datosGuardados = Boolean(contratoActivo.tipoContrato && contratoActivo.estadoContrato && contratoActivo.fechaInicio && contratoActivo.fechaFin);
+          const serviciosGuardados = contratoActivo.services !== null;
+          const preventivoGuardado = contratoActivo.preventivePolicy !== null;
+          const economicosGuardados = contratoActivo.economics !== null;
+
+          setEditModoDatos(!datosGuardados);
+          setEditModoServicios(!serviciosGuardados);
+          setEditModoPreventivo(!preventivoGuardado);
+          setEditModoEconomicos(!economicosGuardados);
+
+          setServiciosGuardados(serviciosGuardados);
+          setPreventivoGuardado(preventivoGuardado);
+          setEconomicosGuardados(economicosGuardados);
+
+          if (contratoActivo._id || contratoActivo.id) {
+            setContractId(contratoActivo._id || contratoActivo.id);
+          }
+
+          if (contratoActivo.tipoContrato) {
+            setContratoData({
+              tipoContrato: contratoActivo.tipoContrato || '',
+              estadoContrato: contratoActivo.estadoContrato || '',
+              fechaInicio: contratoActivo.fechaInicio ? contratoActivo.fechaInicio.split('T')[0] : '',
+              fechaFin: contratoActivo.fechaFin ? contratoActivo.fechaFin.split('T')[0] : '',
+              renovacionAutomatica: contratoActivo.renovacionAutomatica ?? true,
+              responsableComercial: contratoActivo.responsableComercial || '',
+              observacionesContractuales: contratoActivo.observaciones || '',
+            });
+          }
+
           if (contratoActivo.services) {
-            setServiciosIncluidos({
+            setServiciosIncluidos(prev => ({
+              ...prev,
               soporteRemoto: contratoActivo.services.soporteRemoto || false,
               soportePresencial: contratoActivo.services.soportePresencial || false,
               mantenimientoPreventivo: contratoActivo.services.mantenimientoPreventivo || false,
@@ -453,10 +800,12 @@ const EmpresaDetailPage = () => {
               monitoreo: contratoActivo.services.monitoreo || false,
               informesMensuales: contratoActivo.services.informesMensuales || false,
               gestionAccesos: contratoActivo.services.gestionAccesos || false,
-              horasMensualesIncluidas: contratoActivo.services.horasMensualesIncluidas || '',
+              horasMensualesIncluidas: contratoActivo.services.horasMensualesIncluidas ? String(contratoActivo.services.horasMensualesIncluidas) : '',
               excesoHorasFacturable: contratoActivo.services.excesoHorasFacturable || false,
-            });
+              serviciosPersonalizados: contratoActivo.services.serviciosPersonalizados || [],
+            }));
           }
+
           if (contratoActivo.preventivePolicy) {
             setPreventivoData({
               incluyePreventivo: contratoActivo.preventivePolicy.incluyePreventivo || false,
@@ -494,13 +843,30 @@ const EmpresaDetailPage = () => {
           if (contratoActivo.history) {
             mapHistorialContrato(contratoActivo.history);
           }
+        } else {
+          // No hay contrato activo, dejar formularios abiertos para crear uno nuevo
+          setEditModoDatos(true);
+          setEditModoServicios(true);
+          setEditModoPreventivo(true);
+          setEditModoEconomicos(true);
         }
       } catch (err) {
         console.warn('No se pudo cargar el contrato activo:', err);
+        // En caso de error, dejar formularios abiertos
+        setEditModoDatos(true);
+        setEditModoServicios(true);
+        setEditModoPreventivo(true);
+        setEditModoEconomicos(true);
+      } finally {
+        setContratoLoading(false);
       }
     };
 
-    fetchContratoActivo();
+    if (activeTab === 'contrato') {
+      fetchContratoActivo();
+    } else {
+      setContratoLoading(false);
+    }
   }, [empresaId, activeTab]);
 
   // Helpers SLA
@@ -524,10 +890,8 @@ const EmpresaDetailPage = () => {
     const guardadas = SLA_SECCIONES.filter((sec) => {
       const clave = SLA_CONFIG_KEY[sec];
       const valor = slaConfiguracion?.[clave];
-      console.log(`[DEBUG getSeccionesGuardadas] ${sec} -> ${clave}: ${valor ? 'existe' : 'NO existe'}`);
       return Boolean(valor);
     });
-    console.log('[DEBUG getSeccionesGuardadas] Total guardadas:', guardadas.length, 'de', SLA_SECCIONES.length);
     return guardadas;
   };
 
@@ -536,7 +900,6 @@ const EmpresaDetailPage = () => {
 
     // NO bloquear mientras se carga la configuración SLA
     if (slaLoading) {
-      console.log('[DEBUG hasUnsavedChanges] SLA aún cargando → NO bloquear');
       return false;
     }
 
@@ -554,11 +917,6 @@ const EmpresaDetailPage = () => {
 
     // Solo bloquear si hay 1-6 secciones guardadas (incompleto)
     const bloquear = seccionesGuardadas >= 1 && seccionesGuardadas < 7;
-    
-    console.log('[DEBUG hasUnsavedChanges]', {
-      seccionesGuardadas,
-      bloquear,
-    });
 
     return bloquear;
   };
@@ -578,15 +936,12 @@ const EmpresaDetailPage = () => {
       if (empresaId) {
         // SIEMPRE enviar las 7 secciones para forzar eliminación completa (soft delete)
         const todasLasSecciones = [...SLA_SECCIONES];
-        console.log('[DEBUG] Limpiando todas las secciones SLA:', todasLasSecciones);
         
         await slaService.limpiarSecciones(empresaId, todasLasSecciones);
-        console.log('[DEBUG] Todas las secciones eliminadas del backend (soft delete)');
         
         // Recargar configuración desde el backend (debería ser null)
         const rawConfig = await slaService.getConfiguracion(empresaId);
         const config = normalizeSLAConfig(rawConfig);
-        console.log('[DEBUG] Config recargada después de limpiar (normalizada):', config);
         setSlaConfiguracion(config);
         
         if (!config) {
@@ -602,7 +957,6 @@ const EmpresaDetailPage = () => {
       if (isRefreshing) {
         setIsRefreshing(false);
         setShowUnsavedConfirmModal(false);
-        console.log('[DEBUG handleConfirmUnsavedExit] Llamando window.location.reload()');
         window.location.reload();
       } else {
         // Cambiar a la pestaña o ruta que el usuario quería
@@ -735,7 +1089,6 @@ const EmpresaDetailPage = () => {
     if (!isEditando) {
       // Primera vez o rellenando inicial: Guardar directamente sin pedir motivo
       try {
-        console.log('[SLA Save] Primera vez guardando:', { section, data: JSON.stringify(data) });
         
         // Guardar la sección
         await slaService.guardarSeccion(empresaId, section, data);
@@ -769,7 +1122,6 @@ const EmpresaDetailPage = () => {
       setMotivoInput('');
       setMotivoCallback(() => async (motivo: string) => {
         try {
-          console.log('[SLA Save] Editando:', { section, data: JSON.stringify(data), motivo });
           
           // Guardar la sección enviando el motivo en la misma llamada
           await slaService.guardarSeccion(empresaId!, section, data, motivo);
@@ -808,7 +1160,6 @@ const EmpresaDetailPage = () => {
 
   // Handlers para guardar cambios en contrato
   const handleSaveDatosContrato = async () => {
-    console.log('[DEBUG] handleSaveDatosContrato iniciado');
     if (!empresaId) {
       setError('No se ha cargado la empresa');
       return;
@@ -819,15 +1170,15 @@ const EmpresaDetailPage = () => {
       alert('Por favor complete todos los campos obligatorios (Tipo de contrato, Estado, Fecha inicio y Fecha fin)');
       return;
     }
-    
+   
+ 
     setSavingDatos(true);
     setError(null);
     setContratoSuccess(null);
     try {
       if (!contractId) {
-        console.log('[DEBUG] Creando nuevo contrato...');
         // CREAR contrato nuevo SIN pedir motivo
-        const nuevoContrato = await createContrato(empresaId, {
+        const payload: any = {
           tipoContrato: contratoData.tipoContrato,
           estadoContrato: contratoData.estadoContrato,
           fechaInicio: contratoData.fechaInicio,
@@ -836,7 +1187,11 @@ const EmpresaDetailPage = () => {
           responsableComercial: contratoData.responsableComercial,
           observaciones: contratoData.observacionesContractuales,
           motivo: 'Creación inicial del contrato',
-        });
+        };
+        if (contratoData.tipoContrato === 'bolsa_horas') {
+          payload.horasMensualesIncluidas = serviciosIncluidos.horasMensualesIncluidas;
+        }
+        const nuevoContrato = await createContrato(empresaId, payload);
         const newId = nuevoContrato?._id || nuevoContrato?.id;
         if (newId) {
           setContractId(newId);
@@ -873,15 +1228,14 @@ const EmpresaDetailPage = () => {
         setEditModoDatos(false);
         await refreshContratoHistorial();
       } else {
-        console.log('[DEBUG] Actualizando contrato existente, pidiendo motivo...');
         // ACTUALIZAR contrato existente - PEDIR MOTIVO
         setSavingDatos(false);
         pedirMotivo(async (motivo) => {
           setSavingDatos(true);
           try {
-            console.log('[DEBUG] Llamando a updateContratoDatos con motivo:', motivo);
             await updateContratoDatos(empresaId, contractId, {
               tipoContrato: contratoData.tipoContrato,
+              estadoContrato: contratoData.estadoContrato,
               fechaInicio: contratoData.fechaInicio,
               fechaFin: contratoData.fechaFin,
               renovacionAutomatica: contratoData.renovacionAutomatica,
@@ -889,7 +1243,6 @@ const EmpresaDetailPage = () => {
               observaciones: contratoData.observacionesContractuales,
               motivo,
             });
-            console.log('[DEBUG] updateContratoDatos completado');
             setContratoSuccess('✅ Datos del contrato actualizados');
             setEditModoDatos(false);
             await refreshContratoHistorial();
@@ -909,13 +1262,11 @@ const EmpresaDetailPage = () => {
       const errorMsg = err instanceof Error ? err.message : 'Error al guardar datos del contrato';
       setError(errorMsg);
     } finally {
-      console.log('[DEBUG] Reseteando flag savingDatos');
       setSavingDatos(false);
     }
   };
 
   const handleSaveServicios = async () => {
-    console.log('[DEBUG] handleSaveServicios iniciado');
     if (!empresaId) {
       setError('No se ha cargado la empresa');
       return;
@@ -924,10 +1275,16 @@ const EmpresaDetailPage = () => {
       alert('⚠️ Primero debes guardar los Datos del Contrato');
       return;
     }
-
+    // Validar horasMensualesIncluidas solo si el tipo de contrato es bolsa_horas
+    if (contratoData.tipoContrato === 'bolsa_horas' && !serviciosIncluidos.horasMensualesIncluidas) {
+      setServiciosIncluidos(prev => ({ ...prev, showHorasError: true }));
+      alert('Por favor ingrese las horas mensuales incluidas para Bolsa de Horas');
+      return;
+    } else {
+      setServiciosIncluidos(prev => ({ ...prev, showHorasError: false }));
+    }
     // Solo pedir motivo si ya fue guardado antes (edición)
     if (serviciosGuardados) {
-      console.log('[DEBUG] Pidiendo motivo (es edición)');
       setSavingServicios(false);
       pedirMotivo((motivo) => {
         handleSaveServiciosConMotivo(motivo);
@@ -944,14 +1301,11 @@ const EmpresaDetailPage = () => {
       setError('No se ha cargado la empresa o contrato');
       return;
     }
-
-    console.log('[DEBUG] Iniciando guardado de servicios con motivo:', motivo);
     setSavingServicios(true);
     setError(null);
     setContratoSuccess(null);
     try {
-      console.log('[DEBUG] Llamando a updateContratoServicios...');
-      await updateContratoServicios(empresaId, contractId, {
+      const serviciosPayload: any = {
         soporteRemoto: serviciosIncluidos.soporteRemoto,
         soportePresencial: serviciosIncluidos.soportePresencial,
         mantenimientoPreventivo: serviciosIncluidos.mantenimientoPreventivo,
@@ -960,11 +1314,14 @@ const EmpresaDetailPage = () => {
         monitoreo: serviciosIncluidos.monitoreo,
         informesMensuales: serviciosIncluidos.informesMensuales,
         gestionAccesos: serviciosIncluidos.gestionAccesos,
-        horasMensualesIncluidas: serviciosIncluidos.horasMensualesIncluidas ? Number(serviciosIncluidos.horasMensualesIncluidas) : undefined,
         excesoHorasFacturable: serviciosIncluidos.excesoHorasFacturable,
+        serviciosPersonalizados: serviciosIncluidos.serviciosPersonalizados, // Incluir servicios personalizados
         motivo,
-      });
-      console.log('[DEBUG] updateContratoServicios completado exitosamente');
+      };
+      if (contratoData.tipoContrato === 'bolsa_horas') {
+        serviciosPayload.horasMensualesIncluidas = Number(serviciosIncluidos.horasMensualesIncluidas);
+      }
+      await updateContratoServicios(empresaId, contractId, serviciosPayload);
       setContratoSuccess('✅ Servicios incluidos guardados');
       setServiciosGuardados(true);
       setEditModoServicios(false);
@@ -975,7 +1332,6 @@ const EmpresaDetailPage = () => {
       const errorMsg = err instanceof Error ? err.message : 'Error al guardar servicios';
       setError(errorMsg);
     } finally {
-      console.log('[DEBUG] Reseteando flag savingServicios');
       setSavingServicios(false);
     }
   };
@@ -1201,16 +1557,25 @@ const EmpresaDetailPage = () => {
           observaciones: contratoData.observacionesContractuales,
           motivo: 'Creación inicial del contrato',
         });
+        // El backend debe devolver el ID real del contrato, nunca 'activo'.
         const newId = nuevo?._id || nuevo?.id;
-        if (newId) {
+        if (newId && newId !== 'activo' && newId !== 'vencido' && newId !== 'suspendido') {
           setContractId(newId);
         } else {
           try {
             const activo = await getContratoActivo(empresaId);
             if (activo && (activo._id || activo.id)) {
-              setContractId(activo._id || activo.id);
+              const realId = activo._id || activo.id;
+              if (realId && realId !== 'activo' && realId !== 'vencido' && realId !== 'suspendido') {
+                setContractId(realId);
+              } else {
+                setContractId(null);
+              }
+            } else {
+              setContractId(null);
             }
           } catch (e) {
+            setContractId(null);
             console.warn('No se pudo obtener ID del contrato recién creado:', e);
           }
         }
@@ -1234,6 +1599,7 @@ const EmpresaDetailPage = () => {
       if (wasExisting) {
         await updateContratoDatos(empresaId, idToUse, {
           tipoContrato: contratoData.tipoContrato,
+          estadoContrato: contratoData.estadoContrato,
           fechaInicio: contratoData.fechaInicio,
           fechaFin: contratoData.fechaFin,
           renovacionAutomatica: contratoData.renovacionAutomatica,
@@ -1244,7 +1610,7 @@ const EmpresaDetailPage = () => {
       }
 
       // Servicios incluidos
-      await updateContratoServicios(empresaId, idToUse, {
+      const serviciosPayload2: any = {
         soporteRemoto: serviciosIncluidos.soporteRemoto,
         soportePresencial: serviciosIncluidos.soportePresencial,
         mantenimientoPreventivo: serviciosIncluidos.mantenimientoPreventivo,
@@ -1253,10 +1619,13 @@ const EmpresaDetailPage = () => {
         monitoreo: serviciosIncluidos.monitoreo,
         informesMensuales: serviciosIncluidos.informesMensuales,
         gestionAccesos: serviciosIncluidos.gestionAccesos,
-        horasMensualesIncluidas: serviciosIncluidos.horasMensualesIncluidas ? Number(serviciosIncluidos.horasMensualesIncluidas) : undefined,
         excesoHorasFacturable: serviciosIncluidos.excesoHorasFacturable,
         motivo: wasExisting ? motivoAll! : 'Configuración inicial de servicios',
-      });
+      };
+      if (contratoData.tipoContrato === 'bolsa_horas') {
+        serviciosPayload2.horasMensualesIncluidas = Number(serviciosIncluidos.horasMensualesIncluidas);
+      }
+      await updateContratoServicios(empresaId, idToUse, serviciosPayload2);
 
       // Preventivo
       await updateContratoPreventivo(empresaId, idToUse, {
@@ -1453,8 +1822,18 @@ const EmpresaDetailPage = () => {
               { id: 'sedes', label: 'Sedes', icon: '📍', badge: sedes.length },
               { id: 'contactos', label: 'Contactos', icon: '👥' },
               { id: 'contrato', label: 'Contrato', icon: '📄' },
-              { id: 'sla', label: 'SLA', icon: '⚡' },
-              { id: 'mantenimientos', label: 'Mantenimientos', icon: '🔧', disabled: !preventivoData.incluyePreventivo },
+              { 
+                id: 'sla', 
+                label: 'SLA', 
+                icon: '⚡',
+                disabled: ['vencido', 'suspendido'].includes(contratoData.estadoContrato?.toLowerCase() || '')
+              },
+              { 
+                id: 'mantenimientos', 
+                label: 'Mantenimientos', 
+                icon: '🔧', 
+                disabled: !preventivoData.incluyePreventivo || ['vencido', 'suspendido'].includes(contratoData.estadoContrato?.toLowerCase() || '')
+              },
               { id: 'historial', label: 'Historial', icon: '📊' },
             ].map(tab => (
               <button
@@ -1564,13 +1943,15 @@ const EmpresaDetailPage = () => {
                 <div className="bg-slate-50 rounded-lg border border-slate-200 p-6">
                   <p className="text-sm font-bold text-slate-700 mb-3">Estado del contrato:</p>
                   <span className={`inline-block text-base font-semibold ${
-                    empresa.estadoContrato === "activo"
+                    contratoData.estadoContrato === "activo"
                       ? "text-emerald-700"
-                      : empresa.estadoContrato === "suspendido"
+                      : contratoData.estadoContrato === "suspendido"
                       ? "text-amber-700"
-                      : "text-rose-700"
+                      : contratoData.estadoContrato === "vencido"
+                      ? "text-rose-700"
+                      : "text-slate-500"
                   }`}>
-                    {empresa.estadoContrato?.replace(/_/g, " ").toUpperCase() || "—"}
+                    {contratoData.estadoContrato ? contratoData.estadoContrato.replace(/_/g, " ").toUpperCase() : "---"}
                   </span>
                 </div>
               </div>
@@ -1805,6 +2186,19 @@ const EmpresaDetailPage = () => {
                 </div>
               </div>
 
+              {/* Indicador de carga */}
+              {contratoLoading && (
+                <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-12">
+                  <div className="flex flex-col items-center justify-center gap-4">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    <p className="text-slate-600 font-medium">Cargando información del contrato...</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Formularios de contrato - solo se muestran cuando NO está cargando */}
+              {!contratoLoading && (
+              <>
               {/* Datos del Contrato */}
               <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-8">
                 <div className="flex items-center justify-between mb-8 pb-6 border-b-2 border-blue-200">
@@ -1819,17 +2213,31 @@ const EmpresaDetailPage = () => {
                       <p className="text-sm text-slate-500 mt-0.5">Información principal del contrato activo (Campos obligatorios marcados con *)</p>
                     </div>
                   </div>
-                  {contractId && !editModoDatos && (
-                    <button
-                      onClick={() => setEditModoDatos(true)}
-                      className="px-4 py-2 rounded-lg font-semibold text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
-                    >
-                      ✏️ Editar
-                    </button>
-                  )}
+                  <div className="flex gap-3">
+                    {/* Botón Renovar Contrato */}
+                    {mostrarBotonRenovar() && (
+                      <button
+                        onClick={() => setShowRenovarModal(true)}
+                        className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700 transition-all shadow-md hover:shadow-lg flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Renovar contrato
+                      </button>
+                    )}
+                    {contractId && !editModoDatos && (
+                      <button
+                        onClick={() => setEditModoDatos(true)}
+                        className="px-4 py-2 rounded-lg font-semibold text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                      >
+                        ✏️ Editar
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {!contractId || editModoDatos ? (
+                {(!contractId || editModoDatos) ? (
                 <div className="space-y-8">
                   {/* Fila 1: Tipo de Contrato y Estado */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1852,16 +2260,44 @@ const EmpresaDetailPage = () => {
                     {/* Estado del Contrato */}
                     <div className="bg-linear-to-br from-green-50 to-slate-50 rounded-lg border border-slate-200 p-6">
                       <label className="text-sm font-bold text-slate-700 mb-3 block">Estado del contrato <span className="text-red-600">*</span></label>
-                      <select 
-                        value={contratoData.estadoContrato}
-                        onChange={(e) => setContratoData({...contratoData, estadoContrato: e.target.value})}
-                        className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 text-slate-900 font-medium hover:border-green-400 focus:outline-none focus:ring-2 focus:ring-green-500"
-                      >
-                        <option value="">-- SELECCIONAR --</option>
-                        <option value="activo">Activo</option>
-                        <option value="suspendido">Suspendido</option>
-                        <option value="vencido">Vencido</option>
-                      </select>
+                      
+                      {contractId ? (
+                        // MODO EDICIÓN: Solo permitir cambiar a "Suspendido"
+                        <>
+                          <select
+                            value={contratoData.estadoContrato}
+                            onChange={(e) => setContratoData({...contratoData, estadoContrato: e.target.value})}
+                            className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 text-slate-900 font-medium hover:border-green-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          >
+                            {contratoData.estadoContrato === 'activo' && (
+                              <option value="activo">Activo (calculado automáticamente)</option>
+                            )}
+                            {contratoData.estadoContrato === 'vencido' && (
+                              <option value="vencido">Vencido (calculado automáticamente)</option>
+                            )}
+                            <option value="suspendido">Suspendido</option>
+                          </select>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Los estados "Activo" y "Vencido" se calculan automáticamente. Solo puedes cambiar a "Suspendido".
+                          </p>
+                        </>
+                      ) : (
+                        // MODO CREACIÓN: Mostrar placeholder, se calcula automáticamente
+                        <>
+                          {((contratoData.estadoContrato === 'activo' || contratoData.estadoContrato === 'vencido') && contratoData.fechaFin) ? (
+                            <div className="w-full px-3 py-2 bg-gray-100 rounded-lg border border-slate-300 text-slate-900 font-semibold cursor-not-allowed select-none">
+                              {contratoData.estadoContrato === 'activo' ? 'Activo' : 'Vencido'}
+                            </div>
+                          ) : (
+                            <div className="w-full px-3 py-2 bg-gray-100 rounded-lg border border-slate-300 text-slate-400 font-semibold cursor-not-allowed select-none">
+                              — — —
+                            </div>
+                          )}
+                          <p className="text-xs text-gray-500 mt-1">
+                            El estado se asigna automáticamente según la fecha de fin.
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -1935,13 +2371,22 @@ const EmpresaDetailPage = () => {
                   {/* Responsable Comercial */}
                   <div className="bg-linear-to-br from-rose-50 to-slate-50 rounded-lg border border-slate-200 p-6">
                     <label className="text-sm font-bold text-slate-700 mb-3 block">Responsable comercial (INTISCORP)</label>
-                    <input 
-                      type="text"
+                    <select 
                       value={contratoData.responsableComercial}
                       onChange={(e) => setContratoData({...contratoData, responsableComercial: e.target.value})}
-                      placeholder="Nombre del responsable"
-                      className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 text-slate-900 font-medium hover:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                    />
+                      disabled={loadingUsuarios}
+                      className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 text-slate-900 font-medium hover:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">-- Seleccionar responsable --</option>
+                      {usuariosAdmin.map((usuario) => (
+                        <option key={usuario.id} value={usuario.nombre}>
+                          {usuario.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    {loadingUsuarios && (
+                      <p className="text-xs text-slate-400 mt-2">⏳ Cargando usuarios administrativos...</p>
+                    )}
                   </div>
 
                   {/* Observaciones */}
@@ -2003,7 +2448,7 @@ const EmpresaDetailPage = () => {
                   )}
                 </div>
 
-                {editModoServicios && (
+                {(!contractId || editModoServicios) && (
                 <div className="space-y-8">
                   {/* Checkboxes principales */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2035,6 +2480,115 @@ const EmpresaDetailPage = () => {
                         <span className="text-slate-800 font-semibold text-sm">{item.label}</span>
                       </label>
                     ))}
+                    
+                    {/* Servicios personalizados */}
+                    {serviciosIncluidos.serviciosPersonalizados.map((servicio) => (
+                      <label
+                        key={servicio.id}
+                        className={`flex items-center gap-3 rounded-lg border p-4 cursor-pointer transition-all bg-linear-to-br from-white to-slate-50 shadow-sm hover:border-emerald-300 ${
+                          servicio.activo ? 'border-emerald-300 bg-emerald-50/60 shadow-md' : 'border-slate-200'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 accent-emerald-600"
+                          checked={servicio.activo}
+                          onChange={() => {
+                            const updated = serviciosIncluidos.serviciosPersonalizados.map((s) =>
+                              s.id === servicio.id ? { ...s, activo: !s.activo } : s
+                            );
+                            setServiciosIncluidos({ ...serviciosIncluidos, serviciosPersonalizados: updated });
+                          }}
+                        />
+                        <span className="text-slate-800 font-semibold text-sm">{servicio.nombre}</span>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (confirm(`¿Eliminar el servicio "${servicio.nombre}"?`)) {
+                              const filtered = serviciosIncluidos.serviciosPersonalizados.filter((s) => s.id !== servicio.id);
+                              setServiciosIncluidos({ ...serviciosIncluidos, serviciosPersonalizados: filtered });
+                            }
+                          }}
+                          className="ml-auto text-red-500 hover:text-red-700 text-xs font-bold"
+                          title="Eliminar servicio"
+                        >
+                          ✕
+                        </button>
+                      </label>
+                    ))}
+                  </div>
+                  
+                  {/* Botón para agregar servicios personalizados */}
+                  <div className="border-t border-slate-200 pt-4">
+                    {!mostrarAgregarServicio ? (
+                      <button
+                        onClick={() => setMostrarAgregarServicio(true)}
+                        className="w-full px-4 py-3 rounded-lg border-2 border-dashed border-emerald-300 bg-emerald-50/30 text-emerald-700 font-semibold text-sm hover:bg-emerald-50 transition-all flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        Agregar servicio personalizado
+                      </button>
+                    ) : (
+                      <div className="bg-emerald-50 rounded-lg border border-emerald-200 p-4">
+                        <label className="text-sm font-bold text-slate-700 mb-2 block">Nombre del servicio</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={nuevoServicioNombre}
+                            onChange={(e) => setNuevoServicioNombre(e.target.value)}
+                            placeholder="Ej: Respaldos automáticos"
+                            className="flex-1 px-3 py-2 bg-white rounded-lg border border-slate-300 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && nuevoServicioNombre.trim()) {
+                                const nuevoServicio = {
+                                  id: `custom_${Date.now()}`,
+                                  nombre: nuevoServicioNombre.trim(),
+                                  activo: false,
+                                };
+                                setServiciosIncluidos({
+                                  ...serviciosIncluidos,
+                                  serviciosPersonalizados: [...serviciosIncluidos.serviciosPersonalizados, nuevoServicio],
+                                });
+                                setNuevoServicioNombre('');
+                                setMostrarAgregarServicio(false);
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={() => {
+                              if (nuevoServicioNombre.trim()) {
+                                const nuevoServicio = {
+                                  id: `custom_${Date.now()}`,
+                                  nombre: nuevoServicioNombre.trim(),
+                                  activo: false,
+                                };
+                                setServiciosIncluidos({
+                                  ...serviciosIncluidos,
+                                  serviciosPersonalizados: [...serviciosIncluidos.serviciosPersonalizados, nuevoServicio],
+                                });
+                                setNuevoServicioNombre('');
+                                setMostrarAgregarServicio(false);
+                              }
+                            }}
+                            disabled={!nuevoServicioNombre.trim()}
+                            className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            ✓ Agregar
+                          </button>
+                          <button
+                            onClick={() => {
+                              setNuevoServicioNombre('');
+                              setMostrarAgregarServicio(false);
+                            }}
+                            className="px-4 py-2 rounded-lg bg-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-300 transition-colors"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Horas y exceso facturable */}
@@ -2121,7 +2675,7 @@ const EmpresaDetailPage = () => {
                   )}
                 </div>
 
-                {editModoPreventivo && (
+                {(!contractId || editModoPreventivo) && (
                 <div className="space-y-8">
                   {/* Incluye preventivo */}
                   <div className="bg-linear-to-br from-amber-50 to-slate-50 rounded-lg border border-slate-200 p-6">
@@ -2264,7 +2818,7 @@ const EmpresaDetailPage = () => {
                   )}
                 </div>
 
-                {editModoEconomicos && (
+                {(!contractId || editModoEconomicos) && (
                 <div className="space-y-8">
                   {/* Tipo de facturación y moneda */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2613,6 +3167,7 @@ const EmpresaDetailPage = () => {
                           <th className="px-4 py-3 text-left text-sm font-bold text-slate-700">Motivo</th>
                           <th className="px-4 py-3 text-left text-sm font-bold text-slate-700">Fecha</th>
                           <th className="px-4 py-3 text-left text-sm font-bold text-slate-700">Usuario</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold text-slate-700">Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2621,6 +3176,8 @@ const EmpresaDetailPage = () => {
                             switch(tipo) {
                               case 'CREACION':
                                 return 'bg-green-100 text-green-800';
+                              case 'RENOVACION':
+                                return 'bg-cyan-100 text-cyan-800';
                               case 'EDICION':
                                 return 'bg-blue-100 text-blue-800';
                               case 'ELIMINACION':
@@ -2643,6 +3200,20 @@ const EmpresaDetailPage = () => {
                               <td className="px-4 py-3 text-sm text-slate-600 italic">{item.motivo || '—'}</td>
                               <td className="px-4 py-3 text-sm text-slate-700">{item.fecha}</td>
                               <td className="px-4 py-3 text-sm text-slate-700">{item.usuario}</td>
+                              <td className="px-4 py-3 text-center">
+                                {(item.tipoAccion === 'CREACION' || item.tipoAccion === 'RENOVACION') && item.contractId && (
+                                  <button
+                                    onClick={() => handleVerDetalles(item.contractId)}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors flex items-center gap-1.5 mx-auto"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                    Ver detalles
+                                  </button>
+                                )}
+                              </td>
                             </tr>
                           );
                         })}
@@ -2651,6 +3222,8 @@ const EmpresaDetailPage = () => {
                   </div>
                 )}
               </div>
+              </>
+              )}
             </div>
           )}
 
@@ -2724,6 +3297,464 @@ const EmpresaDetailPage = () => {
             </div>
           )}
 
+          {/* Modal de confirmación para renovar contrato */}
+          {showRenovarModal && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg transform transition-all animate-scaleIn">
+                {/* Header con gradiente */}
+                <div className="bg-gradient-to-r from-emerald-500 to-teal-600 px-8 py-6 flex items-center gap-4 rounded-t-3xl">
+                  <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
+                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">Renovar contrato</h2>
+                    <p className="text-emerald-50 text-sm mt-1">Confirme la renovación del contrato</p>
+                  </div>
+                </div>
+
+                {/* Body */}
+                <div className="p-8 space-y-6">
+                  <div className="flex items-start gap-4 p-6 bg-amber-50 border-l-4 border-amber-400 rounded-lg">
+                    <svg className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                      <p className="font-bold text-amber-900 text-lg mb-2">¿Está seguro de renovar el contrato?</p>
+                      <p className="text-amber-800 text-sm leading-relaxed">
+                        Esta acción habilitará los formularios para crear un nuevo contrato. 
+                        El contrato anterior se mantendrá en el historial.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
+                    <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
+                      <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Al confirmar:
+                    </h3>
+                    <ul className="space-y-2 text-sm text-slate-600">
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        Los formularios se habilitarán para completar
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        Se registrará como un nuevo contrato
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        Se añadirá un registro de RENOVACIÓN en el historial
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="bg-slate-50 px-8 py-5 flex gap-3 justify-end border-t border-slate-200 rounded-b-3xl">
+                  <button
+                    onClick={() => setShowRenovarModal(false)}
+                    className="px-6 py-2.5 bg-white border-2 border-slate-300 text-slate-700 font-semibold rounded-xl hover:bg-slate-100 transition-all shadow-sm hover:shadow"
+                  >
+                    No, cancelar
+                  </button>
+                  <button
+                    onClick={handleRenovarContrato}
+                    className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold rounded-xl hover:from-emerald-600 hover:to-teal-700 transition-all shadow-md hover:shadow-lg flex items-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Sí, renovar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal de ver detalles de contrato histórico */}
+          {showDetallesModal && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl my-8 max-h-[90vh] overflow-y-auto">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-8 py-6 flex items-center justify-between rounded-t-3xl sticky top-0 z-10">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
+                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-white">Detalles del contrato</h2>
+                      <p className="text-indigo-100 text-sm mt-1">Vista en modo solo lectura</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowDetallesModal(false);
+                      setContratoHistoricoId(null);
+                      setContratoHistorico(null);
+                    }}
+                    className="text-white hover:text-indigo-100 text-2xl font-bold transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Body */}
+                <div className="p-8">
+                  {loadingDetalles ? (
+                    <div className="text-center py-12">
+                      <div className="inline-block p-4 bg-indigo-50 rounded-full mb-4">
+                        <svg className="w-8 h-8 text-indigo-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      </div>
+                      <p className="text-slate-600 font-semibold">Cargando detalles del contrato...</p>
+                    </div>
+                  ) : contratoHistorico ? (
+                    <div className="space-y-8">
+                      {/* 1. Datos del Contrato */}
+                      <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-8">
+                        <div className="flex items-center gap-3 mb-6 pb-4 border-b-2 border-blue-200">
+                          <div className="p-3 bg-blue-100 rounded-lg">
+                            <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <h3 className="text-xl font-bold text-slate-900">📋 Datos del Contrato</h3>
+                        </div>
+
+                        <div className="space-y-8">
+                          {/* Fila 1: Tipo y Estado */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-blue-50 rounded-lg border border-slate-200 p-6">
+                              <label className="text-sm font-bold text-slate-700 mb-3 block">Tipo de contrato</label>
+                              <input 
+                                type="text"
+                                value={contratoHistorico.tipoContrato || ''}
+                                disabled
+                                className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                              />
+                            </div>
+
+                            <div className="bg-blue-50 rounded-lg border border-slate-200 p-6">
+                              <label className="text-sm font-bold text-slate-700 mb-3 block">Estado del contrato</label>
+                              <input 
+                                type="text"
+                                value={contratoHistorico.estadoContrato || ''}
+                                disabled
+                                className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Fila 2: Fechas */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-blue-50 rounded-lg border border-slate-200 p-6">
+                              <label className="text-sm font-bold text-slate-700 mb-3 block">Fecha de inicio</label>
+                              <input 
+                                type="date"
+                                value={contratoHistorico.fechaInicio ? contratoHistorico.fechaInicio.split('T')[0] : ''}
+                                disabled
+                                className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                              />
+                            </div>
+
+                            <div className="bg-blue-50 rounded-lg border border-slate-200 p-6">
+                              <label className="text-sm font-bold text-slate-700 mb-3 block">Fecha de fin</label>
+                              <input 
+                                type="date"
+                                value={contratoHistorico.fechaFin ? contratoHistorico.fechaFin.split('T')[0] : ''}
+                                disabled
+                                className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Fila 3: Vigencia y Renovación */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-blue-50 rounded-lg border border-slate-200 p-6">
+                              <label className="text-sm font-bold text-slate-700 mb-3 block">Vigencia</label>
+                              <input 
+                                type="text"
+                                value={contratoHistorico.vigencia || '—'}
+                                disabled
+                                className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-700 italic cursor-not-allowed"
+                              />
+                            </div>
+
+                            <div className="bg-blue-50 rounded-lg border border-slate-200 p-6 flex items-center">
+                              <label className="flex items-center gap-3 cursor-not-allowed">
+                                <input 
+                                  type="checkbox" 
+                                  checked={contratoHistorico.renovacionAutomatica || false}
+                                  disabled
+                                  className="w-5 h-5 text-blue-600 rounded cursor-not-allowed"
+                                />
+                                <span className="text-sm font-bold text-slate-700">Renovación automática</span>
+                              </label>
+                            </div>
+                          </div>
+
+                          {/* Fila 4: Responsable */}
+                          <div className="bg-blue-50 rounded-lg border border-slate-200 p-6">
+                            <label className="text-sm font-bold text-slate-700 mb-3 block">Responsable comercial</label>
+                            <input 
+                              type="text"
+                              value={contratoHistorico.responsableComercial || ''}
+                              disabled
+                              className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                            />
+                          </div>
+
+                          {/* Fila 5: Observaciones */}
+                          <div className="bg-blue-50 rounded-lg border border-slate-200 p-6">
+                            <label className="text-sm font-bold text-slate-700 mb-3 block">Observaciones contractuales</label>
+                            <textarea 
+                              value={contratoHistorico.observacionesContractuales || ''}
+                              disabled
+                              rows={3}
+                              className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 resize-none cursor-not-allowed"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 2. Servicios Incluidos */}
+                      <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-8">
+                        <div className="flex items-center gap-3 mb-6 pb-4 border-b-2 border-green-200">
+                          <div className="p-3 bg-green-100 rounded-lg">
+                            <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                            </svg>
+                          </div>
+                          <h3 className="text-xl font-bold text-slate-900">✅ Servicios Incluidos</h3>
+                        </div>
+
+                        <div className="space-y-6">
+                          {/* Grid de servicios */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {[
+                              { label: 'Soporte remoto', key: 'soporteRemoto' },
+                              { label: 'Soporte presencial', key: 'soportePresencial' },
+                              { label: 'Mantenimiento preventivo', key: 'mantenimientoPreventivo' },
+                              { label: 'Gestión de inventario', key: 'gestionInventario' },
+                              { label: 'Gestión de credenciales', key: 'gestionCredenciales' },
+                              { label: 'Monitoreo', key: 'monitoreo' },
+                              { label: 'Informes mensuales', key: 'informesMensuales' },
+                              { label: 'Gestión de accesos', key: 'gestionAccesos' },
+                            ].map((servicio) => (
+                              <div key={servicio.key} className="bg-green-50 rounded-lg border border-slate-200 p-4">
+                                <label className="flex items-center gap-3 cursor-not-allowed">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={contratoHistorico[servicio.key] || false}
+                                    disabled
+                                    className="w-5 h-5 text-green-600 rounded cursor-not-allowed"
+                                  />
+                                  <span className="text-sm font-semibold text-slate-700">{servicio.label}</span>
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Horas mensuales y exceso */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-green-50 rounded-lg border border-slate-200 p-6">
+                              <label className="text-sm font-bold text-slate-700 mb-3 block">Horas mensuales incluidas (si es bolsa)</label>
+                              <input 
+                                type="text"
+                                value={contratoHistorico.horasMensualesIncluidas || ''}
+                                disabled
+                                className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                              />
+                            </div>
+
+                            <div className="bg-green-50 rounded-lg border border-slate-200 p-6 flex items-center">
+                              <label className="flex items-center gap-3 cursor-not-allowed">
+                                <input 
+                                  type="checkbox" 
+                                  checked={contratoHistorico.excesoHorasFacturable || false}
+                                  disabled
+                                  className="w-5 h-5 text-green-600 rounded cursor-not-allowed"
+                                />
+                                <span className="text-sm font-bold text-slate-700">Exceso de horas facturable</span>
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 3. Mantenimientos Preventivos */}
+                      <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-8">
+                        <div className="flex items-center gap-3 mb-6 pb-4 border-b-2 border-purple-200">
+                          <div className="p-3 bg-purple-100 rounded-lg">
+                            <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            </svg>
+                          </div>
+                          <h3 className="text-xl font-bold text-slate-900">🔧 Mantenimientos Preventivos</h3>
+                        </div>
+
+                        <div className="space-y-6">
+                          {/* Checkbox principal */}
+                          <div className="bg-purple-50 rounded-lg border border-slate-200 p-6">
+                            <label className="flex items-center gap-3 cursor-not-allowed">
+                              <input 
+                                type="checkbox" 
+                                checked={contratoHistorico.incluyePreventivo || false}
+                                disabled
+                                className="w-5 h-5 text-purple-600 rounded cursor-not-allowed"
+                              />
+                              <span className="text-sm font-bold text-slate-700">Incluye mantenimiento preventivo</span>
+                            </label>
+                          </div>
+
+                          {/* Campos condicionales */}
+                          {contratoHistorico.incluyePreventivo && (
+                            <>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="bg-purple-50 rounded-lg border border-slate-200 p-6">
+                                  <label className="text-sm font-bold text-slate-700 mb-3 block">Frecuencia</label>
+                                  <input 
+                                    type="text"
+                                    value={contratoHistorico.frecuencia || ''}
+                                    disabled
+                                    className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                                  />
+                                </div>
+
+                                <div className="bg-purple-50 rounded-lg border border-slate-200 p-6">
+                                  <label className="text-sm font-bold text-slate-700 mb-3 block">Modalidad</label>
+                                  <input 
+                                    type="text"
+                                    value={contratoHistorico.modalidad || ''}
+                                    disabled
+                                    className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="bg-purple-50 rounded-lg border border-slate-200 p-6">
+                                <label className="text-sm font-bold text-slate-700 mb-3 block">Aplica a</label>
+                                <input 
+                                  type="text"
+                                  value={contratoHistorico.aplica || ''}
+                                  disabled
+                                  className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                                />
+                              </div>
+
+                              <div className="bg-purple-50 rounded-lg border border-slate-200 p-6">
+                                <label className="text-sm font-bold text-slate-700 mb-3 block">Observaciones</label>
+                                <textarea 
+                                  value={contratoHistorico.observaciones || ''}
+                                  disabled
+                                  rows={3}
+                                  className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 resize-none cursor-not-allowed"
+                                />
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 4. Condiciones Económicas */}
+                      <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-8">
+                        <div className="flex items-center gap-3 mb-6 pb-4 border-b-2 border-amber-200">
+                          <div className="p-3 bg-amber-100 rounded-lg">
+                            <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <h3 className="text-xl font-bold text-slate-900">💰 Condiciones Económicas</h3>
+                        </div>
+
+                        <div className="space-y-6">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-amber-50 rounded-lg border border-slate-200 p-6">
+                              <label className="text-sm font-bold text-slate-700 mb-3 block">Tipo de facturación</label>
+                              <input 
+                                type="text"
+                                value={contratoHistorico.tipoFacturacion || ''}
+                                disabled
+                                className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                              />
+                            </div>
+
+                            <div className="bg-amber-50 rounded-lg border border-slate-200 p-6">
+                              <label className="text-sm font-bold text-slate-700 mb-3 block">Moneda</label>
+                              <input 
+                                type="text"
+                                value={contratoHistorico.moneda || ''}
+                                disabled
+                                className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-amber-50 rounded-lg border border-slate-200 p-6">
+                              <label className="text-sm font-bold text-slate-700 mb-3 block">Monto referencial</label>
+                              <input 
+                                type="text"
+                                value={contratoHistorico.montoReferencial || ''}
+                                disabled
+                                className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                              />
+                            </div>
+
+                            <div className="bg-amber-50 rounded-lg border border-slate-200 p-6">
+                              <label className="text-sm font-bold text-slate-700 mb-3 block">Día de facturación</label>
+                              <input 
+                                type="text"
+                                value={contratoHistorico.diaFacturacion || ''}
+                                disabled
+                                className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="bg-amber-50 rounded-lg border border-slate-200 p-6">
+                            <label className="text-sm font-bold text-slate-700 mb-3 block">Observaciones</label>
+                            <textarea 
+                              value={contratoHistorico.observacionesEconomicas || ''}
+                              disabled
+                              rows={3}
+                              className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 resize-none cursor-not-allowed"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center text-slate-500 py-12">
+                      ⚠️ No se pudieron cargar los detalles del contrato
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="bg-slate-50 px-8 py-5 flex gap-3 justify-end border-t border-slate-200 rounded-b-3xl sticky bottom-0">
+                  <button
+                    onClick={() => {
+                      setShowDetallesModal(false);
+                      setContratoHistoricoId(null);
+                      setContratoHistorico(null);
+                    }}
+                    className="px-6 py-2.5 bg-slate-600 text-white font-semibold rounded-xl hover:bg-slate-700 transition-all shadow-md"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* TAB: SLA */}
           {activeTab === 'sla' && empresa && sedes && (
             <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-8">
@@ -2767,6 +3798,8 @@ const EmpresaDetailPage = () => {
                         id: String(s._id || s.id || ''),
                         nombre: s.nombre || '',
                       }))}
+                      // Pasar el estado del contrato para control automático
+                      estadoContrato={contratoData.estadoContrato}
                       onSave={(data) => handleSlaSave('alcance', 'Alcance del SLA', data)}
                       onCancel={() => handleSlaCancel('alcance')}
                     />
@@ -3306,7 +4339,7 @@ const EmpresaDetailPage = () => {
                 min-w-[300px] max-w-md
               `}
             >
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 {toastType === 'success' ? (
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -3322,7 +4355,7 @@ const EmpresaDetailPage = () => {
               </div>
               <button
                 onClick={() => setShowToast(false)}
-                className="flex-shrink-0 hover:opacity-80 transition-opacity"
+                className="shrink-0 hover:opacity-80 transition-opacity"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

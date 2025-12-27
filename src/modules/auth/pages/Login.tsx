@@ -41,7 +41,6 @@ const Login = () => {
 
       // ¡ÉXITO!
       // 'responseData' debería ser algo como { user: {...}, token: "..." }
-      console.log("Login exitoso:", responseData);
       
       // 6. Guardamos el usuario y token en el contexto
       login({ user: responseData.user, token: responseData.token });

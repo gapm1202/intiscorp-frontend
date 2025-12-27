@@ -127,10 +127,7 @@ const InventarioPage = () => {
         // Fetch categories
         try {
           const cats = await getCategorias();
-          console.log('📚 Categorías cargadas:', cats);
           if (cats.length > 0) {
-            console.log('📋 Primera categoría:', cats[0]);
-            console.log('🔑 ID disponible:', cats[0].id);
           }
           setCategories(Array.isArray(cats) ? cats : []);
         } catch (catErr) {
@@ -142,10 +139,7 @@ const InventarioPage = () => {
         if (sedeId) {
           const inventarioData = await getInventarioBySede(empresaId, sedeId);
           const itemList = Array.isArray(inventarioData) ? inventarioData : inventarioData?.data ?? [];
-          console.log('📊 Items cargados:', itemList);
           if (itemList[0]) {
-            console.log('🔍 Primer item - fecha_fin_garantia:', itemList[0].fecha_fin_garantia);
-            console.log('🔍 Primer item - fechaFinGarantia:', itemList[0].fechaFinGarantia);
           }
           setItems(itemList);
           const found = sedesList.find((s: Sede) => String(s._id ?? s.id) === String(sedeId));
@@ -459,7 +453,6 @@ const InventarioPage = () => {
                           <button
                             onClick={() => {
                               // Guardar ID de categoría en edición
-                              console.log('🎯 Editando categoría:', c.nombre, 'ID:', c.id);
                               setEditingCategoryId(c.id || null);
                               setNewCategoryFields(c.campos || []);
                               setShowCategoryModal(true);
@@ -835,16 +828,6 @@ const InventarioPage = () => {
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => { 
-                                console.log('🔍 Ver activo - Item completo:', item);
-                                console.log('📋 Campos clave:', {
-                                  fechaFinGarantia: item.fechaFinGarantia,
-                                  fecha_fin_garantia: item.fecha_fin_garantia,
-                                  camposPersonalizados: item.camposPersonalizados,
-                                  campos_personalizados: item.campos_personalizados,
-                                  camposPersonalizadosArray: item.camposPersonalizadosArray,
-                                  campos_personalizados_array: item.campos_personalizados_array,
-                                  fotos: item.fotos,
-                                });
                                 setViewItem(item); 
                                 setCurrentView('viewAsset'); 
                               }}
@@ -1005,7 +988,6 @@ const InventarioPage = () => {
                   onClick={async () => {
                     try {
                       const activoId = viewItem.id || viewItem._id;
-                      console.log('📜 Cargando historial para activo ID:', activoId);
                       
                       const token = localStorage.getItem('token');
                       const response = await fetch(`http://localhost:4000/api/activos/${activoId}/historial`, {
@@ -1015,8 +997,6 @@ const InventarioPage = () => {
                         }
                       });
                       
-                      console.log('📊 Response status:', response.status);
-                      
                       if (!response.ok) {
                         const errorText = await response.text();
                         console.error('❌ Error del servidor:', errorText);
@@ -1025,12 +1005,8 @@ const InventarioPage = () => {
                       }
                       
                       const data = await response.json();
-                      console.log('📦 Datos recibidos del backend:', data);
                       
                       const historial = data.data || data;
-                      console.log('📋 Historial parseado:', historial);
-                      console.log('📊 Es array?', Array.isArray(historial));
-                      console.log('📊 Cantidad de registros:', historial.length);
                       
                       setHistorialData(Array.isArray(historial) ? historial : []);
                       setCurrentView('historialAsset');
@@ -2433,12 +2409,9 @@ const InventarioPage = () => {
                     <button className="px-4 py-2 border rounded hover:bg-gray-50" onClick={() => { setCategoryPreview(null); setShowPreview(false); }}>Cancelar</button>
                     <button className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" onClick={async () => {
                       try {
-                        console.log('🔍 Editando ID?', editingCategoryId);
-                        console.log('📝 Preview:', categoryPreview);
                         
                         if (editingCategoryId) {
                           // EDITAR categoría existente
-                          console.log('✏️ EDITANDO categoría ID:', editingCategoryId);
                           // Ensure final normalization before sending
                           const finalCampos = (categoryPreview.campos || []).map((f) => ({
                             ...f,
@@ -2450,7 +2423,6 @@ const InventarioPage = () => {
                               opciones: (sf.opciones || []).map(s => String(s || '').trim()).filter(Boolean)
                             }))
                           }));
-                          console.log('📦 Datos a enviar:', { subcategorias: categoryPreview.subcategorias, campos: finalCampos });
                           const updated = await updateCategoria(editingCategoryId, {
                             subcategorias: categoryPreview.subcategorias,
                             campos: finalCampos
@@ -2459,7 +2431,6 @@ const InventarioPage = () => {
                           alert('✅ Categoría actualizada exitosamente');
                         } else {
                           // CREAR nueva categoría
-                          console.log('➕ CREANDO nueva categoría:', categoryPreview.nombre);
                           
                           // Validar nombre
                           if (!categoryPreview.nombre || !categoryPreview.nombre.trim()) {
@@ -2487,13 +2458,6 @@ const InventarioPage = () => {
                             ...(categoryPreview.subcategorias && categoryPreview.subcategorias.length > 0 && { subcategorias: categoryPreview.subcategorias }),
                             ...(finalCampos.length > 0 && { campos: finalCampos })
                           };
-                          
-                          console.log('📦 Payload completo para crear categoría:', JSON.stringify(payload, null, 2));
-                          console.log('📦 Tipos de datos en payload:', {
-                            nombre: typeof payload.nombre,
-                            subcategorias: payload.subcategorias ? Array.isArray(payload.subcategorias) : 'no incluido',
-                            campos: payload.campos ? Array.isArray(payload.campos) : 'no incluido'
-                          });
                           
                           const created = await createCategoria(payload as any);
                           setCategories(prev => [created, ...prev]);

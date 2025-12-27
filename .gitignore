@@ -18,6 +18,18 @@ dist-ssr/
 *.local
 .env
 
+# Documentation (backend instructions)
+BACKEND_*.md
+FRONTEND_CHECKLIST.md
+ENDPOINT_*.md
+CATEGORIAS_*.md
+README_NOTIFICACIONES_*.md
+
+# Test files
+test-*.ps1
+test-*.js
+server/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -33,8 +33,6 @@ export async function getHistorialEmpresa(empresaId: string | number): Promise<H
   const url = `${API_BASE}/api/empresas/${empresaId}/historial`;
   const token = getToken();
 
-  console.log("📋 Obteniendo historial de empresa:", url);
-
   const res = await fetch(url, {
     method: "GET",
     headers: {
@@ -43,8 +41,6 @@ export async function getHistorialEmpresa(empresaId: string | number): Promise<H
     },
   });
 
-  console.log("📊 Respuesta status:", res.status);
-
   if (!res.ok) {
     const text = await res.text();
     console.error("❌ Error:", text);
@@ -52,15 +48,12 @@ export async function getHistorialEmpresa(empresaId: string | number): Promise<H
   }
 
   const data = await res.json();
-  console.log("✅ Historial obtenido:", data);
   return Array.isArray(data) ? data : data.data || [];
 }
 
 export async function addHistorialEmpresa(empresaId: string | number, payload: HistorialCreatePayload): Promise<HistorialEntry | null> {
   const url = `${API_BASE}/api/empresas/${empresaId}/historial`;
   const token = getToken();
-
-  console.log("📝 Registrando historial de empresa:", url, payload);
 
   const res = await fetch(url, {
     method: "POST",
@@ -71,8 +64,6 @@ export async function addHistorialEmpresa(empresaId: string | number, payload: H
     body: JSON.stringify(payload),
   });
 
-  console.log("📊 Respuesta historial status:", res.status);
-
   if (!res.ok) {
     const text = await res.text();
     console.error("❌ Error al registrar historial:", text);
@@ -80,6 +71,5 @@ export async function addHistorialEmpresa(empresaId: string | number, payload: H
   }
 
   const data = await res.json();
-  console.log("✅ Historial registrado:", data);
   return (data as { data?: HistorialEntry }).data ?? (data as HistorialEntry);
 }

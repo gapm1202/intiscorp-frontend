@@ -1,12 +1,24 @@
 import { useAuth } from "@/context/authHelpers";
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { getContratosProximosAVencer } from '@/modules/empresas/services/contratosService';
+import { useNavigate } from 'react-router-dom';
 
 interface HeaderProps {
   toggleSidebar: () => void;
 }
 
+interface ContratoProximoVencer {
+  empresaId: string;
+  empresaNombre: string;
+  fechaFin: string;
+  diasRestantes: number;
+  renovacionAutomatica: boolean;
+}
+
 const Header = ({ toggleSidebar }: HeaderProps) => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const notificationRef = useRef<HTMLDivElement>(null);
   const [dark, setDark] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem('theme');
@@ -14,6 +26,8 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
       return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     } catch { return false; }
   });
+  const [contratosProximos, setContratosProximos] = useState<ContratoProximoVencer[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     try {
@@ -24,6 +38,55 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
       /* noop */
     }
   }, [dark]);
+
+  // Cargar contratos próximos a vencer
+  useEffect(() => {
+    const cargarContratosProximos = async () => {
+      try {
+        const contratos = await getContratosProximosAVencer(30);
+        
+        // Normalizar diasRestantes a número (por si viene como string)
+        const contratosNormalizados = (contratos || []).map(c => ({
+          ...c,
+          diasRestantes: typeof c.diasRestantes === 'string' ? parseInt(c.diasRestantes, 10) : c.diasRestantes
+        }));
+        
+        setContratosProximos(contratosNormalizados);
+      } catch (error) {
+        console.error('Error al cargar contratos próximos a vencer:', error);
+        setContratosProximos([]);
+      }
+    };
+
+    cargarContratosProximos();
+    // Actualizar cada 5 minutos
+    const interval = setInterval(cargarContratosProximos, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleRevisarContrato = (empresaId: string) => {
+    setShowNotifications(false);
+    navigate(`/admin/empresas/${empresaId}`);
+    // Guardar en sessionStorage para abrir la pestaña contrato
+    sessionStorage.setItem(`empresaTab_${empresaId}`, 'contrato');
+  };
+
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+
+    if (showNotifications) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showNotifications]);
 
   return (
     <header className="shadow-md sticky top-0 z-30">
@@ -77,22 +140,91 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
             )}
           </button>
           {/* Notificaciones */}
-          <button className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <div className="relative" ref={notificationRef}>
+            <button 
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-              />
-            </svg>
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                />
+              </svg>
+              {contratosProximos.length > 0 && (
+                <span className="absolute top-1 right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                  {contratosProximos.length}
+                </span>
+              )}
+            </button>
+
+            {/* Dropdown de notificaciones */}
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                <div className="p-4 border-b border-gray-200">
+                  <h3 className="text-sm font-bold text-gray-800">Notificaciones</h3>
+                  <p className="text-xs text-gray-500 mt-1">{contratosProximos.length} notificación(es)</p>
+                </div>
+                
+                <div className="max-h-96 overflow-y-auto">
+                  {contratosProximos.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <svg className="w-12 h-12 mx-auto text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="text-sm text-gray-500">No hay contratos próximos a vencer</p>
+                    </div>
+                  ) : (
+                    contratosProximos.map((contrato, index) => (
+                      <div 
+                        key={index} 
+                        className="p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-amber-100 rounded-lg shrink-0">
+                            <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-800 truncate">
+                              {contrato.empresaNombre}
+                            </p>
+                            <p className="text-xs text-gray-600 mt-1">
+                              {contrato.diasRestantes === 0 
+                                ? '⚠️ El contrato vence hoy' 
+                                : contrato.diasRestantes === 1
+                                ? '⚠️ Falta 1 día para que finalice el contrato'
+                                : `⏰ Faltan ${contrato.diasRestantes} días para que finalice el contrato`
+                              }
+                            </p>
+                            {!contrato.renovacionAutomatica && (
+                              <p className="text-xs text-red-600 mt-1 font-semibold">
+                                🔴 Sin renovación automática
+                              </p>
+                            )}
+                            <button
+                              onClick={() => handleRevisarContrato(contrato.empresaId)}
+                              className="mt-2 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                              Revisar Contrato
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Perfil del usuario */}
           <div className="flex items-center space-x-3 border-l border-gray-200 pl-4">

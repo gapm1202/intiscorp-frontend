@@ -16,6 +16,7 @@ interface RequisitosData {
     registroAtencion: boolean;
     informeTecnico: boolean;
   };
+  requisitosPersonalizados?: string[];
 }
 
 interface GestionRequisitosFormProps {
@@ -42,6 +43,7 @@ const defaultData: RequisitosData = {
     registroAtencion: true,
     informeTecnico: true,
   },
+  requisitosPersonalizados: [],
 };
 
 export function GestionRequisitosForm({ initialData, onSave, onCancel }: GestionRequisitosFormProps) {
@@ -51,10 +53,13 @@ export function GestionRequisitosForm({ initialData, onSave, onCancel }: Gestion
       obligacionesCliente: initialData.obligacionesCliente || defaultData.obligacionesCliente,
       condicionesTecnicas: initialData.condicionesTecnicas || defaultData.condicionesTecnicas,
       responsabilidadesProveedor: initialData.responsabilidadesProveedor || defaultData.responsabilidadesProveedor,
+      requisitosPersonalizados: initialData.requisitosPersonalizados || [],
     };
   };
 
   const [formData, setFormData] = useState<RequisitosData>(getInitialData());
+  const [nuevoRequisito, setNuevoRequisito] = useState('');
+  const [mostrarAgregarRequisito, setMostrarAgregarRequisito] = useState(false);
 
   const toggleField = <K extends Section>(section: K, key: keyof RequisitosData[K]) => {
     setFormData((prev) => ({
@@ -63,6 +68,24 @@ export function GestionRequisitosForm({ initialData, onSave, onCancel }: Gestion
         ...prev[section],
         [key]: !prev[section][key],
       },
+    }));
+  };
+
+  const agregarRequisito = () => {
+    if (nuevoRequisito.trim()) {
+      setFormData(prev => ({
+        ...prev,
+        requisitosPersonalizados: [...(prev.requisitosPersonalizados || []), nuevoRequisito.trim()]
+      }));
+      setNuevoRequisito('');
+      setMostrarAgregarRequisito(false);
+    }
+  };
+
+  const eliminarRequisito = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      requisitosPersonalizados: (prev.requisitosPersonalizados || []).filter((_, i) => i !== index)
     }));
   };
 
@@ -165,6 +188,77 @@ export function GestionRequisitosForm({ initialData, onSave, onCancel }: Gestion
               <span className="text-sm text-gray-700">{item.label}</span>
             </label>
           ))}
+        </div>
+
+        {/* Requisitos Personalizados */}
+        <div className="border-b pb-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-gray-900">Requisitos personalizados</p>
+            {!mostrarAgregarRequisito && (
+              <button
+                onClick={() => setMostrarAgregarRequisito(true)}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                + Agregar requisito
+              </button>
+            )}
+          </div>
+
+          {mostrarAgregarRequisito && (
+            <div className="flex gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <input
+                type="text"
+                value={nuevoRequisito}
+                onChange={(e) => setNuevoRequisito(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') agregarRequisito();
+                  if (e.key === 'Escape') {
+                    setMostrarAgregarRequisito(false);
+                    setNuevoRequisito('');
+                  }
+                }}
+                placeholder="Nombre del requisito..."
+                className="flex-1 px-3 py-2 border border-blue-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+              />
+              <button
+                onClick={agregarRequisito}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors"
+              >
+                Agregar
+              </button>
+              <button
+                onClick={() => {
+                  setMostrarAgregarRequisito(false);
+                  setNuevoRequisito('');
+                }}
+                className="px-4 py-2 bg-slate-400 text-white rounded-lg hover:bg-slate-500 text-sm font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
+
+          {formData.requisitosPersonalizados && formData.requisitosPersonalizados.length > 0 ? (
+            <div className="space-y-2">
+              {formData.requisitosPersonalizados.map((req, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 border border-purple-200 bg-purple-50 rounded-lg"
+                >
+                  <span className="text-sm text-gray-700">✨ {req}</span>
+                  <button
+                    onClick={() => eliminarRequisito(index)}
+                    className="text-red-600 hover:text-red-800 text-sm font-medium"
+                  >
+                    ✕ Eliminar
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : !mostrarAgregarRequisito && (
+            <p className="text-sm text-gray-500 italic">No hay requisitos personalizados agregados</p>
+          )}
         </div>
 
         <div className="bg-linear-to-r from-amber-50 to-slate-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">

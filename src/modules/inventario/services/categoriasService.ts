@@ -49,11 +49,8 @@ export const getCategorias = async (): Promise<Category[]> => {
 // Crear una nueva categoría
 export const createCategoria = async (categoria: Omit<Category, 'id'>): Promise<Category> => {
   try {
-    console.log('[categoriasService] 📤 POST /api/categorias con payload:', JSON.stringify(categoria, null, 2));
     const response = await axiosClient.post('/api/categorias', categoria);
     const data = response.data;
-    
-    console.log('[categoriasService] ✅ Respuesta exitosa:', data);
     
     // Si el backend devuelve { ok: true, data: {...} }
     if (data && typeof data === 'object' && 'data' in data) {
@@ -78,17 +75,13 @@ export const createCategoria = async (categoria: Omit<Category, 'id'>): Promise<
     let serverMessage = 'Error desconocido';
     
     if (err.response?.data) {
-      console.log('[categoriasService] 📋 Tipo de response.data:', typeof err.response.data);
       
       if (typeof err.response.data === 'string') {
         serverMessage = err.response.data;
-        console.log('[categoriasService] ✓ Es string:', serverMessage);
       } else if (err.response.data instanceof Blob) {
-        console.log('[categoriasService] ⚠️ Es Blob, intentando leerlo...');
         // Esto no funcionará en este contexto de catch, solo para documentar
         serverMessage = 'Respuesta en formato Blob (ver logs detallados)';
       } else if (typeof err.response.data === 'object') {
-        console.log('[categoriasService] 📦 Es objeto, claves:', Object.keys(err.response.data));
         serverMessage = 
           err.response.data?.message ||
           err.response.data?.error ||

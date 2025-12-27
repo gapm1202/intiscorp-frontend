@@ -1,8 +1,10 @@
- import { useState } from 'react';
+ import { useState, useEffect } from 'react';
+import { getCatalogCategories, getCatalogTypes, ticketTypeLabel } from "@/modules/catalogo/services/catalogoService";
 
 interface AlcanceSLAData {
   slaActivo: boolean;
   aplicaA: 'incidentes';
+  tiposTicketCubiertos: string[];
   tipoServicioCubierto: 'incidente' | 'incidenteCritico';
   serviciosCubiertos: {
     soporteRemoto: boolean;
@@ -29,11 +31,10 @@ interface AlcanceSLAFormProps {
   sedes?: { id: string; nombre: string }[];
 }
 
-const CATEGORIAS_DISPONIBLES = ['PC', 'Servidor', 'Impresora', 'Router', 'Switch', 'Firewall', 'Otro'];
-
 const getDefaultAlcanceData = (): AlcanceSLAData => ({
   slaActivo: false,
   aplicaA: 'incidentes',
+  tiposTicketCubiertos: ['incidente'],
   tipoServicioCubierto: 'incidente',
   serviciosCubiertos: {
     soporteRemoto: false,
@@ -56,21 +57,88 @@ export function AlcanceSLAForm({
   initialData,
   onSave,
   onCancel,
-  categorias = CATEGORIAS_DISPONIBLES,
+  categorias,
   sedes = [],
 }: AlcanceSLAFormProps) {
+  // Determinar estado automático del SLA según estado del contrato
+  const estadoContrato = arguments[0]?.estadoContrato || '';
+  const estadoContratoLower = (estadoContrato || '').toLowerCase();
+  const estadoContratoActivo = estadoContratoLower === 'activo';
+  const estadoContratoInactivo = estadoContratoLower === 'vencido' || estadoContratoLower === 'suspendido';
   const getInitialData = (): AlcanceSLAData => {
     if (!initialData || Object.keys(initialData).length === 0) return getDefaultAlcanceData();
-    return {
+    let data = {
       ...getDefaultAlcanceData(),
       ...initialData,
     };
+    if (estadoContratoActivo) {
+      data.slaActivo = true;
+    }
+    if (estadoContratoInactivo) {
+      data.slaActivo = false;
+    }
+    return data;
   };
 
   const [formData, setFormData] = useState<AlcanceSLAData>(getInitialData());
-  const [nuevaCategoria, setNuevaCategoria] = useState('');
+  const [availableCategories, setAvailableCategories] = useState<string[]>(categorias ?? []);
+  const [availableTypes, setAvailableTypes] = useState<string[]>([]);
+
+  useEffect(() => {
+    // Si nos pasan categorías como prop las usamos; si no, intentamos cargar del módulo Catálogo
+    if (categorias && categorias.length) {
+      setAvailableCategories(categorias);
+    } else {
+      let mounted = true;
+      const load = async () => {
+        try {
+          const cats = await getCatalogCategories();
+          if (!mounted) return;
+          setAvailableCategories(cats.map((c: any) => c.nombre));
+        } catch (e) {
+          console.warn('[AlcanceSLAForm] no se pudieron cargar categorías del catálogo', e);
+        }
+      };
+      load();
+      return () => { mounted = false; };
+    }
+  }, [categorias]);
+
+  // Cargar tipos desde catálogo
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const types = await getCatalogTypes();
+        if (!mounted) return;
+        const normalized = Array.from(new Set((types || []).map((t) => String(t).trim().toLowerCase())));
+        setAvailableTypes(normalized);
+        if (!formData.tiposTicketCubiertos || !formData.tiposTicketCubiertos.length) {
+          setFormData((prev) => ({ ...prev, tiposTicketCubiertos: [normalized[0] || 'incidente'] }));
+        }
+      } catch (e) {
+        console.warn('[AlcanceSLAForm] no se pudieron cargar tipos del catálogo', e);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, []);
+
+  // Si se activa 'todos', sincronizamos la lista de categorías para reflejar todas las existentes
+  useEffect(() => {
+    if (formData.activosCubiertos.tipo === 'todos') {
+      setFormData((prev) => ({
+        ...prev,
+        activosCubiertos: {
+          ...prev.activosCubiertos,
+          categorias: availableCategories,
+        },
+      }));
+    }
+  }, [availableCategories, formData.activosCubiertos.tipo]);
 
   const handleToggleSLAActivo = () => {
+    if (estadoContratoActivo) return; // No permitir cambiar si el contrato está activo
     setFormData((prev) => ({
       ...prev,
       slaActivo: !prev.slaActivo,
@@ -87,16 +155,26 @@ export function AlcanceSLAForm({
     }));
   };
 
-  const handleToggleCategoria = (categoria: string) => {
+  // Handler para selección múltiple de categorías (replace multi-select UI)
+  const handleSelectCategorias = (selected: string[]) => {
+    setFormData((prev) => ({
+      ...prev,
+      activosCubiertos: {
+        ...prev.activosCubiertos,
+        categorias: selected,
+      },
+    }));
+  };
+
+  // Alterna una categoría individual en la selección (más cómodo en UI con checkboxes)
+  const handleToggleCategoriaSelection = (categoria: string) => {
     setFormData((prev) => {
       const actuales = prev.activosCubiertos.categorias || [];
       return {
         ...prev,
         activosCubiertos: {
           ...prev.activosCubiertos,
-          categorias: actuales.includes(categoria)
-            ? actuales.filter((c) => c !== categoria)
-            : [...actuales, categoria],
+          categorias: actuales.includes(categoria) ? actuales.filter((c) => c !== categoria) : [...actuales, categoria],
         },
       };
     });
@@ -115,34 +193,6 @@ export function AlcanceSLAForm({
         },
       };
     });
-  };
-
-  const agregarCategoriaPersonalizada = () => {
-    if (nuevaCategoria.trim()) {
-      setFormData((prev) => ({
-        ...prev,
-        activosCubiertos: {
-          ...prev.activosCubiertos,
-          categoriasPersonalizadas: [
-            ...(prev.activosCubiertos.categoriasPersonalizadas || []),
-            nuevaCategoria.trim(),
-          ],
-        },
-      }));
-      setNuevaCategoria('');
-    }
-  };
-
-  const eliminarCategoriaPersonalizada = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      activosCubiertos: {
-        ...prev.activosCubiertos,
-        categoriasPersonalizadas: (prev.activosCubiertos.categoriasPersonalizadas || []).filter(
-          (_, i) => i !== index
-        ),
-      },
-    }));
   };
 
   const handleSave = () => {
@@ -185,39 +235,66 @@ export function AlcanceSLAForm({
                   Si está inactivo, los tickets no medirán SLA
                 </p>
               </div>
-              <button
-                onClick={handleToggleSLAActivo}
-                className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
-                  formData.slaActivo
-                    ? 'bg-green-500'
-                    : 'bg-gray-300'
-                }`}
-              >
-                <span
-                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                    formData.slaActivo ? 'translate-x-7' : 'translate-x-1'
+              {/* Mostrar el switch solo si el contrato NO está activo/inactivo automático */}
+              {!(estadoContratoActivo || estadoContratoInactivo) && (
+                <button
+                  onClick={handleToggleSLAActivo}
+                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                    formData.slaActivo
+                      ? 'bg-green-500'
+                      : 'bg-gray-300'
                   }`}
-                />
-              </button>
+                >
+                  <span
+                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                      formData.slaActivo ? 'translate-x-7' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              )}
             </div>
             <div className="text-sm font-medium text-gray-700">
-              Estado: <span className={formData.slaActivo ? 'text-green-600' : 'text-red-600'}>
-                {formData.slaActivo ? '✓ Activo' : '✗ Inactivo'}
-              </span>
+              Estado: {estadoContratoActivo && (
+                <span className="text-green-600">✓ Activo</span>
+              )}
+              {estadoContratoInactivo && (
+                <span className="text-red-600">✗ Inactivo</span>
+              )}
+              {estadoContratoActivo && (
+                <span className="ml-2 text-xs text-emerald-700 font-semibold">(Automático por contrato activo)</span>
+              )}
+              {estadoContratoInactivo && (
+                <span className="ml-2 text-xs text-rose-700 font-semibold">(Automático por contrato vencido/suspendido)</span>
+              )}
             </div>
           </div>
 
           {/* 2. Aplica a */}
           <div className="border-b pb-6">
-            <label className="text-sm font-semibold text-gray-900 block mb-4">Aplica a</label>
-            <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <input
-                type="checkbox"
-                checked={formData.aplicaA === 'incidentes'}
-                disabled
-                className="w-5 h-5 text-blue-600 rounded"
-              />
-              <span className="text-sm text-gray-700">Incidentes (Fijo)</span>
+            <label className="text-sm font-semibold text-gray-900 block mb-4">Tipos de ticket cubiertos por el SLA</label>
+            <div className="space-y-3">
+              {availableTypes.length === 0 && <p className="text-sm text-gray-500">Cargando tipos…</p>}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                {availableTypes.map((t) => (
+                  <label key={t} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={(formData.tiposTicketCubiertos || []).includes(t)}
+                      onChange={() => {
+                        setFormData((prev) => {
+                          const curr = prev.tiposTicketCubiertos || [];
+                          return {
+                            ...prev,
+                            tiposTicketCubiertos: curr.includes(t) ? curr.filter((x) => x !== t) : [...curr, t],
+                          };
+                        });
+                      }}
+                      className="w-5 h-5 text-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">{ticketTypeLabel(t)}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -279,11 +356,11 @@ export function AlcanceSLAForm({
             </div>
           </div>
 
-          {/* 4. Activos Cubiertos */}
+          {/* 4. Categorías cubiertas por el SLA */}
           <div className="border-b pb-6">
-            <label className="text-sm font-semibold text-gray-900 block mb-4">Activos Cubiertos</label>
+            <label className="text-sm font-semibold text-gray-900 block mb-4">Categorías cubiertas por el SLA</label>
             <div className="space-y-4">
-              {/* Todos vs Por Categoría */}
+              {/* Modo: todas vs seleccionadas */}
               <div className="space-y-3">
                 <label className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
                   <input
@@ -297,12 +374,13 @@ export function AlcanceSLAForm({
                         activosCubiertos: {
                           ...prev.activosCubiertos,
                           tipo: 'todos',
+                          categorias: availableCategories,
                         },
                       }))
                     }
                     className="w-5 h-5 text-blue-600"
                   />
-                  <span className="text-sm text-gray-700">📦 Todos los activos</span>
+                  <span className="text-sm text-gray-700">🔘 Aplica a todas las categorías</span>
                 </label>
 
                 <label className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
@@ -317,94 +395,37 @@ export function AlcanceSLAForm({
                         activosCubiertos: {
                           ...prev.activosCubiertos,
                           tipo: 'porCategoria',
+                          categorias: [],
                         },
                       }))
                     }
                     className="w-5 h-5 text-blue-600"
                   />
-                  <span className="text-sm text-gray-700">🏷️ Por categoría</span>
+                  <span className="text-sm text-gray-700">🔘 Aplica solo a las categorías seleccionadas</span>
                 </label>
               </div>
 
-              {/* Mostrar categorías si está seleccionado "Por Categoría" */}
+              {/* Mostrar selector múltiple si está seleccionado "Por Categoría" */}
               {formData.activosCubiertos.tipo === 'porCategoria' && (
                 <div className="ml-8 space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <p className="text-xs font-medium text-gray-600 mb-3">Selecciona las categorías a cubrir:</p>
+                  <label className="text-sm font-medium text-gray-700 block mb-2">Selecciona las categorías cubiertas:</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {categorias.map((categoria) => (
-                      <label
-                        key={categoria}
-                        className="flex items-center gap-2 p-2 hover:bg-white rounded cursor-pointer"
-                      >
+                    {availableCategories.length === 0 && (
+                      <p className="text-sm text-gray-500">No hay categorías disponibles en Catálogo.</p>
+                    )}
+                    {availableCategories.map((categoria) => (
+                      <label key={categoria} className="flex items-center gap-2 p-2 rounded hover:bg-white cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={formData.activosCubiertos.categorias?.includes(categoria) || false}
-                          onChange={() => handleToggleCategoria(categoria)}
+                          checked={(formData.activosCubiertos.categorias || []).includes(categoria)}
+                          onChange={() => handleToggleCategoriaSelection(categoria)}
                           className="w-4 h-4 text-blue-600 rounded"
                         />
                         <span className="text-sm text-gray-700">{categoria}</span>
                       </label>
                     ))}
                   </div>
-                  {/* Campo para agregar categorías personalizadas cuando se selecciona 'Otro' */}
-                  {formData.activosCubiertos.categorias?.includes('Otro') && (
-                    <div className="mt-4 p-3 bg-white rounded-lg border border-blue-200 space-y-3">
-                      <p className="text-xs font-semibold text-gray-700">Agregar más categorías:</p>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={nuevaCategoria}
-                          onChange={(e) => setNuevaCategoria(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              agregarCategoriaPersonalizada();
-                            }
-                          }}
-                          placeholder="Ej: Tablet, Escáner, UPS..."
-                          className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                        <button
-                          onClick={agregarCategoriaPersonalizada}
-                          type="button"
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold whitespace-nowrap"
-                        >
-                          + Agregar
-                        </button>
-                      </div>
-                      {(formData.activosCubiertos.categoriasPersonalizadas || []).length > 0 && (
-                        <div className="space-y-2">
-                          <p className="text-xs font-medium text-gray-600">Categorías agregadas:</p>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            {(formData.activosCubiertos.categoriasPersonalizadas || []).map((cat, index) => (
-                              <div
-                                key={index}
-                                className="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-200 hover:bg-white"
-                              >
-                                <label className="flex items-center gap-2 flex-1 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={formData.activosCubiertos.categorias?.includes(cat) || false}
-                                    onChange={() => handleToggleCategoria(cat)}
-                                    className="w-4 h-4 text-blue-600 rounded"
-                                  />
-                                  <span className="text-sm text-gray-700">{cat}</span>
-                                </label>
-                                <button
-                                  onClick={() => eliminarCategoriaPersonalizada(index)}
-                                  type="button"
-                                  className="text-red-600 hover:text-red-800 text-sm font-semibold ml-2"
-                                  title="Eliminar categoría"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <p className="text-xs text-gray-500">Jala las categorías creadas en el módulo de Catálogo de Categorías</p>
                 </div>
               )}
             </div>
