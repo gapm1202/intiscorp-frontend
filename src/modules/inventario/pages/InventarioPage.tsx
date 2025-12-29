@@ -1386,6 +1386,12 @@ const InventarioPage = () => {
                         <p className="font-bold text-gray-900 font-mono text-lg">{String(viewItem.mac)}</p>
                       </div>
                     )}
+                    {String(viewItem.codigoAccesoRemoto ?? '') !== '' && (
+                      <div className="bg-linear-to-br from-indigo-50 to-blue-50 p-4 rounded-lg border border-indigo-200 hover:shadow-md transition-shadow">
+                        <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-2">Código Acceso Remoto</p>
+                        <p className="font-bold text-gray-900 font-mono text-lg">{String(viewItem.codigoAccesoRemoto)}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

@@ -25,7 +25,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
   const menuByRole: Record<string, Array<{ id: string; label: string; path: string }>> = {
     administrador: [
       { id: "dashboard", label: "Dashboard", path: "/dashboard" },
-      { id: "tickets", label: "Tickets", path: "/tickets" },
+      { id: "tickets", label: "Tickets", path: "/admin/tickets" },
       { id: "inventario", label: "Inventario", path: "/inventario" },
       { id: "catalogo", label: "Catálogo de Categorías", path: "/admin/catalogo-categorias" },
       { id: "empresas", label: "Empresas", path: "/empresas" },

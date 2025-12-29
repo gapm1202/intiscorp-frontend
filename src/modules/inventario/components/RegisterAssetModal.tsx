@@ -116,6 +116,7 @@ const RegisterAssetModal = ({
   const [antiguedadCalculada, setAntiguedadCalculada] = useState<string>("");
   const [ip, setIp] = useState<string>("");
   const [mac, setMac] = useState<string>("");
+  const [codigoAccesoRemoto, setCodigoAccesoRemoto] = useState<string>("");
   const [usuariosAsignados, setUsuariosAsignados] = useState<Array<{ nombre: string; correo: string; cargo: string }>>([]);
   const [observaciones, setObservaciones] = useState<string>("");
   const [fotos, setFotos] = useState<Array<{ file: File; description: string }>>([]);
@@ -147,6 +148,7 @@ const RegisterAssetModal = ({
         setFechaFinGarantia("");
         setIp("");
         setMac("");
+        setCodigoAccesoRemoto("");
         setObservaciones("");
         setEstadoActivo("activo");
         setEstadoOperativo("operativo");
@@ -290,6 +292,7 @@ const RegisterAssetModal = ({
 
         setIp(String(asset['ip'] ?? ''));
         setMac(String(asset['mac'] ?? ''));
+        setCodigoAccesoRemoto(String(asset['codigoAccesoRemoto'] ?? ''));
         setObservaciones(String(asset['observaciones'] ?? ''));
 
       // Cargar información contable/compra y garantía si existe
@@ -637,6 +640,7 @@ const RegisterAssetModal = ({
       antiguedadCalculada,
       ip,
       mac,
+      codigoAccesoRemoto: codigoAccesoRemoto || undefined,
       usuariosAsignados,
       observaciones,
       ...categoryData,
@@ -787,6 +791,7 @@ const RegisterAssetModal = ({
       antiguedadCalculada,
       ip,
       mac,
+      codigoAccesoRemoto: codigoAccesoRemoto || undefined,
       usuariosAsignados,
       observaciones,
       empresaId,
@@ -1104,6 +1109,19 @@ const RegisterAssetModal = ({
               <label className="block text-xs font-semibold text-gray-600">MAC Address</label>
               <input value={mac} onChange={e => setMac(e.target.value)} className="w-full mt-1 p-2 border rounded text-sm" />
             </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600">Código Acceso Remoto</label>
+              <input 
+                value={codigoAccesoRemoto} 
+                onChange={e => setCodigoAccesoRemoto(e.target.value)} 
+                className="w-full mt-1 p-2 border rounded text-sm" 
+                placeholder="Ej: AnyDesk, TeamViewer, etc."
+              />
+            </div>
+          </section>
+
+          {/* Estado */}
+          <section className="grid grid-cols-1 gap-4 py-4 border-b">
             <div>
               <label className="block text-xs font-semibold text-gray-600">Estado</label>
               <div className="grid grid-cols-2 gap-2 mt-1">

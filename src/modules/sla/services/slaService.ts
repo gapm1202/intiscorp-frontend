@@ -70,3 +70,14 @@ export const slaService = {
     return response.data;
   },
 };
+
+// Función helper para obtener SLA por empresa
+export async function getSLAByEmpresa(empresaId: number) {
+  try {
+    const response = await axiosClient.get(`${BASE_URL}/configuracion/${empresaId}`);
+    return response.data;
+  } catch (error: any) {
+    console.error('[getSLAByEmpresa] error:', error?.response?.data || error?.message);
+    return null;
+  }
+}

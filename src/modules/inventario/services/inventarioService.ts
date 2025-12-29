@@ -151,6 +151,11 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
       restData['condicion_fisica'] = restData['condicionFisica'];
     }
 
+    // Asegurar campo codigoAccesoRemoto en variantes camelCase + snake_case
+    if (typeof restData['codigoAccesoRemoto'] !== 'undefined') {
+      restData['codigo_acceso_remoto'] = restData['codigoAccesoRemoto'];
+    }
+
     const jsonData = JSON.stringify(restData);
     // Añadir condicion_fisica también como campo top-level en FormData (compatibilidad)
     if (typeof restData['condicion_fisica'] !== 'undefined') {
@@ -230,6 +235,11 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
         restCopy['garantia_duracion'] = restCopy['garantia'];
       }
 
+      // Asegurar campo codigoAccesoRemoto en variantes camelCase + snake_case
+      if (typeof restCopy['codigoAccesoRemoto'] !== 'undefined') {
+        restCopy['codigo_acceso_remoto'] = restCopy['codigoAccesoRemoto'];
+      }
+
       const jsonData2 = JSON.stringify(restCopy);
 
       if (purchaseDocumentFile && (purchaseDocumentFile as FileLike).name) {
@@ -287,6 +297,9 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
         const copy: Record<string, unknown> = { ...payload };
         if (typeof copy['condicionFisica'] !== 'undefined') {
           copy['condicion_fisica'] = copy['condicionFisica'];
+        }
+        if (typeof copy['codigoAccesoRemoto'] !== 'undefined') {
+          copy['codigo_acceso_remoto'] = copy['codigoAccesoRemoto'];
         }
         return copy;
       })())
@@ -423,6 +436,10 @@ export async function updateActivo(empresaId: string | number, sedeId: string | 
       restData2['garantia_duracion'] = restData2['garantia'];
     }
 
+    if (typeof restData2['codigoAccesoRemoto'] !== 'undefined') {
+      restData2['codigo_acceso_remoto'] = restData2['codigoAccesoRemoto'];
+    }
+
     const purchaseDocumentFile = payload['purchaseDocumentFile'] ?? payload['purchaseDocument'];
     const warrantyDocumentFile = payload['warrantyDocumentFile'] ?? payload['warrantyDocument'];
 
@@ -505,6 +522,10 @@ export async function updateActivo(empresaId: string | number, sedeId: string | 
         restCopy['garantia_duracion'] = restCopy['garantia'];
       }
 
+      if (typeof restCopy['codigoAccesoRemoto'] !== 'undefined') {
+        restCopy['codigo_acceso_remoto'] = restCopy['codigoAccesoRemoto'];
+      }
+
       const jsonData4 = JSON.stringify(restCopy);
 
       if (purchaseDocumentFile && (purchaseDocumentFile as FileLike).name) {
@@ -556,7 +577,13 @@ export async function updateActivo(empresaId: string | number, sedeId: string | 
         "Content-Type": "application/json",
         ...(token && { "Authorization": `Bearer ${token}` })
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify((() => {
+        const copy: Record<string, unknown> = { ...payload };
+        if (typeof copy['codigoAccesoRemoto'] !== 'undefined') {
+          copy['codigo_acceso_remoto'] = copy['codigoAccesoRemoto'];
+        }
+        return copy;
+      })())
     });
 
     if (!res.ok) {
