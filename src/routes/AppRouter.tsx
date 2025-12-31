@@ -12,6 +12,7 @@ import HistorialEmpresaPage from "../modules/empresas/pages/HistorialEmpresaPage
 import InventarioPage from "../modules/inventario/pages/InventarioPage";
 import EtiquetasPage from "../modules/inventario/pages/EtiquetasPage";
 import PublicReportPage from "../modules/public/pages/PublicReportPage";
+import PublicTicketStatusPage from "../modules/public/pages/PublicTicketStatusPage";
 import CatalogoCategoriasPage from "../modules/catalogo/pages/CatalogoCategoriasPage";
 import TicketsPage from "../modules/tickets/pages/TicketsPage";
 
@@ -155,6 +156,7 @@ const AppRouter = () => {
         {/* Public report page (no auth) - accessed from QR */}
         <Route path="/public/report" element={<PublicReportPage />} />
         <Route path="/public/activos" element={<PublicReportPage />} />
+        <Route path="/public/ticket/:ticketId" element={<PublicTicketStatusPage />} />
       </Route>
 
 

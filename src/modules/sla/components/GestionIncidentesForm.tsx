@@ -68,11 +68,20 @@ export function GestionIncidentesForm({ initialData, onSave, onCancel }: Gestion
   };
 
   const handleSave = () => {
-    const payload: GestionIncidentesData = {
+    const payload: GestionIncidentesData & { tipos: any[] } = {
       ...formData,
       prioridadCalculada: prioridad,
+      tipos: [], // Campo obligatorio requerido por el backend
     };
-    if (onSave) onSave(payload);
+    console.log('🟢 [GestionIncidentesForm] handleSave llamado');
+    console.log('🟢 [GestionIncidentesForm] payload:', payload);
+    console.log('🟢 [GestionIncidentesForm] onSave existe?:', !!onSave);
+    if (onSave) {
+      console.log('🟢 [GestionIncidentesForm] Llamando a onSave...');
+      onSave(payload);
+    } else {
+      console.error('❌ [GestionIncidentesForm] onSave NO está definido!');
+    }
   };
 
   const handleReset = () => {

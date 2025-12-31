@@ -324,8 +324,19 @@ const PublicReportPage: React.FC = () => {
     if (token) fd.append('token', token);
     if (asset?.assetId) fd.append('assetId', asset.assetId);
     if (assetIdParam) fd.append('assetId', assetIdParam);
-    if (selectedUser) fd.append('reporterUserId', selectedUser);
-    else fd.append('reporterName', reporterName);
+    
+    // Buscar el usuario seleccionado para obtener su ID numérico
+    const selectedUserObj = users.find(u => u.value === selectedUser);
+    if (selectedUserObj?.id) {
+      fd.append('reporterUserId', selectedUserObj.id);
+    }
+    
+    // Siempre enviar el nombre: del usuario seleccionado o del campo manual
+    const nameToSend = selectedUserObj?.nombre || reporterName;
+    if (nameToSend) {
+      fd.append('reporterName', nameToSend);
+    }
+    
     if (reporterEmail) fd.append('reporterEmail', reporterEmail);
     fd.append('description', description);
     fd.append('operational', operational);

@@ -23,9 +23,20 @@ export const slaService = {
   // Guardar sección específica
   async guardarSeccion(empresaId: string, seccion: string, data: unknown, motivo?: string) {
     try {
+      // Normalizar datos según la sección para cumplir con estructura mínima del backend
+      let normalizedData = data;
+      
+      if (seccion === 'incidentes' || seccion === 'gestionIncidentes' || seccion === 'gestion_incidentes') {
+        // Asegurar estructura mínima para Gestión de Incidentes
+        normalizedData = {
+          tipos: [],
+          ...(typeof data === 'object' && data !== null ? data : {})
+        };
+      }
+      
       const response = await axiosClient.post(`${BASE_URL}/seccion/${empresaId}`, {
         seccion,
-        data,
+        data: normalizedData,
         ...(motivo ? { motivo } : {}),
       });
       return response.data;

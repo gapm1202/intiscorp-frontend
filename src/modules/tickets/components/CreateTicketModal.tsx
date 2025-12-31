@@ -31,6 +31,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
   const [slaActivo, setSlaActivo] = useState<any>(null);
   const [archivos, setArchivos] = useState<File[]>([]);
   const [searchActivos, setSearchActivos] = useState('');
+  const [searchUsuarios, setSearchUsuarios] = useState('');
   const [tiposTicket, setTiposTicket] = useState<any[]>([]);
   const [catalogoCategorias, setCatalogoCategorias] = useState<any[]>([]);
   const [catalogoSubcategorias, setCatalogoSubcategorias] = useState<any[]>([]);
@@ -583,22 +584,40 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                           return (
                             <div
                               key={codigo}
-                              className="inline-flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-800 rounded-lg text-xs border border-blue-200"
+                              className="inline-flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-blue-100 to-blue-50 text-blue-800 rounded-lg text-xs border-2 border-blue-200 shadow-sm"
                             >
-                              <div className="flex flex-col">
-                                <span className="font-bold">{activo ? (activo.assetId || activo.id) : codigo}</span>
-                                {activo && (
-                                  <>
-                                    <span className="text-blue-700">{activo.categoria} - {activo.fabricante} {activo.modelo}</span>
-                                    <span className="text-blue-600 italic flex items-center gap-1">
-                                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                                      </svg>
-                                      {activo.area || 'Sin área'}
-                                    </span>
-                                  </>
+                              <div className="flex items-center gap-3">
+                                {/* Información del activo */}
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-sm">{activo ? (activo.assetId || activo.id) : codigo}</span>
+                                  {activo && (
+                                    <>
+                                      <span className="text-blue-700">{activo.categoria} - {activo.fabricante} {activo.modelo}</span>
+                                      <span className="text-blue-600 italic flex items-center gap-1 mt-0.5">
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                                        </svg>
+                                        {activo.area || 'Sin área'}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                                
+                                {/* Código de Acceso Remoto - Destacado al costado */}
+                                {activo?.codigoAccesoRemoto && (
+                                  <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-md border border-indigo-700 shadow-md">
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                      <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
+                                      <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
+                                    </svg>
+                                    <div className="flex flex-col">
+                                      <span className="text-[10px] font-semibold uppercase tracking-wide opacity-90">Acceso Remoto</span>
+                                      <span className="font-bold text-sm">{activo.codigoAccesoRemoto}</span>
+                                    </div>
+                                  </div>
                                 )}
                               </div>
+                              
                               <button
                                 type="button"
                                 onClick={() => {
@@ -607,9 +626,9 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                                     activos_codigos: formData.activos_codigos.filter(c => c !== codigo)
                                   });
                                 }}
-                                className="ml-1 hover:bg-blue-200 rounded-full p-1 transition-colors"
+                                className="ml-2 hover:bg-red-100 hover:text-red-600 rounded-full p-1.5 transition-colors"
                               >
-                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                                 </svg>
                               </button>
@@ -621,7 +640,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
 
                     {/* Buscador de activos */}
                     {formData.sede_id && activos.length > 0 && (
-                      <div className="mb-2">
+                      <div className="mb-2 space-y-2">
                         <input
                           type="text"
                           placeholder="Buscar activo por código, categoría, fabricante o modelo..."
@@ -629,6 +648,45 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                           onChange={(e) => setSearchActivos(e.target.value)}
                           className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const activosFiltrados = activos.filter(activo => {
+                                if (!searchActivos) return true;
+                                const searchLower = searchActivos.toLowerCase();
+                                const codigoActivo = (activo.assetId || activo.id || '').toString().toLowerCase();
+                                const categoria = (activo.categoria || '').toLowerCase();
+                                const fabricante = (activo.fabricante || '').toLowerCase();
+                                const modelo = (activo.modelo || '').toLowerCase();
+                                return codigoActivo.includes(searchLower) || 
+                                       categoria.includes(searchLower) || 
+                                       fabricante.includes(searchLower) || 
+                                       modelo.includes(searchLower);
+                              });
+                              const todosLosCodigos = activosFiltrados.map(a => a.assetId || a.id);
+                              setFormData({
+                                ...formData,
+                                activos_codigos: todosLosCodigos
+                              });
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                          >
+                            Seleccionar todos
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData({
+                                ...formData,
+                                activos_codigos: []
+                              });
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                          >
+                            Limpiar selección
+                          </button>
+                        </div>
                       </div>
                     )}
 
@@ -769,6 +827,56 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                       </div>
                     )}
 
+                    {/* Buscador de usuarios */}
+                    {formData.activos_codigos.length > 0 && usuariosActivo.length > 0 && (
+                      <div className="mb-2 space-y-2">
+                        <input
+                          type="text"
+                          placeholder="Buscar usuario por nombre, correo o cargo..."
+                          value={searchUsuarios}
+                          onChange={(e) => setSearchUsuarios(e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const usuariosFiltrados = usuariosActivo.filter(usuario => {
+                                if (!searchUsuarios) return true;
+                                const searchLower = searchUsuarios.toLowerCase();
+                                const nombre = (usuario.nombre || '').toLowerCase();
+                                const correo = (usuario.correo || '').toLowerCase();
+                                const cargo = (usuario.cargo || '').toLowerCase();
+                                return nombre.includes(searchLower) || 
+                                       correo.includes(searchLower) || 
+                                       cargo.includes(searchLower);
+                              });
+                              const todosLosCorreos = usuariosFiltrados.map(u => u.correo);
+                              setFormData({
+                                ...formData,
+                                usuarios_reporta_ids: todosLosCorreos
+                              });
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium text-green-600 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+                          >
+                            Seleccionar todos
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData({
+                                ...formData,
+                                usuarios_reporta_ids: []
+                              });
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                          >
+                            Limpiar selección
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Lista con checkboxes */}
                     <div className="border border-gray-300 rounded-lg max-h-48 overflow-y-auto">
                       {formData.activos_codigos.length === 0 ? (
@@ -781,42 +889,18 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                         </div>
                       ) : (
                         <>
-                          {/* Checkbox Seleccionar Todos */}
-                          <label className="flex items-center gap-3 p-3 bg-gray-50 border-b-2 border-gray-300 cursor-pointer hover:bg-gray-100 transition-colors">
-                            <input
-                              type="checkbox"
-                              checked={formData.usuarios_reporta_ids.length === usuariosActivo.length && usuariosActivo.length > 0}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  // Seleccionar todos
-                                  const todosLosCorreos = usuariosActivo.map(u => u.correo);
-                                  setFormData({
-                                    ...formData,
-                                    usuarios_reporta_ids: todosLosCorreos
-                                  });
-                                } else {
-                                  // Deseleccionar todos
-                                  setFormData({
-                                    ...formData,
-                                    usuarios_reporta_ids: []
-                                  });
-                                }
-                              }}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                            />
-                            <div className="flex-1">
-                              <div className="text-sm font-bold text-gray-900">
-                                Seleccionar todos
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {usuariosActivo.length} usuario{usuariosActivo.length !== 1 ? 's' : ''} disponible{usuariosActivo.length !== 1 ? 's' : ''}
-                              </div>
-                            </div>
-                          </label>
-                          
                           {/* Lista de usuarios individuales */}
                           <div className="divide-y divide-gray-200">
-                            {usuariosActivo.map(usuario => {
+                            {usuariosActivo.filter(usuario => {
+                              if (!searchUsuarios) return true;
+                              const searchLower = searchUsuarios.toLowerCase();
+                              const nombre = (usuario.nombre || '').toLowerCase();
+                              const correo = (usuario.correo || '').toLowerCase();
+                              const cargo = (usuario.cargo || '').toLowerCase();
+                              return nombre.includes(searchLower) || 
+                                     correo.includes(searchLower) || 
+                                     cargo.includes(searchLower);
+                            }).map(usuario => {
                               const usuarioCorreo = usuario.correo;
                               const isSelected = formData.usuarios_reporta_ids.includes(usuarioCorreo);
                               return (
@@ -859,6 +943,20 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                               </label>
                             );
                           })}
+                          {usuariosActivo.filter(usuario => {
+                            if (!searchUsuarios) return true;
+                            const searchLower = searchUsuarios.toLowerCase();
+                            const nombre = (usuario.nombre || '').toLowerCase();
+                            const correo = (usuario.correo || '').toLowerCase();
+                            const cargo = (usuario.cargo || '').toLowerCase();
+                            return nombre.includes(searchLower) || 
+                                   correo.includes(searchLower) || 
+                                   cargo.includes(searchLower);
+                          }).length === 0 && searchUsuarios && (
+                            <div className="p-4 text-center text-gray-500 text-sm">
+                              No se encontraron usuarios que coincidan con "{searchUsuarios}"
+                            </div>
+                          )}
                           </div>
                         </>
                       )}
