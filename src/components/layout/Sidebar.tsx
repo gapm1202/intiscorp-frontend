@@ -27,7 +27,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
       { id: "dashboard", label: "Dashboard", path: "/dashboard" },
       { id: "tickets", label: "Tickets", path: "/admin/tickets" },
       { id: "inventario", label: "Inventario", path: "/inventario" },
-      { id: "catalogo", label: "Catálogo de Categorías", path: "/admin/catalogo-categorias" },
+      { id: "catalogos", label: "Catálogos", path: "/catalogos" },
       { id: "empresas", label: "Empresas", path: "/empresas" },
       { id: "usuarios", label: "Usuarios", path: "/usuarios" },
       { id: "reportes", label: "Reportes", path: "/reportes" },
@@ -54,7 +54,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
     usuarios: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />,
     reportes: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />,
     configuracion: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />,
-    catalogo: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h10" />,
+    catalogos: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h10" />,
     'mis-tickets': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />,
     'crear-ticket': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />,
     mantenimientos: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />,
@@ -62,6 +62,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
 
   const menuItems = user ? menuByRole[user.rol] ?? menuByRole["cliente"] : menuByRole["cliente"];
   const [inventarioOpen, setInventarioOpen] = useState(false);
+  const [catalogosOpen, setCatalogosOpen] = useState(false);
   type EmpresaItem = { id?: number; _id?: string; nombre?: string; [key: string]: unknown };
   const [empresas, setEmpresas] = useState<EmpresaItem[]>([]);
   const [loadingEmpresas, setLoadingEmpresas] = useState(false);
@@ -107,6 +108,10 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
         setLoadingEmpresas(false);
       }
     }
+  };
+
+  const toggleCatalogos = () => {
+    setCatalogosOpen(v => !v);
   };
 
   return (
@@ -172,20 +177,21 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
           <ul className="space-y-1">
             {menuItems.map((item) => {
               const isActive = location.pathname === item.path || location.pathname.startsWith(item.path);
+              
+              // Inventario menu with submenu
               if (item.id === "inventario") {
                 return (
                   <li key={item.id}>
                     <div className="flex items-center justify-between">
                       <button
-                        onClick={item.id === 'inventario' ? toggleInventario : () => handleNavigation(item.path)}
+                        onClick={toggleInventario}
                         aria-current={isActive ? 'true' : undefined}
                         className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${isActive ? 'active' : ''}`}
                       >
                         <span className="flex items-center space-x-3">
                           <div className={`w-9 h-9 rounded-lg ${collapsed ? 'flex items-center justify-center' : 'flex items-center justify-center'} bg-subtle group-hover:bg-primary flex items-center justify-center transition-colors`}> 
                             <svg className="w-4 h-4 text-slate-600 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              {/** reuse iconMap later */}
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3" />
+                              {iconMap[item.id] || iconMap.dashboard}
                             </svg>
                           </div>
                           {!collapsed && <span className="text-sm font-medium text-slate-700 group-hover:text-primary">{item.label}</span>}
@@ -194,7 +200,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                       </button>
                     </div>
                     {item.id === 'inventario' && inventarioOpen && !collapsed && (
-                          <div className="mt-1 ml-11 space-y-1 border-l-2 border-slate-100 pl-3">
+                      <div className="mt-1 ml-11 space-y-1 border-l-2 border-slate-100 pl-3">
                         {loadingEmpresas ? (
                           <div className="text-xs text-slate-500 py-2">Cargando empresas...</div>
                         ) : empresasError ? (
@@ -220,6 +226,46 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                   </li>
                 );
               }
+
+              // Catalogos menu with submenu
+              if (item.id === "catalogos") {
+                return (
+                  <li key={item.id}>
+                    <button
+                      onClick={toggleCatalogos}
+                      aria-current={isActive ? 'true' : undefined}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${isActive ? 'active' : ''}`}
+                    >
+                      <span className="flex items-center space-x-3">
+                        <div className="w-8 h-8 rounded-lg bg-subtle group-hover:bg-primary flex items-center justify-center transition-colors">
+                          <svg className="w-4 h-4 text-slate-600 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {iconMap[item.id] || iconMap.dashboard}
+                          </svg>
+                        </div>
+                        {!collapsed && <span className="text-sm font-medium text-slate-700 group-hover:text-primary">{item.label}</span>}
+                      </span>
+                    </button>
+                    {catalogosOpen && !collapsed && (
+                      <div className="mt-1 ml-11 space-y-1 border-l-2 border-slate-100 pl-3">
+                        <button
+                          onClick={() => guardedNavigate('/admin/catalogo-categorias')}
+                          className="w-full text-left text-xs py-2 px-3 rounded-md hover:bg-subtle transition-colors text-slate-700"
+                        >
+                          Catálogo de Categorías
+                        </button>
+                        <button
+                          onClick={() => guardedNavigate('/admin/catalogo-servicios')}
+                          className="w-full text-left text-xs py-2 px-3 rounded-md hover:bg-subtle transition-colors text-slate-700"
+                        >
+                          Catálogo de Servicios
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                );
+              }
+              
+              // Regular menu items
               return (
                 <li key={item.id}>
                   <button
@@ -233,7 +279,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                           {iconMap[item.id] || iconMap.dashboard}
                         </svg>
                       </div>
-                      <span className="text-sm font-medium text-slate-700 group-hover:text-primary">{item.label}</span>
+                      {!collapsed && <span className="text-sm font-medium text-slate-700 group-hover:text-primary">{item.label}</span>}
                     </span>
                     {item.id === "tickets" && (
                       <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-semibold">

@@ -1,6 +1,6 @@
 
 import { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { getEmpresaById } from "@/modules/empresas/services/empresasService";
 import { getSedesByEmpresa, toggleSedeActivo } from "@/modules/empresas/services/sedesService";
 import { getContratoActivo, getContratoById, createContrato, updateContratoDatos, updateContratoServicios, updateContratoPreventivo, updateContratoEconomicos, uploadContratoDocumentos, deleteContratoDocumento } from "@/modules/empresas/services/contratosService";
@@ -9,7 +9,6 @@ import CreateSedeModal from "@/modules/empresas/components/CreateSedeModal";
 import CreateEmpresaModal from "@/modules/empresas/components/CreateEmpresaModal";
 import DeleteSedeModal from "./../components/DeleteSedeModal";
 import { AlcanceSLAForm } from "@/modules/sla/components/AlcanceSLAForm";
-import { GestionIncidentesForm } from "@/modules/sla/components/GestionIncidentesForm";
 import { GestionTiemposForm } from "@/modules/sla/components/GestionTiemposForm";
 import { GestionRequisitosForm } from "@/modules/sla/components/GestionRequisitosForm";
 import { GestionHorariosForm } from "@/modules/sla/components/GestionHorariosForm";
@@ -19,10 +18,9 @@ import { slaService } from "@/modules/sla/services/slaService";
 import { useNavGuard } from "@/context/NavGuardContext";
 import MantenimientoSubTabs from "@/modules/mantenimiento/components/MantenimientoSubTabs";
 
-const SLA_SECCIONES: Array<keyof typeof INITIAL_SLA_MODES> = ['alcance', 'incidentes', 'tiempos', 'horarios', 'requisitos', 'exclusiones', 'alertas'];
+const SLA_SECCIONES: Array<keyof typeof INITIAL_SLA_MODES> = ['alcance', 'tiempos', 'horarios', 'requisitos', 'exclusiones', 'alertas'];
 const SLA_CONFIG_KEY: Record<string, string> = {
   alcance: 'alcance',
-  incidentes: 'gestion_incidentes',
   tiempos: 'tiempos',
   horarios: 'horarios',
   requisitos: 'requisitos',
@@ -32,7 +30,6 @@ const SLA_CONFIG_KEY: Record<string, string> = {
 
 const INITIAL_SLA_MODES = {
   alcance: true,
-  incidentes: true,
   tiempos: true,
   horarios: true,
   requisitos: true,
@@ -43,7 +40,6 @@ const INITIAL_SLA_MODES = {
 // Para detectar cuando se hizo clic en "Editar" sobre una sección ya guardada
 const INITIAL_SLA_IS_EDITING = {
   alcance: false,
-  incidentes: false,
   tiempos: false,
   horarios: false,
   requisitos: false,
@@ -133,6 +129,7 @@ interface HistorialSLAItem {
 const EmpresaDetailPage = () => {
   const { empresaId } = useParams<{ empresaId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [sedes, setSedes] = useState<Sede[]>([]);
   const [loading, setLoading] = useState(false);
@@ -170,11 +167,7 @@ const EmpresaDetailPage = () => {
   // Normaliza la configuración SLA para asegurar claves esperadas
   const normalizeSLAConfig = (cfg: any) => {
     if (!cfg) return null;
-    return {
-      ...cfg,
-      // Algunos backends podrían devolver 'incidentes' en lugar de 'gestion_incidentes'
-      gestion_incidentes: cfg?.gestion_incidentes ?? cfg?.incidentes ?? cfg?.gestionIncidentes ?? null,
-    };
+    return cfg;
   };
   
   // Estados para modal de documentos
@@ -214,6 +207,17 @@ const EmpresaDetailPage = () => {
   // Estados para agregar servicios personalizados
   const [nuevoServicioNombre, setNuevoServicioNombre] = useState('');
   const [mostrarAgregarServicio, setMostrarAgregarServicio] = useState(false);
+  
+  // Función para verificar si el contrato está completo (4 formularios guardados)
+  const isContratoCompleto = () => {
+    return Boolean(
+      contractId && // 1. Datos del Contrato guardados
+      serviciosGuardados && // 2. Servicios Incluidos guardados
+      preventivoGuardado && // 3. Mantenimiento Preventivo guardado
+      economicosGuardados // 4. Condiciones Económicas guardadas
+    );
+  };
+  
   // Estados para modo edición/visualización de cada sección
   // Por defecto, mostrar formularios para que el usuario pueda rellenarlos y guardar.
   const [editModoDatos, setEditModoDatos] = useState(true);
@@ -640,6 +644,15 @@ const EmpresaDetailPage = () => {
     }
   };
 
+  // Leer el parámetro 'tab' de la URL y activar la pestaña correspondiente
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['general', 'sedes', 'contactos', 'contrato', 'sla', 'mantenimientos', 'historial'].includes(tabParam)) {
+      setActiveTab(tabParam as any);
+      sessionStorage.setItem(`empresaTab_${empresaId}`, tabParam);
+    }
+  }, [searchParams, empresaId]);
+
   useEffect(() => {
     if (!empresaId) return;
 
@@ -723,7 +736,6 @@ const EmpresaDetailPage = () => {
           
           const editModes = {
             alcance: isEmptyObject(config.alcance),        // true si vacío → muestra formulario
-            incidentes: isEmptyObject(config.gestion_incidentes),
             tiempos: isEmptyObject(config.tiempos),
             horarios: isEmptyObject(config.horarios),
             requisitos: isEmptyObject(config.requisitos),
@@ -915,8 +927,8 @@ const EmpresaDetailPage = () => {
       (s) => !isEmptyObject(cfg[SLA_CONFIG_KEY[s]])
     ).length : 0;
 
-    // Solo bloquear si hay 1-6 secciones guardadas (incompleto)
-    const bloquear = seccionesGuardadas >= 1 && seccionesGuardadas < 7;
+    // Solo bloquear si hay 1-5 secciones guardadas (incompleto)
+    const bloquear = seccionesGuardadas >= 1 && seccionesGuardadas < 6;
 
     return bloquear;
   };
@@ -947,7 +959,7 @@ const EmpresaDetailPage = () => {
         if (!config) {
           // Si es null, setear todos en modo edición (primera vez)
           setSlaEditModes({ ...INITIAL_SLA_MODES });
-          setSlaIsEditing({ alcance: false, incidentes: false, tiempos: false, horarios: false, requisitos: false, exclusiones: false, alertas: false });
+          setSlaIsEditing({ alcance: false, tiempos: false, horarios: false, requisitos: false, exclusiones: false, alertas: false });
         }
       }
     } catch (error) {
@@ -1826,7 +1838,8 @@ const EmpresaDetailPage = () => {
                 id: 'sla', 
                 label: 'SLA', 
                 icon: '⚡',
-                disabled: ['vencido', 'suspendido'].includes(contratoData.estadoContrato?.toLowerCase() || '')
+                lockIcon: !isContratoCompleto() ? '🔒' : undefined,
+                disabled: !isContratoCompleto() || ['vencido', 'suspendido'].includes(contratoData.estadoContrato?.toLowerCase() || '')
               },
               { 
                 id: 'mantenimientos', 
@@ -1836,22 +1849,50 @@ const EmpresaDetailPage = () => {
               },
               { id: 'historial', label: 'Historial', icon: '📊' },
             ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                disabled={tab.disabled}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 whitespace-nowrap ${
-                  tab.disabled
-                    ? 'text-slate-300 cursor-not-allowed bg-slate-50'
-                    : activeTab === tab.id
-                    ? 'bg-blue-600 text-white shadow-md scale-105'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                {tab.icon} {tab.label}
-                {tab.badge && <span className="ml-1 px-2 py-0.5 bg-white/30 rounded-full text-xs font-bold">{tab.badge}</span>}
-                {tab.disabled && <span className="ml-2 text-xs" title="Habilitar en Contrato">🔒</span>}
-              </button>
+              <div key={tab.id} className="relative group">
+                <button
+                  onClick={() => handleTabChange(tab.id)}
+                  disabled={tab.disabled}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 whitespace-nowrap ${
+                    tab.disabled
+                      ? 'text-slate-300 cursor-not-allowed bg-slate-50'
+                      : activeTab === tab.id
+                      ? 'bg-blue-600 text-white shadow-md scale-105'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {tab.lockIcon || tab.icon} {tab.label}
+                  {tab.badge && <span className="ml-1 px-2 py-0.5 bg-white/30 rounded-full text-xs font-bold">{tab.badge}</span>}
+                </button>
+                {/* Tooltip para SLA bloqueado */}
+                {tab.id === 'sla' && tab.lockIcon && (
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-4 py-3 bg-gray-900 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl min-w-max">
+                    <div className="font-bold mb-2 text-yellow-300">⚠️ SLA bloqueado</div>
+                    <div className="mb-2">Complete los 4 formularios del Contrato:</div>
+                    <ul className="text-left space-y-1 ml-2">
+                      <li className="flex items-center gap-2">
+                        <span>{contractId ? '✅' : '❌'}</span>
+                        <span className={contractId ? 'text-green-300' : 'text-red-300'}>1. Datos del Contrato</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span>{serviciosGuardados ? '✅' : '❌'}</span>
+                        <span className={serviciosGuardados ? 'text-green-300' : 'text-red-300'}>2. Servicios Incluidos</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span>{preventivoGuardado ? '✅' : '❌'}</span>
+                        <span className={preventivoGuardado ? 'text-green-300' : 'text-red-300'}>3. Mantenimiento Preventivo</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span>{economicosGuardados ? '✅' : '❌'}</span>
+                        <span className={economicosGuardados ? 'text-green-300' : 'text-red-300'}>4. Condiciones Económicas</span>
+                      </li>
+                    </ul>
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                      <div className="border-4 border-transparent border-t-gray-900"></div>
+                    </div>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -3770,75 +3811,46 @@ const EmpresaDetailPage = () => {
                   </div>
                 </div>
               ) : (
-              <div className="space-y-8">
-                {/* Alcance */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg text-xl">📋</div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">Alcance del SLA</p>
-                        <p className="text-xs text-slate-500">{slaEditModes.alcance ? 'Modo edición' : 'Guardado · ver únicamente'}</p>
+                <div className="space-y-8">
+                  {/* Alcance */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg text-xl">📋</div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">Alcance del SLA</p>
+                          <p className="text-xs text-slate-500">{slaEditModes.alcance ? 'Modo edición' : 'Guardado · ver únicamente'}</p>
+                        </div>
                       </div>
+                      {!slaEditModes.alcance && (
+                        <button
+                          onClick={() => handleSlaEdit('alcance', 'Alcance del SLA')}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow-sm"
+                        >
+                          Editar
+                        </button>
+                      )}
                     </div>
-                    {!slaEditModes.alcance && (
-                      <button
-                        onClick={() => handleSlaEdit('alcance', 'Alcance del SLA')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow-sm"
-                      >
-                        Editar
-                      </button>
-                    )}
-                  </div>
-                  {slaEditModes.alcance && (
-                  <div className="relative">
-                    <AlcanceSLAForm
-                      initialData={slaConfiguracion?.alcance}
-                      sedes={sedes.map((s) => ({
-                        id: String(s._id || s.id || ''),
-                        nombre: s.nombre || '',
-                      }))}
-                      // Pasar el estado del contrato para control automático
-                      estadoContrato={contratoData.estadoContrato}
-                      onSave={(data) => handleSlaSave('alcance', 'Alcance del SLA', data)}
-                      onCancel={() => handleSlaCancel('alcance')}
-                    />
-                  </div>
-                  )}
-                </div>
-
-                {/* Gestión de Incidentes */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-xl">⚡</div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">Gestión de Incidentes</p>
-                        <p className="text-xs text-slate-500">{slaEditModes.incidentes ? 'Modo edición' : 'Guardado · ver únicamente'}</p>
-                      </div>
+                    {slaEditModes.alcance && (
+                      <div className="relative">
+                        <AlcanceSLAForm
+                        initialData={slaConfiguracion?.alcance}
+                        sedes={sedes.map((s) => ({
+                          id: String(s._id || s.id || ''),
+                          nombre: s.nombre || '',
+                        }))}
+                        // Pasar el estado del contrato para control automático
+                        estadoContrato={contratoData.estadoContrato}
+                        contratoCompleto={isContratoCompleto()}
+                        onSave={(data) => handleSlaSave('alcance', 'Alcance del SLA', data)}
+                        onCancel={() => handleSlaCancel('alcance')}
+                      />
                     </div>
-                    {!slaEditModes.incidentes && (
-                      <button
-                        onClick={() => handleSlaEdit('incidentes', 'Gestión de Incidentes')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow-sm"
-                      >
-                        Editar
-                      </button>
-                    )}
-                  </div>
-                  {slaEditModes.incidentes && (
-                  <div className="relative">
-                    <GestionIncidentesForm
-                      initialData={slaConfiguracion?.gestion_incidentes}
-                      onSave={(data) => handleSlaSave('incidentes', 'Gestión de Incidentes', data)}
-                      onCancel={() => handleSlaCancel('incidentes')}
-                    />
-                  </div>
                   )}
-                </div>
+                  </div>
 
-                {/* Tiempos */}
-                <div className="space-y-3">
+                  {/* Tiempos */}
+                  <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-cyan-50 border border-cyan-200 rounded-lg text-xl">⏱️</div>
@@ -3857,13 +3869,13 @@ const EmpresaDetailPage = () => {
                     )}
                   </div>
                   {slaEditModes.tiempos && (
-                  <div className="relative">
-                    <GestionTiemposForm
-                      initialData={slaConfiguracion?.tiempos}
-                      onSave={(data) => handleSlaSave('tiempos', 'Tiempos de Respuesta/Resolución', data)}
-                      onCancel={() => handleSlaCancel('tiempos')}
-                    />
-                  </div>
+                    <div className="relative">
+                      <GestionTiemposForm
+                        initialData={slaConfiguracion?.tiempos}
+                        onSave={(data) => handleSlaSave('tiempos', 'Tiempos de Respuesta/Resolución', data)}
+                        onCancel={() => handleSlaCancel('tiempos')}
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -3887,14 +3899,14 @@ const EmpresaDetailPage = () => {
                     )}
                   </div>
                   {slaEditModes.horarios && (
-                  <div className="relative">
-                    <GestionHorariosForm
-                      initialData={slaConfiguracion?.horarios}
-                      showFueraHorarioOptions={slaConfiguracion?.tiempos?.medicionSLA === 'horasCalendario'}
-                      onSave={(data) => handleSlaSave('horarios', 'Horarios de Atención', data)}
-                      onCancel={() => handleSlaCancel('horarios')}
-                    />
-                  </div>
+                    <div className="relative">
+                      <GestionHorariosForm
+                        initialData={slaConfiguracion?.horarios}
+                        showFueraHorarioOptions={slaConfiguracion?.tiempos?.medicionSLA === 'horasCalendario'}
+                        onSave={(data) => handleSlaSave('horarios', 'Horarios de Atención', data)}
+                        onCancel={() => handleSlaCancel('horarios')}
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -3918,13 +3930,13 @@ const EmpresaDetailPage = () => {
                     )}
                   </div>
                   {slaEditModes.requisitos && (
-                  <div className="relative">
-                    <GestionRequisitosForm
-                      initialData={slaConfiguracion?.requisitos}
-                      onSave={(data) => handleSlaSave('requisitos', 'Requisitos del SLA', data)}
-                      onCancel={() => handleSlaCancel('requisitos')}
-                    />
-                  </div>
+                    <div className="relative">
+                      <GestionRequisitosForm
+                        initialData={slaConfiguracion?.requisitos}
+                        onSave={(data) => handleSlaSave('requisitos', 'Requisitos del SLA', data)}
+                        onCancel={() => handleSlaCancel('requisitos')}
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -3948,13 +3960,13 @@ const EmpresaDetailPage = () => {
                     )}
                   </div>
                   {slaEditModes.exclusiones && (
-                  <div className="relative">
-                    <GestionExclusionesForm
-                      initialData={slaConfiguracion?.exclusiones}
-                      onSave={(data) => handleSlaSave('exclusiones', 'Exclusiones', data)}
-                      onCancel={() => handleSlaCancel('exclusiones')}
-                    />
-                  </div>
+                    <div className="relative">
+                      <GestionExclusionesForm
+                        initialData={slaConfiguracion?.exclusiones}
+                        onSave={(data) => handleSlaSave('exclusiones', 'Exclusiones', data)}
+                        onCancel={() => handleSlaCancel('exclusiones')}
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -3978,13 +3990,13 @@ const EmpresaDetailPage = () => {
                     )}
                   </div>
                   {slaEditModes.alertas && (
-                  <div className="relative">
-                    <GestionAlertasForm
-                      initialData={slaConfiguracion?.alertas}
-                      onSave={(data) => handleSlaSave('alertas', 'Alertas y Control', data)}
-                      onCancel={() => handleSlaCancel('alertas')}
-                    />
-                  </div>
+                    <div className="relative">
+                      <GestionAlertasForm
+                        initialData={slaConfiguracion?.alertas}
+                        onSave={(data) => handleSlaSave('alertas', 'Alertas y Control', data)}
+                        onCancel={() => handleSlaCancel('alertas')}
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -4031,9 +4043,9 @@ const EmpresaDetailPage = () => {
                   )}
                 </div>
               </div>
-              )}
-            </div>
-          )}
+            )}
+          </div>
+        )}
 
           {/* TAB: Mantenimientos Preventivos */}
           {activeTab === 'mantenimientos' && (

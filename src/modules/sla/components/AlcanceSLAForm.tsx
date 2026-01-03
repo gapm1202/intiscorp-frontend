@@ -1,11 +1,10 @@
  import { useState, useEffect } from 'react';
-import { getCatalogCategories, getCatalogTypes, ticketTypeLabel } from "@/modules/catalogo/services/catalogoService";
+import { getCatalogCategories, getTicketTypes } from "@/modules/catalogo/services/catalogoService";
 
 interface AlcanceSLAData {
   slaActivo: boolean;
   aplicaA: 'incidentes';
   tiposTicketCubiertos: string[];
-  tipoServicioCubierto: 'incidente' | 'incidenteCritico';
   serviciosCubiertos: {
     soporteRemoto: boolean;
     soportePresencial: boolean;
@@ -29,13 +28,14 @@ interface AlcanceSLAFormProps {
   onCancel?: () => void;
   categorias?: string[];
   sedes?: { id: string; nombre: string }[];
+  estadoContrato?: string;
+  contratoCompleto?: boolean;
 }
 
 const getDefaultAlcanceData = (): AlcanceSLAData => ({
   slaActivo: false,
   aplicaA: 'incidentes',
   tiposTicketCubiertos: ['incidente'],
-  tipoServicioCubierto: 'incidente',
   serviciosCubiertos: {
     soporteRemoto: false,
     soportePresencial: false,
@@ -59,22 +59,28 @@ export function AlcanceSLAForm({
   onCancel,
   categorias,
   sedes = [],
+  estadoContrato = '',
+  contratoCompleto = true,
 }: AlcanceSLAFormProps) {
   // Determinar estado automático del SLA según estado del contrato
-  const estadoContrato = arguments[0]?.estadoContrato || '';
   const estadoContratoLower = (estadoContrato || '').toLowerCase();
   const estadoContratoActivo = estadoContratoLower === 'activo';
   const estadoContratoInactivo = estadoContratoLower === 'vencido' || estadoContratoLower === 'suspendido';
+  
+  // Si el contrato no está completo, el SLA debe estar inactivo
+  const slaDebeEstarInactivo = !contratoCompleto || estadoContratoInactivo;
   const getInitialData = (): AlcanceSLAData => {
     if (!initialData || Object.keys(initialData).length === 0) return getDefaultAlcanceData();
     let data = {
       ...getDefaultAlcanceData(),
       ...initialData,
     };
-    if (estadoContratoActivo) {
+    // Si el contrato no está completo, SLA siempre inactivo
+    if (!contratoCompleto) {
+      data.slaActivo = false;
+    } else if (estadoContratoActivo) {
       data.slaActivo = true;
-    }
-    if (estadoContratoInactivo) {
+    } else if (estadoContratoInactivo) {
       data.slaActivo = false;
     }
     return data;
@@ -82,7 +88,19 @@ export function AlcanceSLAForm({
 
   const [formData, setFormData] = useState<AlcanceSLAData>(getInitialData());
   const [availableCategories, setAvailableCategories] = useState<string[]>(categorias ?? []);
-  const [availableTypes, setAvailableTypes] = useState<string[]>([]);
+  const [availableTypes, setAvailableTypes] = useState<any[]>([]);
+
+  // Actualizar automáticamente el estado del SLA cuando cambie el estado del contrato o se complete
+  useEffect(() => {
+    if (!contratoCompleto) {
+      // Si el contrato no está completo, SLA debe estar inactivo
+      setFormData(prev => ({ ...prev, slaActivo: false }));
+    } else if (estadoContratoActivo) {
+      setFormData(prev => ({ ...prev, slaActivo: true }));
+    } else if (estadoContratoInactivo) {
+      setFormData(prev => ({ ...prev, slaActivo: false }));
+    }
+  }, [estadoContrato, estadoContratoActivo, estadoContratoInactivo, contratoCompleto]);
 
   useEffect(() => {
     // Si nos pasan categorías como prop las usamos; si no, intentamos cargar del módulo Catálogo
@@ -109,12 +127,17 @@ export function AlcanceSLAForm({
     let mounted = true;
     const load = async () => {
       try {
-        const types = await getCatalogTypes();
+        const types = await getTicketTypes();
         if (!mounted) return;
-        const normalized = Array.from(new Set((types || []).map((t) => String(t).trim().toLowerCase())));
-        setAvailableTypes(normalized);
+        // Filtrar solo los tipos activos
+        const tiposActivos = types.filter((tipo: any) => tipo.activo === true);
+        console.log('[AlcanceSLAForm] Tipos de ticket activos cargados:', tiposActivos);
+        setAvailableTypes(tiposActivos);
+        
+        // Si no hay tipos seleccionados, seleccionar el primero por defecto
         if (!formData.tiposTicketCubiertos || !formData.tiposTicketCubiertos.length) {
-          setFormData((prev) => ({ ...prev, tiposTicketCubiertos: [normalized[0] || 'incidente'] }));
+          const primerTipo = tiposActivos[0]?.nombre || 'incidente';
+          setFormData((prev) => ({ ...prev, tiposTicketCubiertos: [primerTipo] }));
         }
       } catch (e) {
         console.warn('[AlcanceSLAForm] no se pudieron cargar tipos del catálogo', e);
@@ -226,46 +249,56 @@ export function AlcanceSLAForm({
           <p className="text-sm text-slate-600 mt-1">Establece los parámetros de cobertura del SLA</p>
         </div>
         <div className="p-8 space-y-8">
-          {/* 1. SLA Activo */}
+          {/* 1. SLA Activo - Solo lectura, controlado por estado del contrato */}
           <div className="border-b pb-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <label className="text-sm font-semibold text-gray-900">SLA Activo</label>
+                <label className="text-sm font-semibold text-gray-900">Estado del SLA</label>
                 <p className="text-xs text-gray-500 mt-1">
-                  Si está inactivo, los tickets no medirán SLA
+                  El estado se asigna automáticamente según el contrato
                 </p>
               </div>
-              {/* Mostrar el switch solo si el contrato NO está activo/inactivo automático */}
-              {!(estadoContratoActivo || estadoContratoInactivo) && (
-                <button
-                  onClick={handleToggleSLAActivo}
-                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
-                    formData.slaActivo
-                      ? 'bg-green-500'
-                      : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                      formData.slaActivo ? 'translate-x-7' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              )}
+              {/* Indicador visual de solo lectura */}
+              <div className={`px-4 py-2 rounded-lg font-semibold text-sm ${
+                formData.slaActivo
+                  ? 'bg-green-100 text-green-800 border-2 border-green-300'
+                  : 'bg-red-100 text-red-800 border-2 border-red-300'
+              }`}>
+                {formData.slaActivo ? '✓ Activo' : '✗ Inactivo'}
+              </div>
             </div>
-            <div className="text-sm font-medium text-gray-700">
-              Estado: {estadoContratoActivo && (
-                <span className="text-green-600">✓ Activo</span>
-              )}
-              {estadoContratoInactivo && (
-                <span className="text-red-600">✗ Inactivo</span>
-              )}
-              {estadoContratoActivo && (
-                <span className="ml-2 text-xs text-emerald-700 font-semibold">(Automático por contrato activo)</span>
-              )}
-              {estadoContratoInactivo && (
-                <span className="ml-2 text-xs text-rose-700 font-semibold">(Automático por contrato vencido/suspendido)</span>
-              )}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-blue-900">Estado controlado automáticamente</p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    {!contratoCompleto ? (
+                      <>
+                        El SLA está <strong>Inactivo</strong> porque <strong className="text-red-700">el contrato aún no está completo</strong>.
+                        Complete los 4 formularios de la pestaña Contrato para activar el SLA.
+                      </>
+                    ) : formData.slaActivo ? (
+                      <>
+                        El SLA está <strong>Activo</strong> porque el estado del contrato es <strong className="text-green-700">Activo</strong>.
+                      </>
+                    ) : (
+                      <>
+                        El SLA está <strong>Inactivo</strong> porque el estado del contrato es <strong className="text-red-700">{estadoContratoInactivo ? 'Vencido o Suspendido' : 'No activo'}</strong>.
+                      </>
+                    )}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-2">
+                    {!contratoCompleto ? (
+                      <>📌 Vaya a la pestaña Contrato y complete todos los formularios.</>  
+                    ) : (
+                      <>📌 Para cambiar el estado del SLA, actualiza el estado del contrato en la pestaña Contrato.</>
+                    )}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -275,55 +308,26 @@ export function AlcanceSLAForm({
             <div className="space-y-3">
               {availableTypes.length === 0 && <p className="text-sm text-gray-500">Cargando tipos…</p>}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                {availableTypes.map((t) => (
-                  <label key={t} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                {availableTypes.map((tipo) => (
+                  <label key={tipo.id} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
                     <input
                       type="checkbox"
-                      checked={(formData.tiposTicketCubiertos || []).includes(t)}
+                      checked={(formData.tiposTicketCubiertos || []).includes(tipo.nombre)}
                       onChange={() => {
                         setFormData((prev) => {
                           const curr = prev.tiposTicketCubiertos || [];
                           return {
                             ...prev,
-                            tiposTicketCubiertos: curr.includes(t) ? curr.filter((x) => x !== t) : [...curr, t],
+                            tiposTicketCubiertos: curr.includes(tipo.nombre) ? curr.filter((x) => x !== tipo.nombre) : [...curr, tipo.nombre],
                           };
                         });
                       }}
                       className="w-5 h-5 text-blue-600"
                     />
-                    <span className="text-sm text-gray-700">{ticketTypeLabel(t)}</span>
+                    <span className="text-sm text-gray-700">{tipo.nombre}</span>
                   </label>
                 ))}
               </div>
-            </div>
-          </div>
-
-          {/* 2.1. Tipo de servicio cubierto */}
-          <div className="border-b pb-6">
-            <label className="text-sm font-semibold text-gray-900 block mb-4">🔹 Tipo de servicio cubierto</label>
-            <div className="space-y-3">
-              <label className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-                <input
-                  type="radio"
-                  name="tipoServicioCubierto"
-                  value="incidente"
-                  checked={formData.tipoServicioCubierto === 'incidente'}
-                  onChange={() => setFormData((prev) => ({ ...prev, tipoServicioCubierto: 'incidente' }))}
-                  className="w-5 h-5 text-blue-600"
-                />
-                <span className="text-sm text-gray-700">Incidente</span>
-              </label>
-              <label className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-                <input
-                  type="radio"
-                  name="tipoServicioCubierto"
-                  value="incidenteCritico"
-                  checked={formData.tipoServicioCubierto === 'incidenteCritico'}
-                  onChange={() => setFormData((prev) => ({ ...prev, tipoServicioCubierto: 'incidenteCritico' }))}
-                  className="w-5 h-5 text-blue-600"
-                />
-                <span className="text-sm text-gray-700">Incidente crítico</span>
-              </label>
             </div>
           </div>
 

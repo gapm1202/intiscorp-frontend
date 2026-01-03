@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { CategoryForm } from "../components/CategoryForm";
 import { SubcategoryForm } from "../components/SubcategoryForm";
-import { CategoryTable, SubcategoryTable } from "../components/CatalogoTables";
+import { TicketTypeForm, type TicketType } from "../components/TicketTypeForm";
+import { CategoryTable, SubcategoryTable, TicketTypeTable } from "../components/CatalogoTables";
 import type { CatalogCategory, CatalogFilters, CatalogSubcategory } from "../types";
-import axios from "axios";
 import SimpleConfirmModal from "@/modules/empresas/components/SimpleConfirmModal";
 import {
   createCatalogCategory,
@@ -14,10 +14,10 @@ import {
   toggleCatalogSubcategory,
   updateCatalogCategory,
   updateCatalogSubcategory,
-  getCatalogTypes,
-  createCatalogType,
-  deleteCatalogType,
-  ticketTypeLabel,
+  getTicketTypes,
+  createTicketType,
+  updateTicketType,
+  toggleTicketType,
 } from "../services/catalogoService";
 
 const heroGradient = "bg-linear-to-br from-indigo-600 via-purple-600 to-blue-500";
@@ -25,19 +25,18 @@ const heroGradient = "bg-linear-to-br from-indigo-600 via-purple-600 to-blue-500
 const CatalogoCategoriasPage = () => {
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [subcategories, setSubcategories] = useState<CatalogSubcategory[]>([]);
-  const [customTicketTypes, setCustomTicketTypes] = useState<string[]>([]);
+  const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
   const [editingCategory, setEditingCategory] = useState<CatalogCategory | null>(null);
   const [editingSubcategory, setEditingSubcategory] = useState<CatalogSubcategory | null>(null);
-  const [filters, setFilters] = useState<CatalogFilters>({ estado: "todos", tipo: "todos", categoriaId: "todas" });
+  const [editingTicketType, setEditingTicketType] = useState<TicketType | null>(null);
+  const [filters, setFilters] = useState<CatalogFilters>({ estado: "todos", categoriaId: "todas" });
   const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<string | null>(null);
-  const [isDeletingType, setIsDeletingType] = useState(false);
 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<
     | { type: "category"; item: CatalogCategory }
     | { type: "subcategory"; item: CatalogSubcategory }
+    | { type: "ticketType"; item: TicketType }
     | null
   >(null);
   const [isConfirmingEdit, setIsConfirmingEdit] = useState(false);
@@ -46,6 +45,7 @@ const CatalogoCategoriasPage = () => {
   const [deactivateTarget, setDeactivateTarget] = useState<
     | { type: "category"; item: CatalogCategory }
     | { type: "subcategory"; item: CatalogSubcategory }
+    | { type: "ticketType"; item: TicketType }
     | null
   >(null);
   const [isConfirmingDeactivate, setIsConfirmingDeactivate] = useState(false);
@@ -53,23 +53,18 @@ const CatalogoCategoriasPage = () => {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const [cats, subs] = await Promise.all([getCatalogCategories(), getCatalogSubcategories()]);
+      const [cats, subs, types] = await Promise.all([
+        getCatalogCategories(),
+        getCatalogSubcategories(),
+        getTicketTypes(),
+      ]);
       setCategories(cats);
       setSubcategories(subs);
+      setTicketTypes(types);
       setLoading(false);
     };
     load();
   }, []);
-
-  useEffect(() => {
-    const loadTypes = async () => {
-      const types = await getCatalogTypes();
-      setCustomTicketTypes(types);
-    };
-    loadTypes();
-  }, []);
-
-  const mergedTypes = useMemo(() => Array.from(new Set(customTicketTypes.map((ct) => String(ct).trim().toLowerCase()))), [customTicketTypes]);
 
   const handleSaveCategory = async (
     payload: Omit<CatalogCategory, "id" | "createdAt">,
@@ -85,43 +80,31 @@ const CatalogoCategoriasPage = () => {
     }
   };
 
-  const handleAddType = async (t: string) => {
-    const created = await createCatalogType(t);
-    setCustomTicketTypes((prev) => (prev.includes(created) ? prev : [...prev, created]));
-  };
-
-
   const handleSaveSubcategory = async (
     payload: Omit<CatalogSubcategory, "id" | "createdAt">,
     id?: string,
   ) => {
-    // Asegurar que el tipo de ticket exista en el backend/localStorage antes de crear/actualizar
-    const tipo = String(payload.tipoTicket).trim().toLowerCase();
-    const builtins = ["incidente", "solicitud"];
-    if (!builtins.includes(tipo) && !mergedTypes.includes(tipo)) {
-      // Crear el tipo en backend/localStorage y actualizar el listado local
-      await handleAddType(tipo);
-    }
-
     if (id) {
       const updated = await updateCatalogSubcategory(id, payload);
       setSubcategories((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
       setEditingSubcategory(null);
-
-      // Detectar discrepancia entre tipo solicitado y tipo devuelto
-      if (String(updated.tipoTicket).trim().toLowerCase() !== tipo) {
-        console.warn("[catalogo] tipo guardado distinto al solicitado (update)", { requested: tipo, returned: updated.tipoTicket, payload, returnedObj: updated });
-        alert(`Atención: el servidor guardó tipo "${ticketTypeLabel(updated.tipoTicket)}" en lugar de "${ticketTypeLabel(tipo)}". Es probable que el backend no acepte tipos personalizados.`);
-      }
     } else {
       const created = await createCatalogSubcategory(payload);
       setSubcategories((prev) => [...prev, created]);
+    }
+  };
 
-      // Detectar discrepancia entre tipo solicitado y tipo devuelto
-      if (String(created.tipoTicket).trim().toLowerCase() !== tipo) {
-        console.warn("[catalogo] tipo guardado distinto al solicitado (create)", { requested: tipo, returned: created.tipoTicket, payload, returnedObj: created });
-        alert(`Atención: el servidor guardó tipo "${ticketTypeLabel(created.tipoTicket)}" en lugar de "${ticketTypeLabel(tipo)}". Es probable que el backend no acepte tipos personalizados.`);
-      }
+  const handleSaveTicketType = async (
+    payload: Omit<TicketType, "id" | "createdAt">,
+    id?: string,
+  ) => {
+    if (id) {
+      const updated = await updateTicketType(id, payload);
+      setTicketTypes((prev) => prev.map((t) => (t.id === id ? { ...t, ...updated } : t)));
+      setEditingTicketType(null);
+    } else {
+      const created = await createTicketType(payload);
+      setTicketTypes((prev) => [...prev, created]);
     }
   };
 
@@ -129,14 +112,14 @@ const CatalogoCategoriasPage = () => {
     return subcategories.filter((s) => {
       const byEstado =
         filters.estado === "todos" ? true : filters.estado === "activos" ? s.activo : !s.activo;
-      const byTipo = filters.tipo === "todos" ? true : s.tipoTicket === filters.tipo;
       const byCategoria = filters.categoriaId === "todas" ? true : s.categoriaId === filters.categoriaId;
-      return byEstado && byTipo && byCategoria;
+      return byEstado && byCategoria;
     });
   }, [subcategories, filters]);
 
   const activeCategories = categories.filter((c) => c.activo).length;
   const activeSubcategories = subcategories.filter((s) => s.activo).length;
+  const activeTicketTypes = ticketTypes.filter((t) => t.activo).length;
 
   return (
     <div className="space-y-6">
@@ -145,6 +128,72 @@ const CatalogoCategoriasPage = () => {
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div className="space-y-1">
             <h1 className="text-3xl font-extrabold">Catálogo de Categorías</h1>
+            <p className="text-white/80 max-w-2xl">
+              Centraliza categorías y subcategorías para Tickets. Solo se desactivan, nunca se eliminan. Las
+              categorías activas y visibles son las que se ofrecen al crear tickets.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white/10 rounded-xl p-4 backdrop-blur border border-white/20">
+              <p className="text-sm text-white/80">Categorías activas</p>
+              <p className="text-2xl font-bold">{activeCategories}</p>
+            </div>
+            <div className="bg-white/10 rounded-xl p-4 backdrop-blur border border-white/20">
+              <p className="text-sm text-white/80">Subcategorías activas</p>
+              <p className="text-2xl font-bold">{activeSubcategories}</p>
+            </div>
+            <div className="bg-white/10 rounded-xl p-4 backdrop-blur border border-white/20 col-span-2">
+              <p className="text-sm text-white/80">Tipos de Ticket activos</p>
+              <p className="text-2xl font-bold">{activeTicketTypes}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Sección NUEVA: Tipos de Ticket */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-sm text-slate-500">🏷️ Gestión de Tipos</p>
+            <h2 className="text-xl font-bold text-slate-900">Tipos de Ticket</h2>
+          </div>
+          {editingTicketType && (
+            <span className="text-xs px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 font-semibold">
+              Editando {editingTicketType.nombre}
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1">
+            <TicketTypeForm
+              initial={editingTicketType}
+              onSubmit={handleSaveTicketType}
+              onClear={() => setEditingTicketType(null)}
+              onRequestDeactivate={(id) => {
+                const item = ticketTypes.find((t) => t.id === id);
+                if (!item) return;
+                setDeactivateTarget({ type: "ticketType", item });
+                setDeactivateModalOpen(true);
+              }}
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <TicketTypeTable
+              items={ticketTypes}
+              onEdit={(t) => {
+                setEditTarget({ type: "ticketType", item: t });
+                setEditModalOpen(true);
+              }}
+              onToggle={(t) => {
+                setDeactivateTarget({ type: "ticketType", item: t });
+                setDeactivateModalOpen(true);
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/*   <h1 className="text-3xl font-extrabold">Catálogo de Categorías</h1>
             <p className="text-white/80 max-w-2xl">
               Centraliza categorías y subcategorías para Tickets. Solo se desactivan, nunca se eliminan. Las
               categorías activas y visibles son las que se ofrecen al crear tickets.
@@ -180,8 +229,6 @@ const CatalogoCategoriasPage = () => {
           <CategoryForm
             initial={editingCategory}
             onSubmit={handleSaveCategory}
-            customTypes={mergedTypes}
-            onAddCustomType={handleAddType}
             onClear={() => setEditingCategory(null)}
             onRequestDeactivate={(id) => {
               const item = categories.find((c) => c.id === id);
@@ -190,44 +237,6 @@ const CatalogoCategoriasPage = () => {
               setDeactivateModalOpen(true);
             }}
           />
-
-          <div className="mt-4">
-            <label className="text-xs font-semibold text-slate-600">Tipos disponibles</label>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {(() => {
-                const builtins = ["incidente", "solicitud"];
-                const normalizedCustom = Array.from(new Set(customTicketTypes.map((ct) => String(ct).trim().toLowerCase())));
-                const extras = normalizedCustom.filter((t) => !builtins.includes(t));
-                const merged = [...builtins, ...extras];
-                return merged.map((t) => {
-                  const referenced = categories.some((c) => c.tipoTicket === t) || subcategories.some((s) => s.tipoTicket === t);
-                  return (
-                    <span
-                      key={t}
-                      className="px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-sm flex items-center gap-2"
-                    >
-                      <span className="capitalize">{ticketTypeLabel(t)}</span>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (referenced) {
-                            alert("No se puede eliminar: el tipo está en uso en categorías o subcategorías.");
-                            return;
-                          }
-                          setModalType(t);
-                          setModalOpen(true);
-                        }}
-                        className={`text-red-500 hover:text-red-700 text-xs ${referenced ? "opacity-50 cursor-not-allowed" : ""}`}
-                        disabled={referenced}
-                      >
-                        Eliminar
-                      </button>
-                    </span>
-                  );
-                });
-              })()}
-            </div>
-          </div>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
@@ -245,7 +254,6 @@ const CatalogoCategoriasPage = () => {
           <SubcategoryForm
             categories={categories}
             initial={editingSubcategory}
-            customTypes={customTicketTypes}
             onSubmit={handleSaveSubcategory}
             onClear={() => setEditingSubcategory(null)}
             onRequestDeactivate={(id) => {
@@ -284,18 +292,6 @@ const CatalogoCategoriasPage = () => {
                 <option value="todos">Todos</option>
                 <option value="activos">Activos</option>
                 <option value="inactivos">Inactivos</option>
-              </select>
-            </div>
-            <div className="flex-1 min-w-[180px]">
-              <label className="text-xs font-semibold text-slate-600">Tipo</label>
-              <select
-                value={filters.tipo}
-                onChange={(e) => setFilters((f) => ({ ...f, tipo: e.target.value as CatalogFilters["tipo"] }))}
-                className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              >
-                <option value="todos">Todos</option>
-                <option value="incidente">Incidente</option>
-                <option value="solicitud">Solicitud</option>
               </select>
             </div>
             <div className="flex-1 min-w-[180px]">
@@ -344,42 +340,15 @@ const CatalogoCategoriasPage = () => {
         )}
 
         <SimpleConfirmModal
-          isOpen={modalOpen}
-          title={`¿Eliminar tipo "${ticketTypeLabel(modalType ?? "")}"?`}
-          message={`Esta acción no se puede deshacer. Se eliminará el tipo "${ticketTypeLabel(modalType ?? "")}" de la lista de opciones.`}
-          confirmLabel="Eliminar"
-          cancelLabel="Cancelar"
-          onCancel={() => {
-            setModalOpen(false);
-            setModalType(null);
-          }}
-          onConfirm={async () => {
-            if (!modalType) return;
-            setIsDeletingType(true);
-            try {
-              await deleteCatalogType(modalType);
-              const types = await getCatalogTypes();
-              setCustomTicketTypes(types);
-              setModalOpen(false);
-              setModalType(null);
-            } catch (err) {
-              if (axios.isAxiosError(err) && err.response?.status === 400) {
-                alert(err.response?.data?.error ?? "No se puede eliminar el tipo porque está en uso.");
-              } else {
-                console.warn("deleteCatalogType error", err);
-                alert("No se pudo eliminar el tipo. Intenta nuevamente.");
-              }
-            } finally {
-              setIsDeletingType(false);
-            }
-          }}
-          isConfirming={isDeletingType}
-        />
-
-        <SimpleConfirmModal
           isOpen={editModalOpen}
           title={`¿Estás seguro de editar?`}
-          message={`Vas a editar ${editTarget?.type === "category" ? "la categoría" : "la subcategoría"} "${editTarget ? (editTarget.type === "category" ? editTarget.item.nombre : editTarget.item.nombre) : ""}"`}
+          message={`Vas a editar ${
+            editTarget?.type === "category"
+              ? "la categoría"
+              : editTarget?.type === "subcategory"
+                ? "la subcategoría"
+                : "el tipo de ticket"
+          } "${editTarget ? editTarget.item.nombre : ""}"`}
           confirmLabel="Editar"
           cancelLabel="Cancelar"
           onCancel={() => {
@@ -391,7 +360,8 @@ const CatalogoCategoriasPage = () => {
             setIsConfirmingEdit(true);
             try {
               if (editTarget.type === "category") setEditingCategory(editTarget.item);
-              else setEditingSubcategory(editTarget.item);
+              else if (editTarget.type === "subcategory") setEditingSubcategory(editTarget.item);
+              else setEditingTicketType(editTarget.item);
               setEditModalOpen(false);
               setEditTarget(null);
             } finally {
@@ -404,7 +374,13 @@ const CatalogoCategoriasPage = () => {
         <SimpleConfirmModal
           isOpen={deactivateModalOpen}
           title={`¿Estás seguro?`}
-          message={`Se ${deactivateTarget?.item?.activo ? "desactivará" : "activará"} ${(deactivateTarget?.type === "category" ? "la categoría" : "la subcategoría")} "${deactivateTarget ? deactivateTarget.item.nombre : ""}"`}
+          message={`Se ${deactivateTarget?.item?.activo ? "desactivará" : "activará"} ${
+            deactivateTarget?.type === "category"
+              ? "la categoría"
+              : deactivateTarget?.type === "subcategory"
+                ? "la subcategoría"
+                : "el tipo de ticket"
+          } "${deactivateTarget ? deactivateTarget.item.nombre : ""}"`}
           confirmLabel={deactivateTarget?.item?.activo ? "Desactivar" : "Activar"}
           cancelLabel="Cancelar"
           onCancel={() => {
@@ -418,9 +394,12 @@ const CatalogoCategoriasPage = () => {
               if (deactivateTarget.type === "category") {
                 const updated = await toggleCatalogCategory(deactivateTarget.item.id, !deactivateTarget.item.activo);
                 setCategories((prev) => prev.map((cat) => (cat.id === deactivateTarget.item.id ? { ...cat, ...updated } : cat)));
-              } else {
+              } else if (deactivateTarget.type === "subcategory") {
                 const updated = await toggleCatalogSubcategory(deactivateTarget.item.id, !deactivateTarget.item.activo);
                 setSubcategories((prev) => prev.map((sub) => (sub.id === deactivateTarget.item.id ? { ...sub, ...updated } : sub)));
+              } else {
+                const updated = await toggleTicketType(deactivateTarget.item.id);
+                setTicketTypes((prev) => prev.map((type) => (type.id === deactivateTarget.item.id ? { ...type, ...updated } : type)));
               }
               setDeactivateModalOpen(false);
               setDeactivateTarget(null);

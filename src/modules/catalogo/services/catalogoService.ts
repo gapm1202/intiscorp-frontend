@@ -1,5 +1,6 @@
 import axiosClient from "@/api/axiosClient";
-import type { CatalogCategory, CatalogSubcategory, TicketType } from "../types";
+import type { CatalogCategory, CatalogSubcategory } from "../types";
+import type { TicketType } from "../components/TicketTypeForm";
 
 // Datos de respaldo para desarrollo sin backend
 const fallbackCategories: CatalogCategory[] = [
@@ -242,5 +243,49 @@ export const deleteCatalogType = async (tipo: string): Promise<boolean> => {
     const list = (await getCatalogTypes()).filter((t) => t !== normalized);
     localStorage.setItem(LOCAL_TYPES_KEY, JSON.stringify(list));
     return true;
+  }
+};
+// ==================== CRUD TIPOS DE TICKET ====================
+
+export const getTicketTypes = async (): Promise<TicketType[]> => {
+  try {
+    const res = await axiosClient.get("/api/catalogo/tipos-ticket");
+    return Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+  } catch (err) {
+    console.warn("[catalogoService] getTicketTypes error:", err);
+    return [];
+  }
+};
+
+export const createTicketType = async (payload: Omit<TicketType, "id" | "createdAt">): Promise<TicketType> => {
+  try {
+    const res = await axiosClient.post("/api/catalogo/tipos-ticket", payload);
+    return res.data?.data ?? res.data;
+  } catch (err) {
+    console.error("[catalogoService] createTicketType error:", err);
+    throw err;
+  }
+};
+
+export const updateTicketType = async (
+  id: string,
+  payload: Partial<Omit<TicketType, "id" | "createdAt">>
+): Promise<TicketType> => {
+  try {
+    const res = await axiosClient.put(`/api/catalogo/tipos-ticket/${id}`, payload);
+    return res.data?.data ?? res.data;
+  } catch (err) {
+    console.error("[catalogoService] updateTicketType error:", err);
+    throw err;
+  }
+};
+
+export const toggleTicketType = async (id: string): Promise<TicketType> => {
+  try {
+    const res = await axiosClient.patch(`/api/catalogo/tipos-ticket/${id}/toggle`);
+    return res.data?.data ?? res.data;
+  } catch (err) {
+    console.error("[catalogoService] toggleTicketType error:", err);
+    throw err;
   }
 };

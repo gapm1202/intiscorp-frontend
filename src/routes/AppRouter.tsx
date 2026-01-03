@@ -14,6 +14,7 @@ import EtiquetasPage from "../modules/inventario/pages/EtiquetasPage";
 import PublicReportPage from "../modules/public/pages/PublicReportPage";
 import PublicTicketStatusPage from "../modules/public/pages/PublicTicketStatusPage";
 import CatalogoCategoriasPage from "../modules/catalogo/pages/CatalogoCategoriasPage";
+import CatalogoServiciosPage from "../modules/catalogo/pages/CatalogoServiciosPage";
 import TicketsPage from "../modules/tickets/pages/TicketsPage";
 
 const AppRouter = () => {
@@ -108,6 +109,16 @@ const AppRouter = () => {
             <RoleRoute role="admin">
               <AdminLayout>
                 <CatalogoCategoriasPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/catalogo-servicios"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <CatalogoServiciosPage />
               </AdminLayout>
             </RoleRoute>
           }

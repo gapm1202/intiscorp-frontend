@@ -1,12 +1,11 @@
 import { useState, useEffect, type FormEvent } from "react";
-import type { CatalogCategory, CatalogSubcategory, TicketType } from "../types";
+import type { CatalogCategory, CatalogSubcategory } from "../types";
 
 interface Props {
   categories: CatalogCategory[];
   initial?: CatalogSubcategory | null;
   onSubmit: (payload: Omit<CatalogSubcategory, "id" | "createdAt">, id?: string) => void;
   onClear: () => void;
-  customTypes: string[];
   onRequestDeactivate?: (id: string) => void;
 }
 
@@ -15,10 +14,8 @@ const subDefaults: Omit<CatalogSubcategory, "id"> = {
   codigo: "",
   nombre: "",
   descripcion: "",
-  tipoTicket: "incidente",
   requiereValidacion: false,
   activo: true,
-  heredaTipo: true,
   createdAt: new Date().toISOString(),
 };
 
@@ -38,7 +35,7 @@ const buildSubCode = (categoriaNombre: string, subNombre: string) => {
   return `SUB-${catToken || subToken}`;
 };
 
-export const SubcategoryForm = ({ categories, initial, onSubmit, onClear, customTypes, onRequestDeactivate }: Props) => {
+export const SubcategoryForm = ({ categories, initial, onSubmit, onClear, onRequestDeactivate }: Props) => {
   const [form, setForm] = useState(() =>
     initial
       ? {
@@ -46,10 +43,8 @@ export const SubcategoryForm = ({ categories, initial, onSubmit, onClear, custom
           codigo: initial.codigo,
           nombre: initial.nombre,
           descripcion: initial.descripcion ?? "",
-          tipoTicket: initial.tipoTicket,
           requiereValidacion: initial.requiereValidacion,
           activo: initial.activo,
-          heredaTipo: Boolean(initial.heredaTipo),
           createdAt: initial.createdAt ?? new Date().toISOString(),
         }
       : subDefaults,
@@ -76,10 +71,8 @@ export const SubcategoryForm = ({ categories, initial, onSubmit, onClear, custom
       codigo: form.codigo,
       nombre: form.nombre,
       descripcion: form.descripcion,
-      tipoTicket: form.heredaTipo && selectedCategory ? selectedCategory.tipoTicket : form.tipoTicket,
       requiereValidacion: form.requiereValidacion,
       activo: form.activo,
-      heredaTipo: form.heredaTipo,
     };
     onSubmit(payload, initial?.id);
     setForm(subDefaults);
@@ -89,7 +82,6 @@ export const SubcategoryForm = ({ categories, initial, onSubmit, onClear, custom
   // Sincronizar el formulario cuando cambia `initial` (al entrar en modo edición)
   useEffect(() => {
     if (!initial) {
-      // Evitar setState sincrónico dentro del efecto para no disparar renders en cascada
       setTimeout(() => setForm(subDefaults), 0);
       return;
     }
@@ -100,29 +92,15 @@ export const SubcategoryForm = ({ categories, initial, onSubmit, onClear, custom
           codigo: initial.codigo,
           nombre: initial.nombre,
           descripcion: initial.descripcion ?? "",
-          tipoTicket: initial.tipoTicket,
           requiereValidacion: initial.requiereValidacion,
           activo: initial.activo,
-          heredaTipo: Boolean(initial.heredaTipo),
           createdAt: initial.createdAt ?? new Date().toISOString(),
         }),
       0,
     );
   }, [initial]);
 
-  // Si se activa herencia o cambia la categoría padre, sincronizamos el tipoTicket con la categoría
-  useEffect(() => {
-    if (!form.heredaTipo) return;
-    const cat = categories.find((c) => c.id === form.categoriaId);
-    if (cat && cat.tipoTicket !== form.tipoTicket) {
-      setForm((prev) => ({ ...prev, tipoTicket: cat.tipoTicket }));
-    }
-  }, [form.categoriaId, form.heredaTipo, categories]);
-
   const canSubmit = Boolean(form.categoriaId && form.codigo.trim() && form.nombre.trim());
-
-  const selectedCategory = categories.find((c) => c.id === form.categoriaId);
-  const effectiveTicket = form.heredaTipo && selectedCategory ? selectedCategory.tipoTicket : form.tipoTicket;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -176,39 +154,7 @@ export const SubcategoryForm = ({ categories, initial, onSubmit, onClear, custom
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-semibold text-slate-800 mb-1">Tipo de ticket *</label>
-          <div className="flex flex-col gap-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
-            <label className="flex items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                checked={form.heredaTipo}
-                onChange={(e) => handleChange("heredaTipo", e.target.checked)}
-                disabled={!form.categoriaId}
-                className="w-5 h-5 text-purple-600 border-slate-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              <span>Heredar de la categoría ({selectedCategory?.tipoTicket ?? "--"})</span>
-            </label>
-            {!form.heredaTipo && (
-              <select
-                value={form.tipoTicket}
-                onChange={(e) => handleChange("tipoTicket", e.target.value as TicketType)}
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
-              >
-                <option value="incidente">Incidente</option>
-                <option value="solicitud">Solicitud</option>
-                {customTypes.map((t) => (
-                  <option key={t} value={t}>
-                    {t.charAt(0).toUpperCase() + t.slice(1)}
-                  </option>
-                ))}
-              </select>
-            )}
-            <p className="text-xs text-slate-500">Autocompleta tipo de ticket en Tickets</p>
-            <p className="text-xs text-slate-500">Tipo efectivo: {effectiveTicket === "incidente" ? "Incidente" : effectiveTicket === "solicitud" ? "Solicitud" : effectiveTicket}</p>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4">
           <input
             id="sub-activa"

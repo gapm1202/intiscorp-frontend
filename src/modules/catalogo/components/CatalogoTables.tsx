@@ -1,10 +1,16 @@
 import type { CatalogCategory, CatalogSubcategory } from "../types";
-import { ticketTypeLabel } from "../services/catalogoService";
+import type { TicketType } from "./TicketTypeForm";
 
 interface CategoryTableProps {
   items: CatalogCategory[];
   onEdit: (item: CatalogCategory) => void;
   onToggle: (item: CatalogCategory) => void;
+}
+
+interface TicketTypeTableProps {
+  items: TicketType[];
+  onEdit: (item: TicketType) => void;
+  onToggle: (item: TicketType) => void;
 }
 
 interface SubcategoryTableProps {
@@ -29,7 +35,6 @@ export const CategoryTable = ({ items, onEdit, onToggle }: CategoryTableProps) =
             <tr>
               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Código</th>
               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Categoría</th>
-              <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Tipo</th>
               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Estado</th>
               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Visible</th>
               <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Acciones</th>
@@ -40,11 +45,6 @@ export const CategoryTable = ({ items, onEdit, onToggle }: CategoryTableProps) =
               <tr key={cat.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 font-semibold text-slate-900">{cat.codigo}</td>
                 <td className="px-4 py-3 text-slate-800">{cat.nombre}</td>
-                <td className="px-4 py-3">
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                    {ticketTypeLabel(cat.tipoTicket)}
-                  </span>
-                </td>
                 <td className="px-4 py-3">
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-semibold border ${
@@ -97,7 +97,6 @@ export const SubcategoryTable = ({ items, categories, onEdit, onToggle }: Subcat
               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Código</th>
               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Subcategoría</th>
               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Categoría</th>
-              <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Tipo</th>
               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Estado</th>
               <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Acciones</th>
             </tr>
@@ -108,11 +107,6 @@ export const SubcategoryTable = ({ items, categories, onEdit, onToggle }: Subcat
                 <td className="px-4 py-3 font-semibold text-slate-900">{sub.codigo}</td>
                 <td className="px-4 py-3 text-slate-800">{sub.nombre}</td>
                 <td className="px-4 py-3 text-slate-700">{catName(sub.categoriaId)}</td>
-                <td className="px-4 py-3">
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-100">
-                    {ticketTypeLabel(sub.tipoTicket)}
-                  </span>
-                </td>
                 <td className="px-4 py-3">
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-semibold border ${
@@ -136,6 +130,64 @@ export const SubcategoryTable = ({ items, categories, onEdit, onToggle }: Subcat
                     className="inline-flex items-center gap-1 text-amber-600 hover:text-amber-800 font-semibold text-sm"
                   >
                     ❌ {sub.activo ? "Desactivar" : "Activar"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+export const TicketTypeTable = ({ items, onEdit, onToggle }: TicketTypeTableProps) => {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+        <div>
+          <p className="text-sm text-slate-500">🏷️ Tabla de Tipos de Ticket</p>
+          <h3 className="text-lg font-semibold text-slate-900">{items.length} tipos</h3>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full">
+          <thead>
+            <tr>
+              <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Nombre</th>
+              <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Descripción</th>
+              <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Estado</th>
+              <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {items.map((type) => (
+              <tr key={type.id} className="hover:bg-slate-50">
+                <td className="px-4 py-3 font-semibold text-slate-900">{type.nombre}</td>
+                <td className="px-4 py-3 text-slate-700">{type.descripcion || "—"}</td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                      type.activo
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                        : "bg-amber-50 text-amber-700 border-amber-100"
+                    }`}
+                  >
+                    {type.activo ? "Activo" : "Inactivo"}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right space-x-2">
+                  <button
+                    onClick={() => onEdit(type)}
+                    className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-semibold text-sm"
+                  >
+                    ✏️ Editar
+                  </button>
+                  <button
+                    onClick={() => onToggle(type)}
+                    className="inline-flex items-center gap-1 text-amber-600 hover:text-amber-800 font-semibold text-sm"
+                  >
+                    ❌ {type.activo ? "Desactivar" : "Activar"}
                   </button>
                 </td>
               </tr>

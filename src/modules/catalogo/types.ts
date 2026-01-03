@@ -1,11 +1,9 @@
-export type TicketType = "incidente" | "solicitud" | string;
-
+﻿// Interfaces para categorias
 export interface CatalogCategory {
   id: string;
   codigo: string;
   nombre: string;
   descripcion?: string;
-  tipoTicket: TicketType;
   activo: boolean;
   visibleEnTickets: boolean;
   createdAt?: string;
@@ -16,16 +14,44 @@ export interface CatalogSubcategory {
   codigo: string;
   nombre: string;
   descripcion?: string;
-  tipoTicket: TicketType;
   requiereValidacion: boolean;
   activo: boolean;
   categoriaId: string;
-  heredaTipo?: boolean;
   createdAt?: string;
 }
 
 export interface CatalogFilters {
   estado: "todos" | "activos" | "inactivos";
-  tipo: "todos" | TicketType;
   categoriaId: "todas" | string;
+}
+
+// Tipos e interfaces para servicios
+export type TipoServicio = string;
+
+export interface CatalogServicio {
+  _id?: string;
+  id?: string;
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  tipoServicio: TipoServicio;
+  activo: boolean;
+  visibleEnTickets: boolean;
+  creadoPor?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ServicioStats {
+  total: number;
+  activos: number;
+  inactivos: number;
+  visiblesEnTickets: number;
+}
+
+export interface ServicioFilters {
+  estado: "todos" | "activos" | "inactivos";
+  tipoServicio: "todos" | TipoServicio;
+  visibleEnTickets: "todos" | "si" | "no";
+  busqueda: string;
 }

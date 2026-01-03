@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
-import { X, Upload, AlertCircle, Building2, MapPin, Tag, Wrench, Clock, User } from 'lucide-react';
-import { getEmpresas } from '@/modules/empresas/services/empresasService';
+import { X, Upload, AlertCircle, Building2, Tag, Wrench, Clock, User, CheckCircle2, XCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { getEmpresas, getEmpresaById } from '@/modules/empresas/services/empresasService';
 import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
 import { getCategorias } from '@/modules/inventario/services/categoriasService';
 import { getInventarioBySede } from '@/modules/inventario/services/inventarioService';
 import { getUsuariosAdministrativos } from '@/modules/auth/services/userService';
 import { getSLAByEmpresa } from '@/modules/sla/services/slaService';
-import { getCatalogCategories, getCatalogSubcategories, getCatalogTypes, ticketTypeLabel } from '@/modules/catalogo/services/catalogoService';
+import { getContratoActivo } from '@/modules/empresas/services/contratosService';
+import { getCatalogCategories, getCatalogSubcategories, getTicketTypes } from '@/modules/catalogo/services/catalogoService';
 import type { PrioridadTicket } from '../types';
 
 interface CreateTicketModalProps {
@@ -29,13 +31,15 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
   const [subcategorias, setSubcategorias] = useState<any[]>([]);
   const [tecnicos, setTecnicos] = useState<any[]>([]);
   const [slaActivo, setSlaActivo] = useState<any>(null);
+  const [contratoActivo, setContratoActivo] = useState<any>(null);
+  const [slaStatus, setSlaStatus] = useState<'loading' | 'sin-configurar' | 'contrato-inactivo' | 'activo' | null>(null);
   const [archivos, setArchivos] = useState<File[]>([]);
   const [searchActivos, setSearchActivos] = useState('');
   const [searchUsuarios, setSearchUsuarios] = useState('');
   const [tiposTicket, setTiposTicket] = useState<any[]>([]);
   const [catalogoCategorias, setCatalogoCategorias] = useState<any[]>([]);
   const [catalogoSubcategorias, setCatalogoSubcategorias] = useState<any[]>([]);
-  const [categoriasFiltradas, setCategoriasFiltradas] = useState<any[]>([]);
+  const navigate = useNavigate();
 
   // Datos del ticket
   const [formData, setFormData] = useState({
@@ -176,17 +180,12 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
     }
   }, [formData.activos_codigos, activos]);
 
-  // Al cambiar tipo de ticket, filtrar categorías del catálogo por ese tipo
+  // Al cambiar tipo de ticket, resetear categoría si había una seleccionada
   useEffect(() => {
-    if (formData.tipo_ticket && catalogoCategorias.length > 0) {
-      const categoriasPorTipo = catalogoCategorias.filter(cat => cat.tipoTicket === formData.tipo_ticket);
-      console.log('📋 Categorías filtradas para tipo:', formData.tipo_ticket, categoriasPorTipo);
-      setCategoriasFiltradas(categoriasPorTipo);
-    } else {
-      setCategoriasFiltradas([]);
-      setFormData(prev => ({ ...prev, categoria_id: '' }));
+    if (formData.tipo_ticket) {
+      setFormData(prev => ({ ...prev, categoria_id: '', subcategoria_id: '' }));
     }
-  }, [formData.tipo_ticket, catalogoCategorias]);
+  }, [formData.tipo_ticket]);
 
   // Al cambiar categoría, cargar subcategorías del catálogo
   useEffect(() => {
@@ -225,13 +224,13 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
 
   const loadInitialData = async () => {
     try {
-      const [empData, catData, tecData, catalogoData, tiposData, subcatalogoData] = await Promise.all([
+      const [empData, catData, tecData, catalogoData, subcatalogoData, tiposData] = await Promise.all([
         getEmpresas(),
         getCategorias(),
         getUsuariosAdministrativos(),
         getCatalogCategories(),
-        getCatalogTypes(),
-        getCatalogSubcategories()
+        getCatalogSubcategories(),
+        getTicketTypes()
       ]);
       
       console.log('📊 Empresas cargadas:', empData);
@@ -239,12 +238,17 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
       console.log('📊 Cantidad de empresas:', Array.isArray(empData) ? empData.length : 'No es array');
       console.log('📊 Catálogo cargado (raw):', catalogoData);
       console.log('📊 Total categorías en catálogo:', catalogoData.length);
-      console.log('📊 Tipos de ticket cargados:', tiposData);
       console.log('📊 Subcategorías del catálogo:', subcatalogoData);
+      console.log('📊 Tipos de ticket cargados:', tiposData);
       console.log('📊 Usuarios cargados (raw):', tecData);
       
       setEmpresas(empData);
       setCategorias(catData);
+      
+      // Filtrar solo tipos activos
+      const tiposActivos = tiposData.filter((tipo: any) => tipo.activo === true);
+      console.log('📊 Tipos de ticket activos:', tiposActivos);
+      setTiposTicket(tiposActivos);
       
       // Filtrar técnicos y administradores (case-insensitive)
       const tecnicosFiltrados = tecData.filter((u: any) => {
@@ -262,9 +266,6 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
       // Guardar subcategorías del catálogo activas
       const subcategoriasActivas = subcatalogoData.filter((sub: any) => sub.activo);
       setCatalogoSubcategorias(subcategoriasActivas);
-      
-      // Guardar tipos de ticket (incidente, solicitud, y personalizados)
-      setTiposTicket(tiposData);
     } catch (error) {
       console.error('Error cargando datos iniciales:', error);
     }
@@ -272,12 +273,22 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
 
   const loadEmpresaRelatedData = async (empresaId: number) => {
     try {
-      const [sedesData, slaData] = await Promise.all([
+      setSlaStatus('loading');
+      
+      const [sedesData, slaData, empresaData] = await Promise.all([
         getSedesByEmpresa(empresaId),
-        getSLAByEmpresa(empresaId).catch(() => null)
+        getSLAByEmpresa(empresaId).catch(() => null),
+        getEmpresaById(empresaId).catch(() => null)
       ]);
       
       console.log('📍 Sedes recibidas (raw):', sedesData);
+      console.log('📋 SLA recibido:', slaData);
+      console.log('🏢 Empresa recibida:', empresaData);
+      console.log('📄 Contrato de empresa:', empresaData?.contrato);
+      console.log('📄 Estado contrato (campo contrato):', empresaData?.contrato?.estadoContrato);
+      console.log('📄 Estado contrato (campo estado_contrato):', empresaData?.contrato?.estado_contrato);
+      console.log('📄 Estado contrato directo en empresa:', empresaData?.estadoContrato);
+      console.log('📄 Estado contrato snake_case en empresa:', empresaData?.estado_contrato);
       
       // Normalizar sedes: puede venir como array directo o como { data: [...] }
       const sedesArray = Array.isArray(sedesData) ? sedesData : (sedesData?.data || []);
@@ -293,18 +304,66 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
       
       setSedes(sedesArray);
       setSlaActivo(slaData);
+      setContratoActivo(empresaData?.contrato || null);
       
-      // Si hay SLA activo, pre-cargar modalidades y tipos
-      if (slaData?.activo) {
-        setFormData(prev => ({ ...prev, aplica_sla: true }));
-      } else {
-        setFormData(prev => ({ ...prev, aplica_sla: false }));
-      }
+      // Evaluar estado del SLA usando el contrato de la empresa
+      evaluateSLAStatus(slaData, empresaData?.contrato);
+      
     } catch (error) {
       console.error('Error cargando datos de empresa:', error);
       setSedes([]);
       setSlaActivo(null);
+      setContratoActivo(null);
+      setSlaStatus(null);
     }
+  };
+
+  const evaluateSLAStatus = (sla: any, contrato: any) => {
+    console.log('🔍 Evaluando SLA Status - SLA:', sla);
+    console.log('🔍 Evaluando SLA Status - Contrato:', contrato);
+    
+    // 1️⃣ Sin SLA configurado (debe tener las 6 secciones guardadas)
+    // Verificar que existan las 6 secciones: alcance, tiempos, horarios, requisitos, exclusiones, alertas
+    const seccionesRequeridas = ['alcance', 'tiempos', 'horarios', 'requisitos', 'exclusiones', 'alertas'];
+    const isEmptyObject = (obj: any) => !obj || typeof obj !== 'object' || Object.keys(obj).length === 0;
+    
+    const seccionesConfiguraDas = seccionesRequeridas.filter(seccion => !isEmptyObject(sla?.[seccion]));
+    const slaCompleto = seccionesConfiguraDas.length === 6;
+    
+    if (!sla || !slaCompleto) {
+      console.log('⚠️ SLA no configurado - Secciones encontradas:', seccionesConfiguraDas.length, '/ 6');
+      setSlaStatus('sin-configurar');
+      setFormData(prev => ({ ...prev, aplica_sla: false }));
+      return;
+    }
+
+    // 2️⃣ Verificar estado del contrato (buscar en múltiples ubicaciones posibles)
+    const estadoContratoRaw = contrato?.estado_contrato || contrato?.estadoContrato || contrato?.estado || null;
+    const estadoContrato = estadoContratoRaw ? String(estadoContratoRaw).toUpperCase() : null;
+    
+    console.log('🔍 Estado del contrato detectado:', estadoContrato);
+    console.log('🔍 Contrato completo para debug:', JSON.stringify(contrato, null, 2));
+    
+    // Si no hay contrato o estado es null/vacío, vencido o suspendido → bloquear
+    if (!contrato || !estadoContrato || estadoContrato === 'VENCIDO' || estadoContrato === 'SUSPENDIDO') {
+      console.log('🔴 Contrato inactivo - Estado:', estadoContrato || 'SIN CONFIGURAR');
+      setSlaStatus('contrato-inactivo');
+      setFormData(prev => ({ ...prev, aplica_sla: false }));
+      return;
+    }
+
+    // 3️⃣ SLA configurado y contrato ACTIVO
+    if (estadoContrato === 'ACTIVO') {
+      console.log('🟢 SLA activo');
+      setSlaStatus('activo');
+      setFormData(prev => ({ ...prev, aplica_sla: true }));
+      return;
+    }
+
+    // Caso por defecto (no debería llegar aquí)
+    console.log('⚠️ Estado del contrato no reconocido:', estadoContrato);
+    setSlaStatus('contrato-inactivo');
+    setFormData(prev => ({ ...prev, aplica_sla: false }));
   };
 
   const loadActivosBySede = async (empresaId: number, sedeId: number) => {
@@ -423,6 +482,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
     setSedes([]);
     setSubcategorias([]);
     setSlaActivo(null);
+    setShowCustomTipoInput(false);
+    setCustomTipoValue('');
   };
 
   const getPrioridadColor = (prioridad: PrioridadTicket | '') => {
@@ -437,6 +498,9 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
   };
 
   if (!isOpen) return null;
+
+  // Determinar si el formulario debe estar bloqueado
+  const isFormBlocked = Boolean(formData.empresa_id && (slaStatus === 'sin-configurar' || slaStatus === 'contrato-inactivo'));
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -486,6 +550,84 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                       </option>
                     ))}
                   </select>
+                  
+                  {/* Estado del SLA */}
+                  {formData.empresa_id && (
+                    <div className="mt-3">
+                      {slaStatus === 'loading' && (
+                        <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                          <span className="text-sm text-blue-700">Verificando SLA...</span>
+                        </div>
+                      )}
+                      
+                      {slaStatus === 'sin-configurar' && (
+                        <div className="p-3 bg-yellow-50 border border-yellow-300 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-yellow-800">
+                                ⚠️ SLA no ha sido configurado
+                              </p>
+                              <p className="text-xs text-yellow-700 mt-1">
+                                Por favor complete la configuración del SLA para esta empresa.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              navigate(`/admin/empresas/${formData.empresa_id}?tab=sla`);
+                            }}
+                            className="mt-2 w-full px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-lg hover:bg-yellow-700 transition-colors"
+                          >
+                            Revisar SLA
+                          </button>
+                        </div>
+                      )}
+                      
+                      {slaStatus === 'contrato-inactivo' && (
+                        <div className="p-3 bg-red-50 border border-red-300 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <XCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-red-800">
+                                🔴 SLA no aplica — contrato suspendido o vencido
+                              </p>
+                              <p className="text-xs text-red-700 mt-1">
+                                No se pueden crear tickets para esta empresa debido al estado del contrato.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              navigate(`/admin/empresas/${formData.empresa_id}?tab=contrato`);
+                            }}
+                            className="mt-2 w-full px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                          >
+                            Revisar Contrato
+                          </button>
+                        </div>
+                      )}
+                      
+                      {slaStatus === 'activo' && (
+                        <div className="flex items-start gap-2 p-3 bg-green-50 border border-green-300 rounded-lg">
+                          <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-green-800">
+                              🟢 SLA Activo
+                            </p>
+                            <p className="text-xs text-green-700 mt-1">
+                              El ticket se asociará automáticamente al SLA configurado.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Sede */}
@@ -496,7 +638,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                   <select
                     value={formData.sede_id}
                     onChange={(e) => setFormData({ ...formData, sede_id: e.target.value })}
-                    disabled={!formData.empresa_id || sedes.length === 0}
+                    disabled={isFormBlocked || !formData.empresa_id || sedes.length === 0}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">
@@ -552,7 +694,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                     value={formData.titulo}
                     onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
                     placeholder="Ej: Impresora no funciona en área de contabilidad"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={isFormBlocked}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -566,7 +709,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                     onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
                     placeholder="Describa el problema con el mayor detalle posible..."
                     rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={isFormBlocked}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -670,7 +814,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                                 activos_codigos: todosLosCodigos
                               });
                             }}
-                            className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                            disabled={isFormBlocked}
+                            className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Seleccionar todos
                           </button>
@@ -682,7 +827,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                                 activos_codigos: []
                               });
                             }}
-                            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                            disabled={isFormBlocked}
+                            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Limpiar selección
                           </button>
@@ -737,7 +883,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                                       });
                                     }
                                   }}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  disabled={isFormBlocked}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                                 <div className="flex-1">
                                   <div className="text-sm font-medium text-gray-900">
@@ -835,7 +982,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                           placeholder="Buscar usuario por nombre, correo o cargo..."
                           value={searchUsuarios}
                           onChange={(e) => setSearchUsuarios(e.target.value)}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          disabled={isFormBlocked}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                         />
                         <div className="flex gap-2">
                           <button
@@ -857,7 +1005,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                                 usuarios_reporta_ids: todosLosCorreos
                               });
                             }}
-                            className="px-3 py-1.5 text-xs font-medium text-green-600 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+                            disabled={isFormBlocked}
+                            className="px-3 py-1.5 text-xs font-medium text-green-600 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Seleccionar todos
                           </button>
@@ -869,7 +1018,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                                 usuarios_reporta_ids: []
                               });
                             }}
-                            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                            disabled={isFormBlocked}
+                            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Limpiar selección
                           </button>
@@ -924,7 +1074,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                                       });
                                     }
                                   }}
-                                  className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                                  disabled={isFormBlocked}
+                                  className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                                 <div className="flex-1">
                                   <div className="text-sm font-medium text-gray-900">
@@ -982,17 +1133,18 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tipo de Ticket
+                    Tipo de Ticket *
                   </label>
                   <select
                     value={formData.tipo_ticket}
                     onChange={(e) => setFormData({ ...formData, tipo_ticket: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={isFormBlocked}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Seleccionar tipo...</option>
                     {tiposTicket.map(tipo => (
-                      <option key={tipo} value={tipo}>
-                        {ticketTypeLabel(tipo)}
+                      <option key={tipo.id} value={tipo.nombre}>
+                        {tipo.nombre}
                       </option>
                     ))}
                   </select>
@@ -1005,11 +1157,11 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                   <select
                     value={formData.categoria_id}
                     onChange={(e) => setFormData({ ...formData, categoria_id: e.target.value })}
-                    disabled={!formData.tipo_ticket}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                    disabled={isFormBlocked}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Seleccionar categoría...</option>
-                    {categoriasFiltradas.map(cat => (
+                    {catalogoCategorias.map(cat => (
                       <option key={cat.id} value={cat.id}>
                         {cat.nombre}
                       </option>
@@ -1024,8 +1176,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                   <select
                     value={formData.subcategoria_id}
                     onChange={(e) => setFormData({ ...formData, subcategoria_id: e.target.value })}
-                    disabled={!formData.categoria_id}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                    disabled={isFormBlocked || !formData.categoria_id}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Seleccionar subcategoría...</option>
                     {subcategorias.map((sub: any) => (
@@ -1053,7 +1205,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                   <select
                     value={formData.impacto}
                     onChange={(e) => setFormData({ ...formData, impacto: e.target.value as Impacto })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={isFormBlocked}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Seleccionar impacto...</option>
                     <option value="BAJO">Bajo - Afecta a un usuario</option>
@@ -1070,7 +1223,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                   <select
                     value={formData.urgencia}
                     onChange={(e) => setFormData({ ...formData, urgencia: e.target.value as Urgencia })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={isFormBlocked}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Seleccionar urgencia...</option>
                     <option value="BAJA">Baja - Puede esperar</option>
@@ -1112,7 +1266,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                   <select
                     value={formData.modalidad}
                     onChange={(e) => setFormData({ ...formData, modalidad: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={isFormBlocked}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Seleccionar modalidad...</option>
                     <option value="REMOTO">Remoto</option>
@@ -1128,7 +1283,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                   <select
                     value={formData.tecnico_asignado_id}
                     onChange={(e) => setFormData({ ...formData, tecnico_asignado_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={isFormBlocked}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Sin asignar</option>
                     {tecnicos.map(tec => (
@@ -1146,8 +1302,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                     type="checkbox"
                     checked={formData.aplica_sla}
                     onChange={(e) => setFormData({ ...formData, aplica_sla: e.target.checked })}
-                    disabled={!slaActivo?.activo}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                    disabled={isFormBlocked || !slaActivo?.activo}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed"
                   />
                   <span className="text-sm font-medium text-gray-700">
                     Aplicar SLA {!slaActivo?.activo && '(No disponible para esta empresa)'}
@@ -1169,13 +1325,15 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                     type="file"
                     multiple
                     onChange={handleFileChange}
+                    disabled={isFormBlocked}
                     className="block w-full text-sm text-gray-500
                       file:mr-4 file:py-2 file:px-4
                       file:rounded-lg file:border-0
                       file:text-sm file:font-semibold
                       file:bg-blue-50 file:text-blue-700
                       hover:file:bg-blue-100
-                      cursor-pointer"
+                      cursor-pointer
+                      disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </label>
                 
@@ -1212,8 +1370,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
             </button>
             <button
               type="submit"
-              disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 font-semibold"
+              disabled={loading || isFormBlocked}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
             >
               {loading ? 'Creando...' : 'Crear Ticket'}
             </button>
