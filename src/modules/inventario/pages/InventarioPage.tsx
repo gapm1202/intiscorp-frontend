@@ -49,9 +49,14 @@ interface Sede {
 }
 
 interface UsuarioItem {
+  usuarioId?: string;
+  asignacionId?: string;
   nombre?: string;
+  nombreCompleto?: string;
   correo?: string;
+  email?: string;
   cargo?: string;
+  fechaAsignacion?: string;
 }
 
 interface FotoItem {
@@ -700,9 +705,33 @@ const InventarioPage = () => {
             <div className={`flex justify-between items-center p-6 border-b border-gray-200 ${
               isInactiveView ? 'bg-gray-100' : 'bg-linear-to-r from-slate-50 to-gray-50'
             }`}>
-              <div>
+              <div className="flex-1">
                 <h3 className={`text-xl font-bold ${isInactiveView ? 'text-gray-800' : 'text-gray-900'}`}>Activos Registrados</h3>
-                <p className={`text-sm mt-1 ${isInactiveView ? 'text-gray-600' : 'text-gray-600'}`}>{items.length} {items.length === 1 ? 'activo encontrado' : 'activos encontrados'}</p>
+                <div className="flex items-center gap-4 mt-2">
+                  <p className={`text-sm ${isInactiveView ? 'text-gray-600' : 'text-gray-600'}`}>
+                    {items.length} {items.length === 1 ? 'activo encontrado' : 'activos encontrados'}
+                  </p>
+                  {(() => {
+                    const activosConMultiplesUsuarios = items.filter(item => {
+                      const usuarios = item.usuariosAsignados || item.usuario_asignado;
+                      const usuariosArray = Array.isArray(usuarios) ? usuarios : 
+                                           typeof usuarios === 'string' ? JSON.parse(usuarios || '[]') : [];
+                      return usuariosArray.length > 1;
+                    }).length;
+                    
+                    if (activosConMultiplesUsuarios > 0) {
+                      return (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-purple-100 to-pink-100 border border-purple-300 rounded-full text-xs font-semibold text-purple-700">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                          {activosConMultiplesUsuarios} compartido{activosConMultiplesUsuarios !== 1 ? 's' : ''}
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
               </div>
               <button
                 onClick={() => setShowRegisterModal(true)}
@@ -765,26 +794,65 @@ const InventarioPage = () => {
                         isTrasladado ? 'text-gray-400' : isInactiveView ? 'text-gray-700' : 'text-gray-700'
                       }`}>
                       {(() => {
+                        // PRIORIDAD 1: Intentar leer el array de usuarios (M:N nuevo formato)
                         const usuarios = item.usuariosAsignados || item.usuario_asignado;
                         const usuariosArray = Array.isArray(usuarios) ? usuarios : 
                                              typeof usuarios === 'string' ? JSON.parse(usuarios || '[]') : [];
                         
-                        if (usuariosArray.length === 0) {
-                          return <span className="text-gray-400 italic">Sin asignar</span>;
+                        if (usuariosArray.length > 0) {
+                          // Mostrar primer usuario + contador
+                          return (
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center border-2 border-purple-300">
+                                  <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    {usuariosArray.length === 1 ? (
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                    ) : (
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    )}
+                                  </svg>
+                                </div>
+                                <span className="font-medium">{usuariosArray[0].nombreCompleto || usuariosArray[0].nombre || '-'}</span>
+                              </div>
+                              <span className={`inline-flex items-center justify-center min-w-[24px] h-6 px-2 text-xs font-bold text-white rounded-full shadow-sm ${
+                                isTrasladado ? 'bg-gray-400' : 'bg-gradient-to-r from-purple-500 to-pink-600'
+                              }`}>
+                                {usuariosArray.length}
+                              </span>
+                            </div>
+                          );
                         }
                         
-                        if (usuariosArray.length === 1) {
-                          return <span>{usuariosArray[0].nombre || '-'}</span>;
+                        // PRIORIDAD 2 (FALLBACK): Usar usuarioAsignadoData (campo legacy para un solo usuario)
+                        const usuarioData = item.usuarioAsignadoData || item.usuario_asignado_data;
+                        if (usuarioData && (usuarioData.nombreCompleto || usuarioData.nombre)) {
+                          return (
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center border-2 border-purple-300">
+                                  <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                  </svg>
+                                </div>
+                                <span className="font-medium">{usuarioData.nombreCompleto || usuarioData.nombre}</span>
+                              </div>
+                              <span className={`inline-flex items-center justify-center min-w-[24px] h-6 px-2 text-xs font-bold text-white rounded-full shadow-sm ${
+                                isTrasladado ? 'bg-gray-400' : 'bg-gradient-to-r from-purple-500 to-pink-600'
+                              }`}>
+                                1
+                              </span>
+                            </div>
+                          );
                         }
                         
+                        // PRIORIDAD 3: Si no hay nada, mostrar "Sin asignar"
                         return (
-                          <div className="flex items-center gap-2">
-                            <span>{usuariosArray[0].nombre || '-'}</span>
-                            <span className={`inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white rounded-full shadow-sm ${
-                              isTrasladado ? 'bg-gray-400' : 'bg-linear-to-br from-blue-500 to-blue-600'
-                            }`}>
-                              +{usuariosArray.length - 1}
-                            </span>
+                          <div className="flex items-center gap-2 text-gray-400 italic">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                            </svg>
+                            <span>Sin asignar</span>
                           </div>
                         );
                       })()}
@@ -973,9 +1041,10 @@ const InventarioPage = () => {
               <div className="flex gap-3">
                 <button 
                   onClick={() => {
+                    console.log('🔵 [BOTÓN EDITAR CLICKEADO]', { viewItem });
                     setEditingAsset(viewItem);
                     setShowRegisterModal(true);
-                    setCurrentView('main');
+                    // NO cambiar vista - el modal se mostrará encima
                   }}
                   className="bg-amber-500 hover:bg-amber-600 px-5 py-2.5 rounded-lg transition-all duration-200 font-semibold flex items-center gap-2 shadow-lg hover:shadow-xl"
                 >
@@ -1110,45 +1179,99 @@ const InventarioPage = () => {
 
               {/* Usuarios Asignados */}
               {(() => {
+                console.log('🔍 [VISTA DETALLE] viewItem completo:', viewItem);
+                console.log('🔍 [VISTA DETALLE] usuariosAsignados:', viewItem.usuariosAsignados);
+                
+                // PRIORIDAD 1: Intentar leer el array de usuarios M:N (NUEVO)
                 const usuarios = viewItem.usuariosAsignados || viewItem.usuario_asignado;
+                console.log('🔍 [VISTA DETALLE] usuarios extraídos:', usuarios);
+                
                 const usuariosArray = Array.isArray(usuarios) ? usuarios : 
                                      typeof usuarios === 'string' ? JSON.parse(usuarios || '[]') : [];
-                return usuariosArray.length > 0 ? (
-                  <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
-                    <div className="bg-linear-to-r from-purple-50 to-pink-50 px-6 py-4 border-b border-purple-100">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-linear-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
-                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                          </svg>
+                
+                console.log('🔍 [VISTA DETALLE] usuariosArray procesado:', usuariosArray);
+                console.log('🔍 [VISTA DETALLE] usuariosArray.length:', usuariosArray.length);
+                
+                if (usuariosArray.length > 0) {
+                  return (
+                    <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+                      <div className="bg-linear-to-r from-purple-50 to-pink-50 px-6 py-4 border-b border-purple-100">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-linear-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                          </div>
+                          <h4 className="font-bold text-xl text-gray-900">Usuarios Asignados <span className="text-purple-600">({usuariosArray.length})</span></h4>
                         </div>
-                        <h4 className="font-bold text-xl text-gray-900">Usuarios Asignados <span className="text-purple-600">({usuariosArray.length})</span></h4>
                       </div>
-                    </div>
-                    <div className="p-6">
-                      <div className="space-y-4">
-                        {usuariosArray.map((usuario: UsuarioItem, idx: number) => (
-                          <div key={idx} className="bg-linear-to-br from-purple-50 to-pink-50 p-5 rounded-lg border-2 border-purple-200 hover:shadow-md transition-shadow">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                              <div>
-                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Nombre</p>
-                                <p className="font-bold text-gray-900">{usuario.nombre || '-'}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Correo</p>
-                                <p className="font-semibold text-gray-900 text-sm">{usuario.correo || '-'}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Cargo</p>
-                                <p className="font-bold text-gray-900">{usuario.cargo || '-'}</p>
+                      <div className="p-6">
+                        <div className="space-y-4">
+                          {usuariosArray.map((usuario: UsuarioItem, idx: number) => (
+                            <div key={idx} className="bg-linear-to-br from-purple-50 to-pink-50 p-5 rounded-lg border-2 border-purple-200 hover:shadow-md transition-shadow">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Nombre</p>
+                                  <p className="font-bold text-gray-900">{usuario.nombreCompleto || usuario.nombre || '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Correo</p>
+                                  <p className="font-semibold text-gray-900 text-sm">{usuario.correo || usuario.email || '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Cargo</p>
+                                  <p className="font-bold text-gray-900">{usuario.cargo || '-'}</p>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : null;
+                  );
+                }
+                
+                // PRIORIDAD 2 (FALLBACK LEGACY): Si no hay array, intentar campo único usuarioAsignadoData
+                const usuarioData = viewItem.usuarioAsignadoData || viewItem.usuario_asignado_data;
+                console.log('🔍 [VISTA DETALLE] usuarioAsignadoData (fallback):', usuarioData);
+                
+                if (usuarioData && (usuarioData.nombreCompleto || usuarioData.nombre)) {
+                  return (
+                    <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+                      <div className="bg-linear-to-r from-purple-50 to-pink-50 px-6 py-4 border-b border-purple-100">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-linear-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                          </div>
+                          <h4 className="font-bold text-xl text-gray-900">Usuario Asignado</h4>
+                        </div>
+                      </div>
+                      <div className="p-6">
+                        <div className="bg-linear-to-br from-purple-50 to-pink-50 p-5 rounded-lg border-2 border-purple-200">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Nombre</p>
+                              <p className="font-bold text-gray-900">{usuarioData.nombreCompleto || usuarioData.nombre || '-'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Correo</p>
+                              <p className="font-semibold text-gray-900 text-sm">{usuarioData.correo || usuarioData.email || '-'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Cargo</p>
+                              <p className="font-bold text-gray-900">{usuarioData.cargo || '-'}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                // PRIORIDAD 3: Sin asignación
+                return null;
               })()}
 
               {/* Información Adicional */}

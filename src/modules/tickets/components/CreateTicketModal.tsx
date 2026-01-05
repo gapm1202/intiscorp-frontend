@@ -9,6 +9,7 @@ import { getUsuariosAdministrativos } from '@/modules/auth/services/userService'
 import { getSLAByEmpresa } from '@/modules/sla/services/slaService';
 import { getContratoActivo } from '@/modules/empresas/services/contratosService';
 import { getCatalogCategories, getCatalogSubcategories, getTicketTypes } from '@/modules/catalogo/services/catalogoService';
+import { getServicios } from '@/modules/catalogo/services/servicioApi';
 import type { PrioridadTicket } from '../types';
 
 interface CreateTicketModalProps {
@@ -39,6 +40,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
   const [tiposTicket, setTiposTicket] = useState<any[]>([]);
   const [catalogoCategorias, setCatalogoCategorias] = useState<any[]>([]);
   const [catalogoSubcategorias, setCatalogoSubcategorias] = useState<any[]>([]);
+  const [serviciosDisponibles, setServiciosDisponibles] = useState<any[]>([]);
   const navigate = useNavigate();
 
   // Datos del ticket
@@ -59,6 +61,10 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
     ubicacion: '',
     usuarios_reporta_ids: [] as string[], // Array de IDs de usuarios que reportan
     
+    // Servicio
+    servicio_id: '',
+    tipo_servicio: '', // Solo lectura, se llena automáticamente
+    
     // ITIL
     impacto: '' as Impacto | '',
     urgencia: '' as Urgencia | '',
@@ -74,7 +80,10 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
     tecnico_asignado_id: '',
     
     // Control
-    estado: 'ABIERTO' as const
+    estado: 'ABIERTO' as const,
+    
+    // Origen
+    origen: 'INTERNO' as const // Automático: INTERNO desde sistema, QR desde formulario público
   });
 
   // Cargar datos iniciales
@@ -214,6 +223,23 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
     }
   }, [formData.categoria_id, catalogoSubcategorias]);
 
+  // Al seleccionar servicio, actualizar automáticamente el tipo de servicio
+  useEffect(() => {
+    if (formData.servicio_id && serviciosDisponibles.length > 0) {
+      const servicioSeleccionado = serviciosDisponibles.find(
+        s => String(s.id) === String(formData.servicio_id)
+      );
+      if (servicioSeleccionado) {
+        setFormData(prev => ({ 
+          ...prev, 
+          tipo_servicio: servicioSeleccionado.tipoServicio || '' 
+        }));
+      }
+    } else {
+      setFormData(prev => ({ ...prev, tipo_servicio: '' }));
+    }
+  }, [formData.servicio_id, serviciosDisponibles]);
+
   // Calcular prioridad automáticamente (ITIL)
   useEffect(() => {
     if (formData.impacto && formData.urgencia) {
@@ -224,13 +250,14 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
 
   const loadInitialData = async () => {
     try {
-      const [empData, catData, tecData, catalogoData, subcatalogoData, tiposData] = await Promise.all([
+      const [empData, catData, tecData, catalogoData, subcatalogoData, tiposData, serviciosData] = await Promise.all([
         getEmpresas(),
         getCategorias(),
         getUsuariosAdministrativos(),
         getCatalogCategories(),
         getCatalogSubcategories(),
-        getTicketTypes()
+        getTicketTypes(),
+        getServicios()
       ]);
       
       console.log('📊 Empresas cargadas:', empData);
@@ -241,6 +268,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
       console.log('📊 Subcategorías del catálogo:', subcatalogoData);
       console.log('📊 Tipos de ticket cargados:', tiposData);
       console.log('📊 Usuarios cargados (raw):', tecData);
+      console.log('📊 Servicios cargados:', serviciosData);
       
       setEmpresas(empData);
       setCategorias(catData);
@@ -266,6 +294,13 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
       // Guardar subcategorías del catálogo activas
       const subcategoriasActivas = subcatalogoData.filter((sub: any) => sub.activo);
       setCatalogoSubcategorias(subcategoriasActivas);
+      
+      // Filtrar servicios: activos y visibles en tickets
+      const serviciosFiltrados = serviciosData.filter((serv: any) => 
+        serv.activo === true && serv.visibleEnTickets === true
+      );
+      console.log('📊 Servicios disponibles para tickets:', serviciosFiltrados);
+      setServiciosDisponibles(serviciosFiltrados);
     } catch (error) {
       console.error('Error cargando datos iniciales:', error);
     }
@@ -1186,6 +1221,40 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                       </option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Servicio
+                  </label>
+                  <select
+                    value={formData.servicio_id}
+                    onChange={(e) => setFormData({ ...formData, servicio_id: e.target.value })}
+                    disabled={isFormBlocked}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Seleccionar servicio...</option>
+                    {serviciosDisponibles.map(servicio => (
+                      <option key={servicio.id} value={servicio.id}>
+                        {servicio.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tipo de Servicio
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.tipo_servicio}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                    placeholder="Se asigna automáticamente"
+                  />
                 </div>
               </div>
             </div>

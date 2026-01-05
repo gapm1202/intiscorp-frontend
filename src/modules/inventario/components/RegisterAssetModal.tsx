@@ -3,6 +3,7 @@ import { getWarrantyInfo } from "@/modules/inventario/utils/warranty";
 import { formatAssetCode, getCompanyPrefix, getCategoryPrefix } from "@/utils/helpers";
 import type { Category } from "@/modules/inventario/services/categoriasService";
 import { createActivo, updateActivo } from "@/modules/inventario/services/inventarioService";
+import { getUsuariosByEmpresa, type Usuario } from "@/modules/usuarios/services/usuariosService";
 
 interface AreaItem {
   id?: string | number;
@@ -44,6 +45,9 @@ const RegisterAssetModal = ({
   categories = [],
   editingAsset = null,
 }: Props) => {
+  // 🔍 DEBUG: Monitorear props del modal
+  console.log('🔷 [MODAL PROPS]', { isOpen, hasEditingAsset: !!editingAsset });
+  
   // Basic fields
   const [categoria, setCategoria] = useState<string>("");
   const [fabricante, setFabricante] = useState<string>("");
@@ -53,6 +57,13 @@ const RegisterAssetModal = ({
   const [area, setArea] = useState<string>("");
   const [responsable, setResponsable] = useState<string>("");
   const [selectedSedeId, setSelectedSedeId] = useState<string | undefined>(sedeId);
+
+  // Sincronizar selectedSedeId cuando cambia sedeId de props
+  useEffect(() => {
+    if (sedeId) {
+      setSelectedSedeId(sedeId);
+    }
+  }, [sedeId]);
 
   // Laptop fields
   const [lapCpu, setLapCpu] = useState<string>("");
@@ -117,7 +128,9 @@ const RegisterAssetModal = ({
   const [ip, setIp] = useState<string>("");
   const [mac, setMac] = useState<string>("");
   const [codigoAccesoRemoto, setCodigoAccesoRemoto] = useState<string>("");
-  const [usuariosAsignados, setUsuariosAsignados] = useState<Array<{ nombre: string; correo: string; cargo: string }>>([]);
+  const [usuariosAsignadosIds, setUsuariosAsignadosIds] = useState<string[]>([]);
+  const [usuariosDisponibles, setUsuariosDisponibles] = useState<Usuario[]>([]);
+  const [loadingUsuarios, setLoadingUsuarios] = useState(false);
   const [observaciones, setObservaciones] = useState<string>("");
   const [fotos, setFotos] = useState<Array<{ file: File; description: string }>>([]);
   const [fotosExistentes, setFotosExistentes] = useState<Array<{ url: string; name: string; description: string }>>([]);
@@ -129,7 +142,33 @@ const RegisterAssetModal = ({
   // Helper para generar una clave interna estable (sin espacios) a partir de la etiqueta
   const getFieldKey = (label: string) => String(label || '').trim().replace(/\s+/g, '_');
 
+  // Cargar usuarios cuando cambia la empresa o sede
+  useEffect(() => {
+    const loadUsuarios = async () => {
+      // Usar empresaId de props y selectedSedeId o sedeId
+      const currentSedeId = selectedSedeId || sedeId;
+      
+      if (!empresaId || !currentSedeId) {
+        setUsuariosDisponibles([]);
+        return;
+      }
+      
+      setLoadingUsuarios(true);
+      try {
+        const usuarios = await getUsuariosByEmpresa(empresaId, currentSedeId);
+        console.log('✅ [USUARIOS CARGADOS]:', usuarios.length, 'usuarios para empresa', empresaId, 'sede', currentSedeId);
+        console.log('👥 Usuarios disponibles:', usuarios);
+        setUsuariosDisponibles(usuarios);
+      } catch (error) {
+        console.error('❌ [ERROR] Al cargar usuarios:', error);
+        setUsuariosDisponibles([]);
+      } finally {
+        setLoadingUsuarios(false);
+      }
+    };
 
+    loadUsuarios();
+  }, [empresaId, selectedSedeId, sedeId]);
 
   useEffect(() => {
     if (isOpen && !editingAsset) {
@@ -152,7 +191,7 @@ const RegisterAssetModal = ({
         setObservaciones("");
         setEstadoActivo("activo");
         setEstadoOperativo("operativo");
-        setUsuariosAsignados([]);
+        setUsuariosAsignadosIds([]);
         setFotos([]);
         setFotosExistentes([]);
         setDynamicFields({});
@@ -260,9 +299,17 @@ const RegisterAssetModal = ({
 
   // Cargar datos cuando se está editando
   useEffect(() => {
+    console.log('🔶 [useEffect DISPARADO] isOpen:', isOpen, '| hasEditingAsset:', !!editingAsset);
+    
     if (isOpen && editingAsset) {
+      console.log('✅ [CONDICIÓN CUMPLIDA] Entrando al bloque de carga...');
       Promise.resolve().then(() => {
         const asset = editingAsset as Record<string, unknown>;
+        console.log('🟢 [MODAL ABIERTO] Datos del activo recibidos:', asset);
+        console.log('🔍 usuarios_asignados_m2n:', asset['usuarios_asignados_m2n']);
+        console.log('🔍 usuariosAsignados:', asset['usuariosAsignados']);
+        console.log('🔍 usuarios_asignados:', asset['usuarios_asignados']);
+        
         setCategoria(String(asset['categoria'] ?? ''));
         setFabricante(String(asset['fabricante'] ?? ''));
         setModelo(String(asset['modelo'] ?? ''));
@@ -349,20 +396,29 @@ const RegisterAssetModal = ({
         console.error('Error parsing información contable/garantía:', e);
       }
       
-      // Cargar usuarios asignados
-        if (asset['usuariosAsignados'] || asset['usuario_asignado'] || asset['usuarioAsignado']) {
-          try {
-            const rawData = asset['usuariosAsignados'] ?? asset['usuario_asignado'] ?? asset['usuarioAsignado'];
-            const usuarios = typeof rawData === 'string' ? JSON.parse(String(rawData)) : rawData as unknown;
-            if (usuarios && !Array.isArray(usuarios)) {
-              setUsuariosAsignados([usuarios as unknown as { nombre: string; correo: string; cargo: string }]);
-            } else if (Array.isArray(usuarios)) {
-              setUsuariosAsignados(usuarios as unknown as Array<{ nombre: string; correo: string; cargo: string }>);
-            }
-          } catch (err) {
-            console.error('Error parsing usuariosAsignados:', err);
-          }
+      // Cargar usuarios asignados (sistema M:N)
+      // Backend devuelve: usuarios_asignados_m2n (nuevo) o usuarios_asignados (legacy)
+      const usuariosAsignados = asset['usuarios_asignados_m2n'] ?? asset['usuariosAsignados'] ?? asset['usuarios_asignados'] ?? [];
+      if (Array.isArray(usuariosAsignados) && usuariosAsignados.length > 0) {
+        console.log('📦 Array usuariosAsignados completo:', usuariosAsignados);
+        const ids = usuariosAsignados.map((u: any) => {
+          const extractedId = String(u.usuarioId ?? u.usuario_id ?? u.id ?? '');
+          console.log('  → Usuario:', u, '| ID extraído:', extractedId);
+          return extractedId;
+        }).filter(Boolean);
+        console.log('🔵 Usuarios asignados cargados:', ids);
+        setUsuariosAsignadosIds(ids);
+      } else {
+        // Fallback: soporte legacy para usuario único
+        const usuarioId = asset['usuarioAsignadoId'] ?? asset['usuario_asignado_id'] ?? '';
+        if (usuarioId) {
+          console.log('🟡 Cargando usuario único (legacy):', usuarioId);
+          setUsuariosAsignadosIds([String(usuarioId)]);
+        } else {
+          console.log('⚪ No hay usuarios asignados');
+          setUsuariosAsignadosIds([]);
         }
+      }
 
       // Cargar campos personalizados
         if (asset['campos_personalizados']) {
@@ -641,7 +697,7 @@ const RegisterAssetModal = ({
       ip,
       mac,
       codigoAccesoRemoto: codigoAccesoRemoto || undefined,
-      usuariosAsignados,
+      usuariosAsignadosIds: usuariosAsignadosIds.length > 0 ? usuariosAsignadosIds : undefined,
       observaciones,
       ...categoryData,
       // Reconstruir objetos con las etiquetas originales (con espacios) antes de enviar
@@ -792,8 +848,9 @@ const RegisterAssetModal = ({
       ip,
       mac,
       codigoAccesoRemoto: codigoAccesoRemoto || undefined,
-      usuariosAsignados,
+      usuariosAsignadosIds: usuariosAsignadosIds.length > 0 ? usuariosAsignadosIds : undefined,
       observaciones,
+      motivo,
       empresaId,
       sedeId,
       empresaNombre,
@@ -857,7 +914,12 @@ const RegisterAssetModal = ({
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    console.log('🚫 [MODAL CERRADO] isOpen es false, no renderizando modal');
+    return null;
+  }
+  
+  console.log('🟩 [MODAL RENDERIZANDO] Modal visible, editingAsset:', !!editingAsset);
 
   const editingAssetId = editingAsset ? String((editingAsset as Record<string, unknown>)['asset_id'] ?? (editingAsset as Record<string, unknown>)['id'] ?? (editingAsset as Record<string, unknown>)['_id'] ?? '') : '';
 
@@ -1207,25 +1269,155 @@ const RegisterAssetModal = ({
 
           {/* Users, Photos, Observations */}
           <section className="space-y-4 py-4">
-            <div className="flex items-center justify-between">
-              <h4 className="font-semibold text-lg">Asignaciones y Multimedia</h4>
-              <button type="button" onClick={() => setUsuariosAsignados(prev => [...prev, { nombre: '', correo: '', cargo: '' }])} className="text-sm bg-purple-50 text-purple-700 px-3 py-1 rounded">+ Agregar Usuario</button>
-            </div>
+            <h4 className="font-semibold text-lg">Asignaciones y Multimedia</h4>
 
             <div>
-              {usuariosAsignados.length === 0 ? (
-                <div className="bg-gray-50 p-3 rounded border border-dashed text-sm text-gray-500">No hay usuarios asignados.</div>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">
+                👥 Usuarios Asignados ({usuariosAsignadosIds.length})
+              </label>
+              
+              {loadingUsuarios ? (
+                <div className="bg-gray-50 p-3 rounded border text-sm text-gray-500">
+                  Cargando usuarios...
+                </div>
+              ) : !empresaId ? (
+                <div className="bg-yellow-50 p-3 rounded border border-yellow-200 text-sm text-yellow-700">
+                  No se pudo cargar la empresa
+                </div>
               ) : (
-                <div className="space-y-3">{usuariosAsignados.map((usuario, idx) => (
-                  <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-white border border-gray-200 p-3 rounded">
-                    <input type="text" value={usuario.nombre} onChange={e => { const updated = [...usuariosAsignados]; updated[idx].nombre = e.target.value; setUsuariosAsignados(updated); }} placeholder="Nombre" className="p-2 border rounded text-sm" />
-                    <input type="email" value={usuario.correo} onChange={e => { const updated = [...usuariosAsignados]; updated[idx].correo = e.target.value; setUsuariosAsignados(updated); }} placeholder="Correo" className="p-2 border rounded text-sm" />
-                    <div className="flex items-center gap-2">
-                      <input type="text" value={usuario.cargo} onChange={e => { const updated = [...usuariosAsignados]; updated[idx].cargo = e.target.value; setUsuariosAsignados(updated); }} placeholder="Cargo" className="flex-1 p-2 border rounded text-sm" />
-                      <button type="button" onClick={() => setUsuariosAsignados(prev => prev.filter((_, i) => i !== idx))} className="px-3 py-2 rounded bg-red-500 text-white">X</button>
+                <div className="space-y-3">
+                  {/* Usuarios ya asignados */}
+                  {usuariosAsignadosIds.length > 0 && (
+                    <div 
+                      className="bg-linear-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg p-4"
+                      style={{ border: '3px solid red' }} // DEBUG: Borde rojo visible
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <h5 className="text-sm font-semibold text-purple-800">
+                          ✅ Asignados ({usuariosAsignadosIds.length})
+                        </h5>
+                        {usuariosAsignadosIds.length > 1 && (
+                          <span className="text-xs bg-linear-to-r from-purple-500 to-pink-600 text-white px-3 py-1 rounded-full font-semibold">
+                            Compartido
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto">
+                        {(() => {
+                          console.log('🎨 [RENDERIZANDO USUARIOS]');
+                          console.log('  → usuariosAsignadosIds:', usuariosAsignadosIds);
+                          console.log('  → usuariosDisponibles:', usuariosDisponibles.length, 'usuarios');
+                          return null;
+                        })()}
+                        {usuariosAsignadosIds.map((userId) => {
+                          console.log('🔍 [BUSCANDO USUARIO]', userId, 'tipo:', typeof userId);
+                          
+                          // Buscar usuario con comparación flexible (string vs number)
+                          const usuario = usuariosDisponibles.find(u => 
+                            String(u.id || u._id || '') === String(userId)
+                          );
+                          
+                          console.log('  → Resultado:', usuario ? `✅ ${usuario.nombreCompleto}` : '❌ NO ENCONTRADO');
+                          
+                          // Debug: mostrar si no se encuentra el usuario
+                          if (!usuario) {
+                            console.warn('⚠️ Usuario no encontrado en disponibles:', userId);
+                            console.log('IDs disponibles:', usuariosDisponibles.map(u => u.id || u._id));
+                            return (
+                              <div key={userId} className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 text-xs text-yellow-700">
+                                Usuario ID {userId} no encontrado en la lista
+                              </div>
+                            );
+                          }
+                          
+                          console.log('✨ [RENDERIZANDO TARJETA]', usuario.nombreCompleto);
+                          return (
+                            <div
+                              key={userId}
+                              className="flex items-center justify-between bg-white border border-purple-300 rounded-lg p-3 hover:shadow-md transition-shadow"
+                            >
+                              <div className="flex items-center gap-3">
+                                {/* Avatar con inicial */}
+                                <div className="w-10 h-10 rounded-full bg-linear-to-br from-purple-400 to-pink-500 flex items-center justify-center text-white font-bold shadow-md">
+                                  {usuario.nombreCompleto?.charAt(0).toUpperCase() || '?'}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-800">
+                                    {usuario.nombreCompleto || 'Sin nombre'}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {usuario.correo || usuario.email || '—'}
+                                  </p>
+                                  <p className="text-xs text-purple-600 font-medium">
+                                    {usuario.cargo || 'Sin cargo'}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setUsuariosAsignadosIds(prev => prev.filter(id => id !== userId));
+                                }}
+                                className="text-red-600 hover:text-red-800 p-2 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Quitar usuario"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
+                  )}
+
+                  {/* Selector para agregar más usuarios */}
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                    <label className="block text-sm font-semibold text-blue-800 mb-2">
+                      ➕ Agregar Usuario
+                    </label>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const userId = e.target.value;
+                        if (userId && !usuariosAsignadosIds.includes(userId)) {
+                          console.log('✅ Agregando usuario:', userId);
+                          console.log('Usuarios disponibles:', usuariosDisponibles.length);
+                          const usuarioSeleccionado = usuariosDisponibles.find(u => 
+                            String(u.id || u._id) === String(userId)
+                          );
+                          console.log('Usuario encontrado:', usuarioSeleccionado);
+                          setUsuariosAsignadosIds(prev => [...prev, userId]);
+                        }
+                        e.target.value = '';
+                      }}
+                      className="w-full p-2.5 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                      disabled={!empresaId || (!selectedSedeId && !sedeId)}
+                    >
+                      <option value="">Seleccionar usuario...</option>
+                      {usuariosDisponibles
+                        .filter(u => !usuariosAsignadosIds.includes(String(u.id || u._id || '')))
+                        .map(u => (
+                          <option key={u.id || u._id} value={u.id || u._id}>
+                            {u.nombreCompleto} - {u.cargo || 'Sin cargo'}
+                          </option>
+                        ))
+                      }
+                    </select>
+                    {usuariosDisponibles.filter(u => !usuariosAsignadosIds.includes(u.id || u._id || '')).length === 0 && (
+                      <p className="text-xs text-blue-600 mt-2">
+                        ✓ Todos los usuarios disponibles ya están asignados
+                      </p>
+                    )}
                   </div>
-                ))}</div>
+
+                  {usuariosDisponibles.length === 0 && (
+                    <p className="text-xs text-gray-500 bg-gray-50 p-3 rounded border">
+                      ⚠️ No hay usuarios registrados en esta sede
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 

@@ -16,6 +16,8 @@ import PublicTicketStatusPage from "../modules/public/pages/PublicTicketStatusPa
 import CatalogoCategoriasPage from "../modules/catalogo/pages/CatalogoCategoriasPage";
 import CatalogoServiciosPage from "../modules/catalogo/pages/CatalogoServiciosPage";
 import TicketsPage from "../modules/tickets/pages/TicketsPage";
+import UsuariosEmpresaPage from "../modules/usuarios/pages/UsuariosEmpresaPage";
+import UsuarioDetailPage from "../modules/usuarios/pages/UsuarioDetailPage";
 
 const AppRouter = () => {
   return (
@@ -131,6 +133,43 @@ const AppRouter = () => {
                 <TicketsPage />
               </AdminLayout>
             </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/usuarios/empresa/:empresaId"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <UsuariosEmpresaPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/usuarios/empresa/:empresaId/:usuarioId"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <UsuarioDetailPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        {/* Rutas para usuarios desde empresas */}
+        <Route
+          path="/empresas/:empresaId/usuarios"
+          element={
+            <AdminLayout>
+              <UsuariosEmpresaPage />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="/empresas/:empresaId/usuarios/:usuarioId"
+          element={
+            <AdminLayout>
+              <UsuarioDetailPage />
+            </AdminLayout>
           }
         />
         {/* Ruta accesible en /empresas (protegida) - usar AdminLayout para mantener sidebar */}

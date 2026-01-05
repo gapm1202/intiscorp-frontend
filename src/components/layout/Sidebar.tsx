@@ -63,6 +63,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
   const menuItems = user ? menuByRole[user.rol] ?? menuByRole["cliente"] : menuByRole["cliente"];
   const [inventarioOpen, setInventarioOpen] = useState(false);
   const [catalogosOpen, setCatalogosOpen] = useState(false);
+  const [usuariosOpen, setUsuariosOpen] = useState(false);
   type EmpresaItem = { id?: number; _id?: string; nombre?: string; [key: string]: unknown };
   const [empresas, setEmpresas] = useState<EmpresaItem[]>([]);
   const [loadingEmpresas, setLoadingEmpresas] = useState(false);
@@ -112,6 +113,25 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
 
   const toggleCatalogos = () => {
     setCatalogosOpen(v => !v);
+  };
+
+  const toggleUsuarios = async () => {
+    setUsuariosOpen(v => !v);
+    // Cargar empresas cuando se abre el menú (si no están ya cargadas)
+    if (!usuariosOpen && empresas.length === 0) {
+      setLoadingEmpresas(true);
+      setEmpresasError(null);
+      try {
+        const data = await getEmpresas();
+        const list = Array.isArray(data) ? data : data?.data ?? [];
+        setEmpresas(list);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Error cargando empresas";
+        setEmpresasError(msg);
+      } finally {
+        setLoadingEmpresas(false);
+      }
+    }
   };
 
   return (
@@ -213,6 +233,52 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                               <li key={e.id ?? e._id}>
                                 <button
                                   onClick={() => guardedNavigate(`/admin/empresas/${e.id ?? e._id}/inventario`)}
+                                  className="w-full text-left text-xs py-2 px-3 rounded-md hover:bg-subtle transition-colors text-slate-700"
+                                >
+                                  {e.nombre ?? "(sin nombre)"}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                );
+              }
+
+              // Usuarios menu with submenu (empresas)
+              if (item.id === "usuarios") {
+                return (
+                  <li key={item.id}>
+                    <button
+                      onClick={toggleUsuarios}
+                      aria-current={isActive ? 'true' : undefined}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${isActive ? 'active' : ''}`}
+                    >
+                      <span className="flex items-center space-x-3">
+                        <div className="w-8 h-8 rounded-lg bg-subtle group-hover:bg-primary flex items-center justify-center transition-colors">
+                          <svg className="w-4 h-4 text-slate-600 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {iconMap[item.id] || iconMap.dashboard}
+                          </svg>
+                        </div>
+                        {!collapsed && <span className="text-sm font-medium text-slate-700 group-hover:text-primary">{item.label}</span>}
+                      </span>
+                    </button>
+                    {usuariosOpen && !collapsed && (
+                      <div className="mt-1 ml-11 space-y-1 border-l-2 border-slate-100 pl-3">
+                        {loadingEmpresas ? (
+                          <div className="text-xs text-slate-500 py-2">Cargando empresas...</div>
+                        ) : empresasError ? (
+                          <div className="text-xs text-red-500 py-2">Error cargando empresas</div>
+                        ) : empresas.length === 0 ? (
+                          <div className="text-xs text-slate-500 py-2">No hay empresas</div>
+                        ) : (
+                          <ul className="space-y-1">
+                            {empresas.map((e: EmpresaItem) => (
+                              <li key={e.id ?? e._id}>
+                                <button
+                                  onClick={() => guardedNavigate(`/admin/usuarios/empresa/${e.id ?? e._id}`)}
                                   className="w-full text-left text-xs py-2 px-3 rounded-md hover:bg-subtle transition-colors text-slate-700"
                                 >
                                   {e.nombre ?? "(sin nombre)"}

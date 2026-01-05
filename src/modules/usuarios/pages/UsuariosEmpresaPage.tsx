@@ -1,0 +1,684 @@
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import type { Usuario, AsignarActivoData, DesactivarUsuarioData } from '../services/usuariosService';
+import { 
+  getUsuariosByEmpresa,
+  createUsuario,
+  updateUsuario,
+  asignarActivo,
+  desactivarUsuario,
+  exportarUsuarios
+} from '../services/usuariosService';
+import { getEmpresaById } from '@/modules/empresas/services/empresasService';
+import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
+import { UsuarioForm } from '../components/UsuarioForm';
+import { AsignarActivoModal } from '../components/AsignarActivoModal';
+import { DesactivarUsuarioModal } from '../components/DesactivarUsuarioModal';
+import { HistorialUsuarioModal } from '../components/HistorialUsuarioModal';
+
+export default function UsuariosEmpresaPage() {
+  const { empresaId } = useParams<{ empresaId: string }>();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [empresaNombre, setEmpresaNombre] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Estados de filtros
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroCargo, setFiltroCargo] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState<'todos' | 'activo' | 'inactivo'>('todos');
+  const [filtroActivo, setFiltroActivo] = useState<'todos' | 'con_activo' | 'sin_activo'>('todos');
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
+
+  // Estados de modales
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [showAsignarActivoModal, setShowAsignarActivoModal] = useState(false);
+  const [showDesactivarModal, setShowDesactivarModal] = useState(false);
+  const [showHistorialModal, setShowHistorialModal] = useState(false);
+  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState<Usuario | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Toast
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    if (!empresaId) {
+      setError('No se proporcionó ID de empresa');
+      setLoading(false);
+      return;
+    }
+
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Cargar empresa primero
+        const empresaData = await getEmpresaById(empresaId);
+        setEmpresaNombre(empresaData.nombre || 'Empresa');
+        
+        // Luego cargar usuarios
+        try {
+          const usuariosData = await getUsuariosByEmpresa(empresaId);
+          
+          // Debug: ver campos de fecha
+          if (usuariosData.length > 0) {
+            console.log('📅 Campos de fecha del primer usuario:', {
+              fechaAlta: usuariosData[0].fechaAlta,
+              createdAt: usuariosData[0].createdAt,
+              fecha_alta: usuariosData[0].fecha_alta,
+              todosLosCampos: Object.keys(usuariosData[0])
+            });
+          }
+          
+          // Cargar sedes para mapear los nombres
+          try {
+            const sedesData = await getSedesByEmpresa(empresaId);
+            console.log('🏪 Sedes cargadas:', sedesData);
+            
+            // Mapear nombres de sedes a cada usuario
+            const usuariosConSede = usuariosData.map((usuario: Usuario) => {
+              if (usuario.sedeId) {
+                const sede = sedesData.find((s: any) => 
+                  String(s.id) === String(usuario.sedeId) || 
+                  String(s._id) === String(usuario.sedeId)
+                );
+                return {
+                  ...usuario,
+                  sedeNombre: sede?.nombre || usuario.sedeNombre
+                };
+              }
+              return usuario;
+            });
+            
+            setUsuarios(Array.isArray(usuariosConSede) ? usuariosConSede : []);
+          } catch (sedesErr) {
+            console.warn('No se pudieron cargar sedes:', sedesErr);
+            // Si falla la carga de sedes, usar los datos sin mapear
+            setUsuarios(Array.isArray(usuariosData) ? usuariosData : []);
+          }
+        } catch (usuariosErr) {
+          // Si falla cargar usuarios, mostrar array vacío pero no error
+          console.warn('No se pudieron cargar usuarios:', usuariosErr);
+          setUsuarios([]);
+        }
+      } catch (err) {
+        console.error('Error cargando datos:', err);
+        const errorMessage = err instanceof Error ? err.message : 'Error al cargar los datos de la empresa';
+        setError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [empresaId]);
+
+  // Recargar usuarios cuando se vuelve a esta página desde una página de detalle
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (!document.hidden && empresaId) {
+        console.log('🔄 Página visible de nuevo - recargando usuarios');
+        try {
+          const data = await getUsuariosByEmpresa(empresaId);
+          console.log('🔄 [RELOAD] Datos recibidos:', data);
+          console.log('🔄 [RELOAD] Cantidad:', Array.isArray(data) ? data.length : 0);
+          console.log('🔄 [RELOAD] Activos:', Array.isArray(data) ? data.filter(u => u.activo).length : 0);
+          console.log('🔄 [RELOAD] Inactivos:', Array.isArray(data) ? data.filter(u => !u.activo).length : 0);
+          
+          // Cargar sedes para mapear los nombres
+          try {
+            const sedesData = await getSedesByEmpresa(empresaId);
+            const usuariosConSede = data.map((usuario: Usuario) => {
+              if (usuario.sedeId) {
+                const sede = sedesData.find((s: any) => 
+                  String(s.id) === String(usuario.sedeId) || 
+                  String(s._id) === String(usuario.sedeId)
+                );
+                return {
+                  ...usuario,
+                  sedeNombre: sede?.nombre || usuario.sedeNombre
+                };
+              }
+              return usuario;
+            });
+            setUsuarios(Array.isArray(usuariosConSede) ? usuariosConSede : []);
+          } catch (err) {
+            setUsuarios(Array.isArray(data) ? data : []);
+          }
+        } catch (err) {
+          console.error('❌ Error al recargar:', err);
+        }
+      }
+    };
+
+    // Escuchar cambios de visibilidad de la página
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Recargar también cuando cambie la ruta (al volver con el botón)
+    if (empresaId && location.pathname.includes(`/empresas/${empresaId}/usuarios`) && !location.pathname.includes('/usuarios/')) {
+      console.log('🔄 Detectado retorno a lista de usuarios - recargando');
+      handleVisibilityChange();
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [location.pathname, empresaId]);
+
+  // Filtrar usuarios - Protección contra datos no válidos
+  const usuariosFiltrados = (Array.isArray(usuarios) ? usuarios : []).filter((usuario) => {
+    // Filtro por búsqueda (nombre o correo)
+    const matchBusqueda = !busqueda || 
+      usuario.nombreCompleto.toLowerCase().includes(busqueda.toLowerCase()) ||
+      usuario.correo.toLowerCase().includes(busqueda.toLowerCase());
+
+    // Filtro por cargo
+    const matchCargo = !filtroCargo || usuario.cargo?.toLowerCase().includes(filtroCargo.toLowerCase());
+
+    // Filtro por estado
+    const matchEstado = filtroEstado === 'todos' ||
+      (filtroEstado === 'activo' && usuario.activo) ||
+      (filtroEstado === 'inactivo' && !usuario.activo);
+
+    // Filtro por activo asignado - revisar tanto activoAsignadoId como activosAsignados (M:N)
+    const tieneActivoAsignado = usuario.activoAsignadoId || 
+                                (usuario.activosAsignados && usuario.activosAsignados.length > 0);
+    const matchActivo = filtroActivo === 'todos' ||
+      (filtroActivo === 'con_activo' && tieneActivoAsignado) ||
+      (filtroActivo === 'sin_activo' && !tieneActivoAsignado);
+
+    return matchBusqueda && matchCargo && matchEstado && matchActivo;
+  });
+
+  // Obtener cargos únicos para el filtro
+  const cargosUnicos = Array.from(new Set(
+    (Array.isArray(usuarios) ? usuarios : []).map(u => u.cargo).filter(Boolean)
+  ));
+
+  const showSuccessToast = (message: string) => {
+    setToastMessage(message);
+    setToastType('success');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+  };
+
+  const showErrorToast = (message: string) => {
+    setToastMessage(message);
+    setToastType('error');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 4000);
+  };
+
+  // Handlers
+  const handleActualizar = async () => {
+    if (!empresaId) return;
+    try {
+      setLoading(true);
+      const data = await getUsuariosByEmpresa(empresaId);
+      console.log('🔄 [ACTUALIZAR] Datos recibidos del backend:', data);
+      console.log('🔄 [ACTUALIZAR] Cantidad de usuarios:', Array.isArray(data) ? data.length : 'No es array');
+      console.log('🔄 [ACTUALIZAR] Usuarios activos:', Array.isArray(data) ? data.filter(u => u.activo).length : 0);
+      console.log('🔄 [ACTUALIZAR] Usuarios inactivos:', Array.isArray(data) ? data.filter(u => !u.activo).length : 0);
+      
+      // Cargar sedes para mapear los nombres
+      try {
+        const sedesData = await getSedesByEmpresa(empresaId);
+        console.log('🏪 Sedes cargadas:', sedesData);
+        
+        // Mapear nombres de sedes a cada usuario
+        const usuariosConSede = data.map((usuario: Usuario) => {
+          if (usuario.sedeId) {
+            const sede = sedesData.find((s: any) => 
+              String(s.id) === String(usuario.sedeId) || 
+              String(s._id) === String(usuario.sedeId)
+            );
+            return {
+              ...usuario,
+              sedeNombre: sede?.nombre || usuario.sedeNombre
+            };
+          }
+          return usuario;
+        });
+        
+        setUsuarios(Array.isArray(usuariosConSede) ? usuariosConSede : []);
+      } catch (err) {
+        console.error('❌ Error al cargar sedes:', err);
+        // Si falla la carga de sedes, usar los datos sin mapear
+        setUsuarios(Array.isArray(data) ? data : []);
+      }
+      
+      showSuccessToast('✅ Lista actualizada');
+    } catch (err) {
+      console.error('❌ [ACTUALIZAR] Error al actualizar:', err);
+      showErrorToast('❌ Error al actualizar');
+      setUsuarios([]); // Asegurar que siempre sea un array
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportar = async (formato: 'excel' | 'pdf') => {
+    if (!empresaId) return;
+    try {
+      const blob = await exportarUsuarios(empresaId, formato);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `usuarios_${empresaNombre}_${new Date().toISOString().split('T')[0]}.${formato === 'excel' ? 'xlsx' : 'pdf'}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      showSuccessToast(`✅ Archivo ${formato.toUpperCase()} descargado`);
+    } catch (err) {
+      showErrorToast(`❌ Error al exportar a ${formato.toUpperCase()}`);
+    }
+  };
+
+  const handleSaveUsuario = async (data: Partial<Usuario>) => {
+    if (!empresaId) return;
+    
+    console.log('🚀 [SAVE USUARIO] Iniciando guardado...');
+    console.log('📋 [SAVE USUARIO] Datos recibidos del formulario:', data);
+    console.log('🏢 [SAVE USUARIO] Empresa ID:', empresaId);
+    
+    try {
+      setIsSaving(true);
+      if (usuarioSeleccionado?.id || usuarioSeleccionado?._id) {
+        // Editar
+        console.log('✏️ [SAVE USUARIO] Modo EDICIÓN - Usuario ID:', usuarioSeleccionado.id || usuarioSeleccionado._id);
+        await updateUsuario(empresaId, usuarioSeleccionado.id || usuarioSeleccionado._id!, data);
+        showSuccessToast('✅ Usuario actualizado correctamente');
+      } else {
+        // Crear
+        const payload = { ...data, empresaId };
+        console.log('➕ [SAVE USUARIO] Modo CREACIÓN - Payload completo a enviar:', JSON.stringify(payload, null, 2));
+        
+        const result = await createUsuario(empresaId, payload);
+        console.log('✅ [SAVE USUARIO] Respuesta del backend:', result);
+        
+        showSuccessToast('✅ Usuario creado correctamente');
+      }
+      setShowFormModal(false);
+      setUsuarioSeleccionado(null);
+      await handleActualizar();
+    } catch (err: any) {
+      console.error('❌ [SAVE USUARIO] Error completo:', err);
+      console.error('❌ [SAVE USUARIO] Error response:', err?.response);
+      console.error('❌ [SAVE USUARIO] Error response data:', err?.response?.data);
+      console.error('❌ [SAVE USUARIO] Error status:', err?.response?.status);
+      
+      // Backend puede devolver el error en .message o .error
+      const errorMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Error al guardar usuario';
+      showErrorToast(`❌ ${errorMsg}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleAsignarActivo = async (data: AsignarActivoData) => {
+    if (!usuarioSeleccionado || !empresaId) return;
+    try {
+      setIsSaving(true);
+      await asignarActivo(empresaId, usuarioSeleccionado.id || usuarioSeleccionado._id!, data);
+      showSuccessToast('✅ Activo asignado correctamente');
+      setShowAsignarActivoModal(false);
+      setUsuarioSeleccionado(null);
+      await handleActualizar();
+    } catch (err: any) {
+      const errorMsg = err?.response?.data?.message || 'Error al asignar activo';
+      showErrorToast(`❌ ${errorMsg}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDesactivar = async (data: DesactivarUsuarioData) => {
+    if (!usuarioSeleccionado || !empresaId) return;
+    try {
+      setIsSaving(true);
+      await desactivarUsuario(empresaId, usuarioSeleccionado.id || usuarioSeleccionado._id!, data);
+      showSuccessToast('✅ Usuario desactivado correctamente');
+      setShowDesactivarModal(false);
+      setUsuarioSeleccionado(null);
+      await handleActualizar();
+    } catch (err: any) {
+      const errorMsg = err?.response?.data?.message || 'Error al desactivar usuario';
+      showErrorToast(`❌ ${errorMsg}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (loading && usuarios.length === 0) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-slate-50 p-8 flex items-center justify-center">
+        <div className="text-center">
+          <svg className="animate-spin h-12 w-12 text-blue-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p className="text-gray-600 mt-4">Cargando usuarios...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-slate-50 p-8">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <div className="text-center mb-4">
+              <span className="text-5xl">⚠️</span>
+              <h2 className="text-xl font-bold text-red-800 mt-4">Error al cargar el módulo</h2>
+            </div>
+            <p className="text-red-700 text-center mb-4">{error}</p>
+            {!empresaId && (
+              <p className="text-sm text-red-600 text-center mb-4">
+                💡 Debe acceder a este módulo desde una empresa específica
+              </p>
+            )}
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => navigate('/admin/empresas')}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                📋 Ver Empresas
+              </button>
+              <button
+                onClick={() => navigate(-1)}
+                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+              >
+                ← Volver
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-slate-50 p-4 md:p-8">
+      {/* Toast Notification */}
+      {showToast && (
+        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg ${toastType === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white animate-fadeIn`}>
+          {toastMessage}
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="mb-8">
+        <button
+          onClick={() => navigate(-1)}
+          className="mb-4 flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+        >
+          ← Volver
+        </button>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+              <span className="text-4xl">👥</span>
+              Usuarios - {empresaNombre}
+            </h1>
+            <p className="text-gray-600 mt-2">Gestión de usuarios de la empresa</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Botones de acción */}
+      <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => {
+              setUsuarioSeleccionado(null);
+              setShowFormModal(true);
+            }}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center gap-2"
+          >
+            ➕ Nuevo Usuario
+          </button>
+          <button
+            onClick={handleActualizar}
+            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors flex items-center gap-2"
+          >
+            🔄 Actualizar
+          </button>
+          <div className="relative">
+            <button
+              onClick={() => setMostrarFiltros(!mostrarFiltros)}
+              className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium transition-colors flex items-center gap-2"
+            >
+              🔍 Filtros {mostrarFiltros ? '▼' : '▶'}
+            </button>
+          </div>
+          <div className="ml-auto flex gap-2">
+            <button
+              onClick={() => handleExportar('excel')}
+              className="px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-colors"
+            >
+              📊 Excel
+            </button>
+            <button
+              onClick={() => handleExportar('pdf')}
+              className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
+            >
+              📊 PDF
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Panel de filtros */}
+      {mostrarFiltros && (
+        <div className="bg-white rounded-xl shadow-md p-6 mb-6 space-y-4">
+          <h3 className="font-bold text-gray-900 mb-4">Filtros de búsqueda</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Buscar por nombre o correo */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Buscar por nombre o correo
+              </label>
+              <input
+                type="text"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Cargo */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Cargo
+              </label>
+              <select
+                value={filtroCargo}
+                onChange={(e) => setFiltroCargo(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Todos</option>
+                {cargosUnicos.map((cargo) => (
+                  <option key={cargo} value={cargo}>{cargo}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Estado */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Estado
+              </label>
+              <select
+                value={filtroEstado}
+                onChange={(e) => setFiltroEstado(e.target.value as any)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="todos">Todos</option>
+                <option value="activo">🟢 Activo</option>
+                <option value="inactivo">🔴 Inactivo</option>
+              </select>
+            </div>
+
+            {/* Activo asignado */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Activo asignado
+              </label>
+              <select
+                value={filtroActivo}
+                onChange={(e) => setFiltroActivo(e.target.value as any)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="todos">Todos</option>
+                <option value="con_activo">Con activo</option>
+                <option value="sin_activo">Sin activo</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tabla de usuarios */}
+      <div className="bg-white rounded-xl shadow-md overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+              <tr>
+                <th className="px-6 py-4 text-left text-sm font-semibold">Nombre</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold">Correo</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold">Cargo</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold">Sede</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold">Estado</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold">Fecha</th>
+                <th className="px-6 py-4 text-center text-sm font-semibold">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {usuariosFiltrados.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                    📭 No hay usuarios que coincidan con los filtros
+                  </td>
+                </tr>
+              ) : (
+                usuariosFiltrados.map((usuario) => (
+                  <tr 
+                    key={usuario.id || usuario._id} 
+                    className={`hover:bg-gray-50 ${!usuario.activo ? 'bg-gray-100' : ''}`}
+                  >
+                    <td className={`px-6 py-4 text-sm font-medium ${usuario.activo ? 'text-gray-900' : 'text-gray-500'}`}>
+                      {usuario.nombreCompleto}
+                    </td>
+                    <td className={`px-6 py-4 text-sm ${usuario.activo ? 'text-gray-600' : 'text-gray-400'}`}>
+                      {usuario.correo}
+                    </td>
+                    <td className={`px-6 py-4 text-sm ${usuario.activo ? 'text-gray-600' : 'text-gray-400'}`}>
+                      {usuario.cargo || '—'}
+                    </td>
+                    <td className={`px-6 py-4 text-sm ${usuario.activo ? 'text-gray-600' : 'text-gray-400'}`}>
+                      {usuario.sedeNombre || '—'}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      {usuario.activo ? (
+                        <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">
+                          🟢 Activo
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 bg-gray-300 text-gray-600 rounded-full text-xs font-semibold">
+                          ⚫ Inactivo
+                        </span>
+                      )}
+                    </td>
+                    <td className={`px-6 py-4 text-sm ${usuario.activo ? 'text-gray-600' : 'text-gray-400'}`}>
+                      {(() => {
+                        const fecha = usuario.fechaAlta || usuario.createdAt;
+                        return fecha ? new Date(fecha).toLocaleDateString('es-PE') : '—';
+                      })()}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => navigate(`/empresas/${empresaId}/usuarios/${usuario.id || usuario._id}`)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                      >
+                        👁️ Ver
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Total de registros */}
+      <div className="mt-4 text-sm text-gray-600 text-right">
+        Mostrando {usuariosFiltrados.length} de {usuarios.length} usuarios
+      </div>
+
+      {/* Modales */}
+      {showFormModal && empresaId && (
+        <UsuarioForm
+          empresaId={empresaId}
+          empresaNombre={empresaNombre}
+          usuario={usuarioSeleccionado}
+          onSave={handleSaveUsuario}
+          onCancel={() => {
+            setShowFormModal(false);
+            setUsuarioSeleccionado(null);
+          }}
+          isSaving={isSaving}
+        />
+      )}
+
+      {showAsignarActivoModal && usuarioSeleccionado && empresaId && (
+        <AsignarActivoModal
+          empresaId={empresaId}
+          usuarioNombre={usuarioSeleccionado.nombreCompleto}
+          activoActualId={usuarioSeleccionado.activoAsignadoId}
+          activoActualCodigo={usuarioSeleccionado.activoAsignadoCodigo}
+          onSave={handleAsignarActivo}
+          onCancel={() => {
+            setShowAsignarActivoModal(false);
+            setUsuarioSeleccionado(null);
+          }}
+          isSaving={isSaving}
+        />
+      )}
+
+      {showDesactivarModal && usuarioSeleccionado && (
+        <DesactivarUsuarioModal
+          usuarioNombre={usuarioSeleccionado.nombreCompleto}
+          onConfirm={handleDesactivar}
+          onCancel={() => {
+            setShowDesactivarModal(false);
+            setUsuarioSeleccionado(null);
+          }}
+          isSaving={isSaving}
+        />
+      )}
+
+      {showHistorialModal && usuarioSeleccionado && empresaId && (
+        <HistorialUsuarioModal
+          empresaId={empresaId}
+          usuarioId={usuarioSeleccionado.id || usuarioSeleccionado._id!}
+          usuarioNombre={usuarioSeleccionado.nombreCompleto}
+          onClose={() => {
+            setShowHistorialModal(false);
+            setUsuarioSeleccionado(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}

@@ -1,5 +1,6 @@
  import { useState, useEffect } from 'react';
 import { getCatalogCategories, getTicketTypes } from "@/modules/catalogo/services/catalogoService";
+import { getServicios } from '@/modules/catalogo/services/servicioApi';
 
 interface AlcanceSLAData {
   slaActivo: boolean;
@@ -9,6 +10,10 @@ interface AlcanceSLAData {
     soporteRemoto: boolean;
     soportePresencial: boolean;
     atencionEnSede: boolean;
+  };
+  serviciosCatalogoSLA: {
+    tipo: 'todos' | 'seleccionados';
+    servicios?: string[]; // IDs de servicios seleccionados
   };
   activosCubiertos: {
     tipo: 'todos' | 'porCategoria';
@@ -40,6 +45,10 @@ const getDefaultAlcanceData = (): AlcanceSLAData => ({
     soporteRemoto: false,
     soportePresencial: false,
     atencionEnSede: false,
+  },
+  serviciosCatalogoSLA: {
+    tipo: 'todos',
+    servicios: [],
   },
   activosCubiertos: {
     tipo: 'todos',
@@ -89,6 +98,7 @@ export function AlcanceSLAForm({
   const [formData, setFormData] = useState<AlcanceSLAData>(getInitialData());
   const [availableCategories, setAvailableCategories] = useState<string[]>(categorias ?? []);
   const [availableTypes, setAvailableTypes] = useState<any[]>([]);
+  const [availableServicios, setAvailableServicios] = useState<any[]>([]);
 
   // Actualizar automáticamente el estado del SLA cuando cambie el estado del contrato o se complete
   useEffect(() => {
@@ -141,6 +151,25 @@ export function AlcanceSLAForm({
         }
       } catch (e) {
         console.warn('[AlcanceSLAForm] no se pudieron cargar tipos del catálogo', e);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, []);
+
+  // Cargar servicios del Catálogo de Servicios
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const servicios = await getServicios();
+        if (!mounted) return;
+        // Filtrar solo servicios activos
+        const serviciosActivos = servicios.filter((s: any) => s.activo === true);
+        console.log('[AlcanceSLAForm] Servicios del catálogo cargados:', serviciosActivos);
+        setAvailableServicios(serviciosActivos);
+      } catch (e) {
+        console.warn('[AlcanceSLAForm] no se pudieron cargar servicios del catálogo', e);
       }
     };
     load();
@@ -213,6 +242,21 @@ export function AlcanceSLAForm({
           sedes: actuales.includes(sedeId)
             ? actuales.filter((s) => s !== sedeId)
             : [...actuales, sedeId],
+        },
+      };
+    });
+  };
+
+  const handleToggleServicioCatalogo = (servicioId: string) => {
+    setFormData((prev) => {
+      const actuales = prev.serviciosCatalogoSLA.servicios || [];
+      return {
+        ...prev,
+        serviciosCatalogoSLA: {
+          ...prev.serviciosCatalogoSLA,
+          servicios: actuales.includes(servicioId)
+            ? actuales.filter((s) => s !== servicioId)
+            : [...actuales, servicioId],
         },
       };
     });
@@ -357,6 +401,90 @@ export function AlcanceSLAForm({
                   <span className="text-sm text-gray-700">{servicio.label}</span>
                 </label>
               ))}
+            </div>
+          </div>
+
+          {/* 3.5 Servicios cubiertos por el SLA (Origen: Catálogo de Servicios) */}
+          <div className="border-b pb-6">
+            <label className="text-sm font-semibold text-gray-900 block mb-4">
+              Servicios cubiertos por el SLA
+              <span className="text-xs font-normal text-gray-500 ml-2">(Origen: Catálogo de Servicios)</span>
+            </label>
+            <div className="space-y-4">
+              {/* Radio buttons: Todos vs Seleccionados */}
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                  <input
+                    type="radio"
+                    name="serviciosCatalogoSLA"
+                    value="todos"
+                    checked={formData.serviciosCatalogoSLA.tipo === 'todos'}
+                    onChange={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        serviciosCatalogoSLA: {
+                          ...prev.serviciosCatalogoSLA,
+                          tipo: 'todos',
+                        },
+                      }))
+                    }
+                    className="w-5 h-5 text-blue-600"
+                  />
+                  <span className="text-sm text-gray-700">🔘 Aplica a todos los servicios</span>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                  <input
+                    type="radio"
+                    name="serviciosCatalogoSLA"
+                    value="seleccionados"
+                    checked={formData.serviciosCatalogoSLA.tipo === 'seleccionados'}
+                    onChange={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        serviciosCatalogoSLA: {
+                          ...prev.serviciosCatalogoSLA,
+                          tipo: 'seleccionados',
+                          servicios: [],
+                        },
+                      }))
+                    }
+                    className="w-5 h-5 text-blue-600"
+                  />
+                  <span className="text-sm text-gray-700">🔘 Aplica solo a los servicios seleccionados</span>
+                </label>
+              </div>
+
+              {/* Mostrar lista de servicios si está seleccionado "Seleccionados" */}
+              {formData.serviciosCatalogoSLA.tipo === 'seleccionados' && (
+                <div className="ml-8 space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <label className="text-sm font-medium text-gray-700 block mb-2">Selecciona los servicios cubiertos:</label>
+                  {availableServicios.length === 0 ? (
+                    <p className="text-sm text-gray-500">No hay servicios activos en el Catálogo de Servicios.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                      {availableServicios.map((servicio) => (
+                        <label key={servicio.id} className="flex items-start gap-2 p-2 rounded hover:bg-white cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(formData.serviciosCatalogoSLA.servicios || []).includes(String(servicio.id))}
+                            onChange={() => handleToggleServicioCatalogo(String(servicio.id))}
+                            className="w-4 h-4 text-blue-600 rounded mt-0.5 flex-shrink-0"
+                          />
+                          <div className="flex-1">
+                            <span className="text-sm text-gray-900 font-medium">{servicio.nombre}</span>
+                            <span className="text-xs text-gray-500 block">{servicio.codigo}</span>
+                            {servicio.tipoServicio && (
+                              <span className="text-xs text-blue-600 block">Tipo: {servicio.tipoServicio}</span>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 mt-2">Servicios cargados desde el módulo Catálogo de Servicios</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -535,10 +663,15 @@ export function AlcanceSLAForm({
               slaActivo: false,
               aplicaA: 'incidentes',
               tipoServicioCubierto: 'incidente',
+              tiposTicketCubiertos: ['incidente'],
               serviciosCubiertos: {
                 soporteRemoto: false,
                 soportePresencial: false,
                 atencionEnSede: false,
+              },
+              serviciosCatalogoSLA: {
+                tipo: 'todos',
+                servicios: [],
               },
               activosCubiertos: {
                 tipo: 'todos',
