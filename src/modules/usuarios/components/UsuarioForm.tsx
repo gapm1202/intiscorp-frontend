@@ -26,6 +26,7 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
 
   const [motivo, setMotivo] = useState<string>('');  // Campo separado para motivo de edición
   const [sinActivo, setSinActivo] = useState(false);
+  const [activosSeleccionados, setActivosSeleccionados] = useState<string[]>([]);  // Array para múltiples activos
 
   const [sedes, setSedes] = useState<any[]>([]);
   const [activos, setActivos] = useState<any[]>([]);
@@ -143,10 +144,13 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
       return;
     }
 
-    // Si marcó "sin activo", asegurar que activoAsignadoId esté vacío o null
+    // Preparar datos: si es nuevo usuario y tiene múltiples activos seleccionados, enviarlos
     const dataToSave = {
       ...formData,
-      activoAsignadoId: sinActivo ? null : (formData.activoAsignadoId || null),
+      // Si no es edición y tiene activos seleccionados, enviarlos como array
+      ...((!usuario && activosSeleccionados.length > 0) ? { activosIds: activosSeleccionados } : {}),
+      // Mantener compatibilidad: si solo seleccionó 1, también enviarlo en activoAsignadoId
+      activoAsignadoId: sinActivo ? null : (activosSeleccionados.length === 1 ? activosSeleccionados[0] : (formData.activoAsignadoId || null)),
       ...(usuario && { motivo })  // Solo incluir motivo en ediciones
     };
 
@@ -331,6 +335,7 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
                   onChange={(e) => {
                     setSinActivo(e.target.checked);
                     if (e.target.checked) {
+                      setActivosSeleccionados([]);
                       handleChange('activoAsignadoId', '');
                     }
                   }}
@@ -341,40 +346,72 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
                 </label>
               </div>
 
-              {/* Selector de activo (solo si NO está marcado "sin activo") */}
+              {/* Selector de activos múltiples (solo si NO está marcado "sin activo") */}
               {!sinActivo && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Activo asignado
+                    Activos asignados (puede seleccionar varios)
                   </label>
-                  <select
-                    value={formData.activoAsignadoId || ''}
-                    onChange={(e) => handleChange('activoAsignadoId', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={!formData.sedeId}
-                  >
-                    <option value="">Seleccione un activo</option>
+                  
+                  {/* Lista de activos disponibles con checkboxes */}
+                  <div className="border border-gray-300 rounded-lg max-h-64 overflow-y-auto">
                     {loadingActivos ? (
-                      <option disabled>⏳ Cargando activos de la sede...</option>
+                      <div className="p-4 text-center text-gray-500">
+                        ⏳ Cargando activos de la sede...
+                      </div>
                     ) : !formData.sedeId ? (
-                      <option disabled>⚠️ Primero seleccione una sede</option>
+                      <div className="p-4 text-center text-gray-500">
+                        ⚠️ Primero seleccione una sede
+                      </div>
                     ) : activos.length === 0 ? (
-                      <option disabled>❌ No hay activos disponibles en esta sede</option>
+                      <div className="p-4 text-center text-gray-500">
+                        ❌ No hay activos disponibles en esta sede
+                      </div>
                     ) : (
-                      activos.map((activo) => {
-                        // Obtener el código del activo priorizando asset_id
-                        const codigo = activo.asset_id || activo.assetId || activo.codigo || activo.codigoActivo || activo.id || activo._id || 'Sin código';
-                        return (
-                          <option key={activo.id || activo._id} value={activo.id || activo._id}>
-                            {codigo}
-                          </option>
-                        );
-                      })
+                      <div className="divide-y divide-gray-200">
+                        {activos.map((activo) => {
+                          const activoId = activo.id || activo._id;
+                          const codigo = activo.asset_id || activo.assetId || activo.codigo || activo.codigoActivo || 'Sin código';
+                          const isSelected = activosSeleccionados.includes(String(activoId));
+                          
+                          return (
+                            <label
+                              key={activoId}
+                              className={`flex items-center gap-3 p-3 cursor-pointer transition-colors ${
+                                isSelected ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setActivosSeleccionados(prev => [...prev, String(activoId)]);
+                                  } else {
+                                    setActivosSeleccionados(prev => prev.filter(id => id !== String(activoId)));
+                                  }
+                                }}
+                                className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                              />
+                              <span className="flex-1 font-medium text-gray-900">{codigo}</span>
+                              {isSelected && <span className="text-blue-600 text-sm font-semibold">✓ Seleccionado</span>}
+                            </label>
+                          );
+                        })}
+                      </div>
                     )}
-                  </select>
+                  </div>
+                  
+                  {/* Contador de activos seleccionados */}
+                  {activosSeleccionados.length > 0 && (
+                    <p className="text-xs text-blue-600 mt-2 flex items-center gap-1 font-semibold">
+                      ✅ {activosSeleccionados.length} activo{activosSeleccionados.length !== 1 ? 's' : ''} seleccionado{activosSeleccionados.length !== 1 ? 's' : ''}
+                    </p>
+                  )}
+                  
                   {formData.sedeId && activos.length > 0 && (
                     <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                      ✅ Mostrando {activos.length} activo{activos.length !== 1 ? 's' : ''} disponible{activos.length !== 1 ? 's' : ''} de esta sede
+                      📋 Mostrando {activos.length} activo{activos.length !== 1 ? 's' : ''} disponible{activos.length !== 1 ? 's' : ''} de esta sede
                     </p>
                   )}
                 </div>
@@ -386,9 +423,10 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
                   <span>
                     <strong>Reglas importantes:</strong><br />
                     • Marque "Sin activo asignado" si el usuario no tiene equipo<br />
-                    • Si tiene activo, primero seleccione la sede para cargar sus activos<br />
-                    • Solo se muestran activos disponibles de la sede<br />
-                    • El activo puede cambiarse después desde las acciones
+                    • Puede seleccionar múltiples activos marcando las casillas<br />
+                    • Primero seleccione la sede para ver los activos disponibles<br />
+                    • Un mismo activo puede estar asignado a varios usuarios<br />
+                    • Puede agregar o cambiar activos después desde las acciones
                   </span>
                 </p>
               </div>

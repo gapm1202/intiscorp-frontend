@@ -81,8 +81,22 @@ export const getUsuariosByEmpresa = async (empresaId: string, sedeId?: string): 
   console.log('📡 [SERVICE] Respuesta de getUsuariosByEmpresa:', response.data);
   console.log('📡 [SERVICE] Usuarios recibidos:', Array.isArray(response.data) ? response.data.length : 'no es array');
   
+  // Log detallado de TODOS los usuarios para debug
+  const data = Array.isArray(response.data) ? response.data : response.data.data || [];
+  if (data.length > 0) {
+    console.log('📡 [SERVICE - PRIMER USUARIO COMPLETO]:', JSON.stringify(data[0], null, 2));
+    console.log('📡 [SERVICE - TODOS LOS USUARIOS]:');
+    data.forEach((user: any, index: number) => {
+      console.log(`  Usuario ${index + 1} (ID: ${user.id}):`, {
+        nombre: user.nombreCompleto,
+        activosAsignados: user.activosAsignados?.length || 0,
+        tieneActivos: Array.isArray(user.activosAsignados) && user.activosAsignados.length > 0
+      });
+    });
+  }
+  
   // Backend devuelve { data: [...], success: true }, extraer el array
-  return Array.isArray(response.data) ? response.data : response.data.data || [];
+  return data;
 };
 
 export const getUsuarioById = async (empresaId: string, usuarioId: string): Promise<Usuario> => {

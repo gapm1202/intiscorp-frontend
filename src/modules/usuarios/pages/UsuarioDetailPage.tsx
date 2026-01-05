@@ -53,13 +53,19 @@ export default function UsuarioDetailPage() {
     try {
       setLoading(true);
       const data = await getUsuariosByEmpresa(empresaId);
+      console.log('🔍 [CARGAR USUARIO] Total usuarios recibidos:', data.length);
+      console.log('🔍 [CARGAR USUARIO] Buscando usuario con ID:', usuarioId);
+      
       const usuarioEncontrado = data.find((u: Usuario) => 
-        (u.id === usuarioId || u._id === usuarioId)
+        (u.id === usuarioId || u._id === usuarioId || String(u.id) === String(usuarioId) || String(u._id) === String(usuarioId))
       );
       
       if (usuarioEncontrado) {
         console.log('✅ Usuario encontrado:', usuarioEncontrado);
+        console.log('✅ Usuario encontrado JSON:', JSON.stringify(usuarioEncontrado, null, 2));
         console.log('📍 SedeId del usuario:', usuarioEncontrado.sedeId);
+        console.log('🔍 activosAsignados del usuario:', usuarioEncontrado.activosAsignados);
+        console.log('🔍 activoAsignadoId (legacy):', usuarioEncontrado.activoAsignadoId);
         
         setUsuario(usuarioEncontrado);
         setError(null);
