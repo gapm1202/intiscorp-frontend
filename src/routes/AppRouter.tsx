@@ -15,6 +15,7 @@ import PublicReportPage from "../modules/public/pages/PublicReportPage";
 import PublicTicketStatusPage from "../modules/public/pages/PublicTicketStatusPage";
 import CatalogoCategoriasPage from "../modules/catalogo/pages/CatalogoCategoriasPage";
 import CatalogoServiciosPage from "../modules/catalogo/pages/CatalogoServiciosPage";
+import CatalogoCorreosPage from "../modules/catalogo/pages/CatalogoCorreosPage";
 import TicketsPage from "../modules/tickets/pages/TicketsPage";
 import UsuariosEmpresaPage from "../modules/usuarios/pages/UsuariosEmpresaPage";
 import UsuarioDetailPage from "../modules/usuarios/pages/UsuarioDetailPage";
@@ -121,6 +122,16 @@ const AppRouter = () => {
             <RoleRoute role="admin">
               <AdminLayout>
                 <CatalogoServiciosPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/catalogo-correos"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <CatalogoCorreosPage />
               </AdminLayout>
             </RoleRoute>
           }

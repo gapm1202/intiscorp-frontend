@@ -325,6 +325,12 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                         >
                           Catálogo de Servicios
                         </button>
+                        <button
+                          onClick={() => guardedNavigate('/admin/catalogo-correos')}
+                          className="w-full text-left text-xs py-2 px-3 rounded-md hover:bg-subtle transition-colors text-slate-700"
+                        >
+                          Catálogo de Correos
+                        </button>
                       </div>
                     )}
                   </li>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { Usuario } from '../services/usuariosService';
 import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
 import { getInventarioByEmpresa, getInventarioBySede } from '@/modules/inventario/services/inventarioService';
+import { getAreasByEmpresa } from '@/modules/inventario/services/areasService';
 
 interface UsuarioFormProps {
   empresaId: string;
@@ -22,6 +23,10 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
     telefono: '',
     observaciones: '',
     activoAsignadoId: '',
+    tipoDocumento: 'DNI',
+    numeroDocumento: '',
+    areaId: '',
+    tipoDocumentoPersonalizado: '',
   });
 
   const [motivo, setMotivo] = useState<string>('');  // Campo separado para motivo de edición
@@ -30,8 +35,11 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
 
   const [sedes, setSedes] = useState<any[]>([]);
   const [activos, setActivos] = useState<any[]>([]);
+  const [areas, setAreas] = useState<any[]>([]);
   const [loadingSedes, setLoadingSedes] = useState(false);
   const [loadingActivos, setLoadingActivos] = useState(false);
+  const [loadingAreas, setLoadingAreas] = useState(false);
+  const [otroTipoDocumento, setOtroTipoDocumento] = useState('');
 
   useEffect(() => {
     if (usuario) {
@@ -44,6 +52,10 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
         telefono: usuario.telefono || '',
         observaciones: usuario.observaciones || '',
         activoAsignadoId: usuario.activoAsignadoId || '',
+        tipoDocumento: (usuario as any).tipoDocumento || 'DNI',
+        numeroDocumento: (usuario as any).numeroDocumento || '',
+        areaId: (usuario as any).areaId || '',
+        tipoDocumentoPersonalizado: (usuario as any).tipoDocumentoPersonalizado || '',
       });
       // Si el usuario no tiene activo asignado, marcar "sin activo"
       setSinActivo(!usuario.activoAsignadoId);
@@ -65,6 +77,24 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
     };
 
     loadSedes();
+  }, [empresaId]);
+
+  // Cargar áreas de la empresa
+  useEffect(() => {
+    const loadAreas = async () => {
+      setLoadingAreas(true);
+      try {
+        const data = await getAreasByEmpresa(empresaId);
+        const areasArray = Array.isArray(data) ? data : data?.data || [];
+        setAreas(areasArray);
+      } catch (error) {
+        console.error('Error cargando áreas:', error);
+      } finally {
+        setLoadingAreas(false);
+      }
+    };
+
+    loadAreas();
   }, [empresaId]);
 
   // Cargar activos cuando cambie la sede seleccionada
@@ -137,6 +167,14 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
       alert('Por favor ingrese un correo electrónico válido');
       return;
     }
+    if (!formData.numeroDocumento?.trim()) {
+      alert('Por favor ingrese el número de documento');
+      return;
+    }
+    if (formData.tipoDocumento === 'Otro' && !formData.tipoDocumentoPersonalizado?.trim()) {
+      alert('Por favor especifique el tipo de documento');
+      return;
+    }
 
     // Si es edición, validar que haya motivo
     if (usuario && (!motivo || motivo.trim().length < 10)) {
@@ -178,6 +216,32 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
             </div>
 
             {/* Empresa (bloqueada) */}
+            {/* Código de usuario - Solo mostrar en creación */}
+            {!usuario && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Código de Usuario
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value="HUA-USR-0001"
+                    disabled
+                    className="w-full px-4 py-3 pr-24 border-2 border-blue-300 rounded-lg bg-blue-50 text-blue-900 font-mono font-bold cursor-not-allowed"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 bg-blue-600 text-white px-3 py-1 rounded-md text-xs font-bold">
+                    AUTO
+                  </span>
+                </div>
+                <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  Se generará automáticamente al crear el usuario (siempre inicia en 0001)
+                </p>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Empresa
@@ -256,6 +320,86 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
               />
             </div>
 
+            {/* Tipo de Documento */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Tipo de Documento <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.tipoDocumento}
+                onChange={(e) => {
+                  handleChange('tipoDocumento', e.target.value);
+                  // Limpiar campo personalizado si no es "Otro"
+                  if (e.target.value !== 'Otro') {
+                    handleChange('tipoDocumentoPersonalizado', '');
+                  }
+                }}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              >
+                <option value="DNI">DNI</option>
+                <option value="CE">Carnet de Extranjería (CE)</option>
+                <option value="Pasaporte">Pasaporte</option>
+                <option value="RUC">RUC</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
+
+            {/* Campo condicional para tipo de documento personalizado */}
+            {formData.tipoDocumento === 'Otro' && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Especificar Tipo de Documento <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.tipoDocumentoPersonalizado}
+                  onChange={(e) => handleChange('tipoDocumentoPersonalizado', e.target.value)}
+                  placeholder="Ej: Cédula, Licencia de Conducir, etc."
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+                <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  Ingrese el tipo de documento que no está en la lista
+                </p>
+              </div>
+            )}
+
+            {/* Número de Documento */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Número de Documento <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.numeroDocumento}
+                onChange={(e) => handleChange('numeroDocumento', e.target.value)}
+                placeholder={
+                  formData.tipoDocumento === 'DNI' ? 'Ej: 12345678' :
+                  formData.tipoDocumento === 'CE' ? 'Ej: 001234567' :
+                  formData.tipoDocumento === 'Pasaporte' ? 'Ej: ABC123456' :
+                  formData.tipoDocumento === 'RUC' ? 'Ej: 20123456789' :
+                  'Ingrese el número de documento'
+                }
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+                maxLength={
+                  formData.tipoDocumento === 'DNI' ? 8 : 
+                  formData.tipoDocumento === 'RUC' ? 11 : 
+                  undefined
+                }
+              />
+              {formData.tipoDocumento === 'DNI' && (
+                <p className="text-xs text-gray-500 mt-1">DNI debe tener 8 dígitos</p>
+              )}
+              {formData.tipoDocumento === 'RUC' && (
+                <p className="text-xs text-gray-500 mt-1">RUC debe tener 11 dígitos</p>
+              )}
+            </div>
+
             {/* Cargo / Rol */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -282,6 +426,35 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
                 placeholder="Ej: +51 999 999 999"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+            </div>
+
+            {/* Área */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                Área
+                <span className="text-xs text-gray-500 font-normal">(Opcional)</span>
+              </label>
+              <select
+                value={formData.areaId}
+                onChange={(e) => handleChange('areaId', e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Seleccionar área</option>
+                {loadingAreas ? (
+                  <option disabled>Cargando áreas...</option>
+                ) : areas.length === 0 ? (
+                  <option disabled>No hay áreas disponibles</option>
+                ) : (
+                  areas.map((area) => (
+                    <option key={area.id || area._id} value={area.id || area._id}>
+                      {area.nombre}
+                    </option>
+                  ))
+                )}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                El área ayuda a organizar a los usuarios por departamento
+              </p>
             </div>
 
             {/* Observaciones */}

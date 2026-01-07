@@ -407,11 +407,14 @@ export default function UsuariosEmpresaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-slate-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-surface via-subtle to-surface p-4 md:p-8">
       {/* Toast Notification */}
       {showToast && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg ${toastType === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white animate-fadeIn`}>
-          {toastMessage}
+        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-xl shadow-card animate-fadeIn ${toastType === 'success' ? 'bg-accent-green text-white' : 'bg-red-500 text-white'}`}>
+          <div className="flex items-center gap-2">
+            <span className="text-xl">{toastType === 'success' ? '✓' : '✕'}</span>
+            <span className="font-medium">{toastMessage}</span>
+          </div>
         </div>
       )}
 
@@ -419,59 +422,87 @@ export default function UsuariosEmpresaPage() {
       <div className="mb-8">
         <button
           onClick={() => navigate(-1)}
-          className="mb-4 flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+          className="mb-6 flex items-center gap-2 text-primary hover:text-primary-600 font-medium transition-all hover:gap-3"
         >
           ← Volver
         </button>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <span className="text-4xl">👥</span>
-              Usuarios - {empresaNombre}
-            </h1>
-            <p className="text-gray-600 mt-2">Gestión de usuarios de la empresa</p>
+        
+        {/* Header Card */}
+        <div className="bg-white rounded-2xl shadow-card overflow-hidden mb-6 border border-slate-100">
+          <div className="h-24 bg-gradient-to-r from-primary via-[#6875f8] to-indigo-600"></div>
+          <div className="px-8 pb-8 -mt-12 flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <div className="w-20 h-20 rounded-xl bg-white shadow-lg flex items-center justify-center ring-4 ring-white shrink-0">
+                <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-primary to-indigo-600 text-white flex items-center justify-center text-2xl font-bold">
+                  👥
+                </div>
+              </div>
+              <div className="pt-4">
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">Usuarios - {empresaNombre}</h1>
+                <p className="text-muted font-medium">Gestión y control de usuarios de la empresa</p>
+              </div>
+            </div>
+            <div className="pt-4">
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl px-6 py-3">
+                <p className="text-sm font-semibold text-slate-600 mb-1">Total de usuarios</p>
+                <p className="text-3xl font-bold text-primary">{usuarios.length}</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Botones de acción */}
-      <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+      <div className="bg-white rounded-2xl shadow-card border border-slate-100 p-6 mb-6">
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => {
               setUsuarioSeleccionado(null);
               setShowFormModal(true);
             }}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center gap-2"
+            className="px-6 py-3 bg-gradient-to-r from-[#5061f7] to-[#4453e6] text-white rounded-xl hover:shadow-lg font-semibold transition-all flex items-center gap-2 hover:scale-105"
           >
-            ➕ Nuevo Usuario
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Nuevo Usuario
           </button>
           <button
             onClick={handleActualizar}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors flex items-center gap-2"
+            className="px-6 py-3 bg-white border-2 border-accent-green text-accent-green rounded-xl hover:bg-accent-green hover:text-white font-semibold transition-all flex items-center gap-2"
           >
-            🔄 Actualizar
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Actualizar
           </button>
-          <div className="relative">
-            <button
-              onClick={() => setMostrarFiltros(!mostrarFiltros)}
-              className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium transition-colors flex items-center gap-2"
-            >
-              🔍 Filtros {mostrarFiltros ? '▼' : '▶'}
-            </button>
-          </div>
+          <button
+            onClick={() => setMostrarFiltros(!mostrarFiltros)}
+            className="px-6 py-3 bg-white border-2 border-slate-300 text-slate-700 rounded-xl hover:border-[#5061f7] hover:text-[#5061f7] font-semibold transition-all flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            Filtros {mostrarFiltros ? '▲' : '▼'}
+          </button>
           <div className="ml-auto flex gap-2">
             <button
               onClick={() => handleExportar('excel')}
-              className="px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-colors"
+              className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:shadow-lg font-semibold transition-all flex items-center gap-2"
             >
-              📊 Excel
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Excel
             </button>
             <button
               onClick={() => handleExportar('pdf')}
-              className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
+              className="px-6 py-3 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl hover:shadow-lg font-semibold transition-all flex items-center gap-2"
             >
-              📊 PDF
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              PDF
             </button>
           </div>
         </div>
@@ -479,34 +510,41 @@ export default function UsuariosEmpresaPage() {
 
       {/* Panel de filtros */}
       {mostrarFiltros && (
-        <div className="bg-white rounded-xl shadow-md p-6 mb-6 space-y-4">
-          <h3 className="font-bold text-gray-900 mb-4">Filtros de búsqueda</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-2xl shadow-card border border-slate-100 p-8 mb-6 space-y-4">
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b-2 border-primary/20">
+            <div className="p-2.5 bg-gradient-to-br from-primary/10 to-indigo-50 rounded-lg">
+              <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-slate-900">Filtros de búsqueda</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Buscar por nombre o correo */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Buscar por nombre o correo
+              <label className="block text-sm font-bold text-slate-700 mb-2">
+                🔎 Buscar por nombre o correo
               </label>
               <input
                 type="text"
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="Escriba para buscar..."
+                className="w-full px-4 py-2.5 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-slate-50 hover:bg-white font-medium"
               />
             </div>
 
             {/* Cargo */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cargo
+              <label className="block text-sm font-bold text-slate-700 mb-2">
+                💼 Cargo
               </label>
               <select
                 value={filtroCargo}
                 onChange={(e) => setFiltroCargo(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2.5 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-slate-50 hover:bg-white font-medium"
               >
-                <option value="">Todos</option>
+                <option value="">Todos los cargos</option>
                 {cargosUnicos.map((cargo) => (
                   <option key={cargo} value={cargo}>{cargo}</option>
                 ))}
@@ -515,33 +553,33 @@ export default function UsuariosEmpresaPage() {
 
             {/* Estado */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Estado
+              <label className="block text-sm font-bold text-slate-700 mb-2">
+                📊 Estado del usuario
               </label>
               <select
                 value={filtroEstado}
                 onChange={(e) => setFiltroEstado(e.target.value as any)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2.5 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-slate-50 hover:bg-white font-medium"
               >
-                <option value="todos">Todos</option>
-                <option value="activo">🟢 Activo</option>
-                <option value="inactivo">🔴 Inactivo</option>
+                <option value="todos">Todos los estados</option>
+                <option value="activo">✓ Activo</option>
+                <option value="inactivo">✕ Inactivo</option>
               </select>
             </div>
 
             {/* Activo asignado */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Activo asignado
+              <label className="block text-sm font-bold text-slate-700 mb-2">
+                🖥️ Activo asignado
               </label>
               <select
                 value={filtroActivo}
                 onChange={(e) => setFiltroActivo(e.target.value as any)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2.5 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-slate-50 hover:bg-white font-medium"
               >
                 <option value="todos">Todos</option>
-                <option value="con_activo">Con activo</option>
-                <option value="sin_activo">Sin activo</option>
+                <option value="con_activo">Con activo asignado</option>
+                <option value="sin_activo">Sin activo asignado</option>
               </select>
             </div>
           </div>
@@ -549,68 +587,85 @@ export default function UsuariosEmpresaPage() {
       )}
 
       {/* Tabla de usuarios */}
-      <div className="bg-white rounded-xl shadow-md overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-card border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-              <tr>
-                <th className="px-6 py-4 text-left text-sm font-semibold">Nombre</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold">Correo</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold">Cargo</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold">Sede</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold">Estado</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold">Fecha</th>
-                <th className="px-6 py-4 text-center text-sm font-semibold">Acciones</th>
+            <thead>
+              <tr className="bg-gradient-to-r from-primary via-[#6875f8] to-indigo-600">
+                <th className="px-6 py-4 text-left text-sm font-bold text-white">Nombre Completo</th>
+                <th className="px-6 py-4 text-left text-sm font-bold text-white">Correo Electrónico</th>
+                <th className="px-6 py-4 text-left text-sm font-bold text-white">Cargo</th>
+                <th className="px-6 py-4 text-left text-sm font-bold text-white">Sede</th>
+                <th className="px-6 py-4 text-left text-sm font-bold text-white">Estado</th>
+                <th className="px-6 py-4 text-left text-sm font-bold text-white">Fecha de Alta</th>
+                <th className="px-6 py-4 text-center text-sm font-bold text-white">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-slate-100">
               {usuariosFiltrados.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                    📭 No hay usuarios que coincidan con los filtros
+                  <td colSpan={7} className="px-6 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="text-6xl text-slate-200">📭</div>
+                      <p className="text-slate-500 font-semibold">No hay usuarios que coincidan con los filtros</p>
+                      <p className="text-sm text-muted">Intenta ajustar tus criterios de búsqueda</p>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 usuariosFiltrados.map((usuario) => (
                   <tr 
                     key={usuario.id || usuario._id} 
-                    className={`hover:bg-gray-50 ${!usuario.activo ? 'bg-gray-100' : ''}`}
+                    className={`transition-all ${!usuario.activo ? 'bg-slate-50/50' : 'hover:bg-gradient-to-r hover:from-blue-50/30 hover:to-transparent'}`}
                   >
-                    <td className={`px-6 py-4 text-sm font-medium ${usuario.activo ? 'text-gray-900' : 'text-gray-500'}`}>
-                      {usuario.nombreCompleto}
+                    <td className={`px-6 py-4 text-sm font-bold ${usuario.activo ? 'text-slate-900' : 'text-slate-400'}`}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${usuario.activo ? 'bg-accent-green' : 'bg-slate-300'}`}></div>
+                        {usuario.nombreCompleto}
+                      </div>
                     </td>
-                    <td className={`px-6 py-4 text-sm ${usuario.activo ? 'text-gray-600' : 'text-gray-400'}`}>
+                    <td className={`px-6 py-4 text-sm font-medium ${usuario.activo ? 'text-slate-600' : 'text-slate-400'}`}>
                       {usuario.correo}
                     </td>
-                    <td className={`px-6 py-4 text-sm ${usuario.activo ? 'text-gray-600' : 'text-gray-400'}`}>
-                      {usuario.cargo || '—'}
+                    <td className={`px-6 py-4 text-sm font-medium ${usuario.activo ? 'text-slate-600' : 'text-slate-400'}`}>
+                      {usuario.cargo || <span className="text-muted">—</span>}
                     </td>
-                    <td className={`px-6 py-4 text-sm ${usuario.activo ? 'text-gray-600' : 'text-gray-400'}`}>
-                      {usuario.sedeNombre || '—'}
+                    <td className={`px-6 py-4 text-sm font-medium ${usuario.activo ? 'text-slate-600' : 'text-slate-400'}`}>
+                      {usuario.sedeNombre || <span className="text-muted">—</span>}
                     </td>
                     <td className="px-6 py-4 text-sm">
                       {usuario.activo ? (
-                        <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">
-                          🟢 Activo
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-bold">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+                          </svg>
+                          ACTIVO
                         </span>
                       ) : (
-                        <span className="px-3 py-1 bg-gray-300 text-gray-600 rounded-full text-xs font-semibold">
-                          ⚫ Inactivo
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 border border-slate-300 text-slate-600 rounded-lg text-xs font-bold">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"/>
+                          </svg>
+                          INACTIVO
                         </span>
                       )}
                     </td>
-                    <td className={`px-6 py-4 text-sm ${usuario.activo ? 'text-gray-600' : 'text-gray-400'}`}>
+                    <td className={`px-6 py-4 text-sm font-medium ${usuario.activo ? 'text-slate-600' : 'text-slate-400'}`}>
                       {(() => {
                         const fecha = usuario.fechaAlta || usuario.createdAt;
-                        return fecha ? new Date(fecha).toLocaleDateString('es-PE') : '—';
+                        return fecha ? new Date(fecha).toLocaleDateString('es-PE') : <span className="text-muted">—</span>;
                       })()}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <button
                         onClick={() => navigate(`/empresas/${empresaId}/usuarios/${usuario.id || usuario._id}`)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                        className="px-4 py-2 bg-[#5061f7] text-white rounded-xl hover:bg-[#4453e6] hover:shadow-lg text-sm font-semibold transition-all inline-flex items-center gap-2"
                       >
-                        👁️ Ver
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        Ver
                       </button>
                     </td>
                   </tr>
@@ -622,8 +677,12 @@ export default function UsuariosEmpresaPage() {
       </div>
 
       {/* Total de registros */}
-      <div className="mt-4 text-sm text-gray-600 text-right">
-        Mostrando {usuariosFiltrados.length} de {usuarios.length} usuarios
+      <div className="mt-6 flex items-center justify-end gap-2">
+        <div className="bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-xl px-6 py-3">
+          <p className="text-sm font-bold text-slate-700">
+            Mostrando <span className="text-[#5061f7] text-lg">{usuariosFiltrados.length}</span> de <span className="text-lg">{usuarios.length}</span> usuarios
+          </p>
+        </div>
       </div>
 
       {/* Modales */}
