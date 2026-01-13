@@ -11,9 +11,10 @@ interface UsuarioFormProps {
   onSave: (data: Partial<Usuario>) => void;
   onCancel: () => void;
   isSaving?: boolean;
+  correosSecundarios?: string[];
 }
 
-export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCancel, isSaving }: UsuarioFormProps) {
+export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCancel, isSaving, correosSecundarios }: UsuarioFormProps) {
   const [formData, setFormData] = useState<Partial<Usuario>>({
     empresaId,
     sedeId: '',
@@ -32,6 +33,7 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
   const [motivo, setMotivo] = useState<string>('');  // Campo separado para motivo de edición
   const [sinActivo, setSinActivo] = useState(false);
   const [activosSeleccionados, setActivosSeleccionados] = useState<string[]>([]);  // Array para múltiples activos
+  const [modoCorreo, setModoCorreo] = useState<'nuevo' | 'existente'>('nuevo'); // Control para correos
 
   const [sedes, setSedes] = useState<any[]>([]);
   const [activos, setActivos] = useState<any[]>([]);
@@ -47,7 +49,7 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
         empresaId: usuario.empresaId,
         sedeId: usuario.sedeId,
         nombreCompleto: usuario.nombreCompleto,
-        correo: usuario.correo,
+        correo: usuario.correo || '',
         cargo: usuario.cargo || '',
         telefono: usuario.telefono || '',
         observaciones: usuario.observaciones || '',
@@ -310,14 +312,97 @@ export function UsuarioForm({ empresaId, empresaNombre, usuario, onSave, onCance
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Correo electrónico <span className="text-red-500">*</span>
               </label>
-              <input
-                type="email"
-                value={formData.correo}
-                onChange={(e) => handleChange('correo', e.target.value)}
-                placeholder="Ej: juan.perez@empresa.com"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
+              
+              {/* Si el usuario NO tiene correo (fue reasignado), mostrar mensaje de ayuda */}
+              {(() => {
+                console.log('🔍 DEBUG - Usuario correo en Form:', usuario?.correo, 'tipo:', typeof usuario?.correo);
+                if (usuario && !usuario.correo) {
+                  return (
+                    <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl">⚠️</span>
+                        <div>
+                          <p className="text-sm font-semibold text-amber-900 mb-1">
+                            Este usuario no tiene correo principal
+                          </p>
+                          <p className="text-xs text-amber-700">
+                            Vaya a la pestaña <strong>Gestión de Correos</strong> y agregue un nuevo correo marcándolo como principal.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                } else if (correosSecundarios && correosSecundarios.length > 0) {
+                  return (
+                    /* Si hay correos secundarios, mostrar opciones */
+                    <div className="space-y-3">
+                      {/* Botones de opción */}
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setModoCorreo('nuevo')}
+                          className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                            modoCorreo === 'nuevo'
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                    >
+                      ✍️ Escribir nuevo correo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModoCorreo('existente')}
+                      className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                        modoCorreo === 'existente'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      🔽 Seleccionar existente
+                    </button>
+                  </div>
+
+                  {/* Campo según la opción elegida */}
+                  {modoCorreo === 'nuevo' ? (
+                    <input
+                      type="email"
+                      value={formData.correo}
+                      onChange={(e) => handleChange('correo', e.target.value)}
+                      placeholder="Ej: juan.perez@empresa.com"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  ) : (
+                    <select
+                      value={formData.correo}
+                      onChange={(e) => handleChange('correo', e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    >
+                      <option value="">Seleccione un correo secundario</option>
+                      {correosSecundarios.map((correo, index) => (
+                        <option key={index} value={correo}>
+                          {correo}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                  );
+                } else {
+                  return (
+                    /* Si NO hay correos secundarios, solo input normal */
+                    <input
+                      type="email"
+                      value={formData.correo}
+                      onChange={(e) => handleChange('correo', e.target.value)}
+                      placeholder="Ej: juan.perez@empresa.com"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  );
+                }
+              })()}
             </div>
 
             {/* Tipo de Documento */}

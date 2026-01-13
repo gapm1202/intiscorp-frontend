@@ -14,6 +14,7 @@ import { UsuarioForm } from '../components/UsuarioForm';
 import { AsignarActivoModal } from '../components/AsignarActivoModal';
 import { CambiarActivoModal } from '../components/CambiarActivoModal';
 import { DesactivarUsuarioModal } from '../components/DesactivarUsuarioModal';
+import { GestionCorreosTab } from '../components/GestionCorreosTab';
 
 // Componente para el contenido del historial
 function HistorialContent({ empresaId, usuarioId }: { empresaId: string; usuarioId: string }) {
@@ -262,6 +263,9 @@ export default function UsuarioDetailPage() {
   const [showCambiarActivoModal, setShowCambiarActivoModal] = useState(false);
   const [showDesactivarModal, setShowDesactivarModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Correos secundarios para el formulario
+  const [correosSecundarios, setCorreosSecundarios] = useState<string[]>([]);
 
   // Toast
   const [showToast, setShowToast] = useState(false);
@@ -622,7 +626,14 @@ export default function UsuarioDetailPage() {
             </div>
             <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-4 border border-blue-200">
               <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Correo Electrónico</label>
-              <p className="text-slate-900 font-semibold mt-1 break-all">{usuario.correo}</p>
+              {(() => {
+                console.log('🔍 DEBUG - Usuario correo en Datos Generales:', usuario.correo, 'tipo:', typeof usuario.correo);
+                return usuario.correo ? (
+                  <p className="text-slate-900 font-semibold mt-1 break-all">{usuario.correo}</p>
+                ) : (
+                  <p className="text-amber-600 font-semibold mt-1 italic">⚠️ Establezca un correo principal</p>
+                );
+              })()}
             </div>
             <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-xl p-4 border border-purple-200">
               <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Cargo</label>
@@ -780,29 +791,20 @@ export default function UsuarioDetailPage() {
         <HistorialContent empresaId={empresaId!} usuarioId={usuario.id || usuario._id!} />
       )}
       {/* Pestaña de Gestión de Correos */}
-      {activeTab === 'correos' && (
-        <div className="bg-white rounded-2xl shadow-card border border-slate-100 p-8">
-          <div className="flex items-center gap-3 mb-8 pb-4 border-b-2 border-[#5061f7]/20">
-            <div className="p-2.5 bg-gradient-to-br from-[#5061f7]/10 to-indigo-50 rounded-lg">
-              <svg className="w-5 h-5 text-[#5061f7]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">Gestión de Correos</h2>
-              <p className="text-sm text-slate-500 mt-0.5">Administre los correos enviados al usuario</p>
-            </div>
-          </div>
-
-          {/* Contenido temporal */}
-          <div className="text-center py-12">
-            <svg className="w-20 h-20 text-slate-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-            <p className="text-slate-500 text-lg font-semibold">Sección de Gestión de Correos</p>
-            <p className="text-slate-400 text-sm mt-2">Pendiente de implementación</p>
-          </div>
-        </div>
+      {activeTab === 'correos' && usuario && (
+        <GestionCorreosTab
+          empresaId={empresaId!}
+          usuarioId={usuario.id || usuario._id!}
+          correoUsuario={usuario.correo}
+          usuarioNombre={usuario.nombreCompleto}
+          empresaNombre={empresaNombre}
+          sedeNombre={sedeNombre}
+          usuarioActivo={usuario.activo}
+          onEditarUsuario={(correosSecundarios) => {
+            setCorreosSecundarios(correosSecundarios || []);
+            setShowFormModal(true);
+          }}
+        />
       )}
       {/* Modales */}
       {showFormModal && usuario && (
@@ -811,8 +813,12 @@ export default function UsuarioDetailPage() {
           empresaId={empresaId!}
           empresaNombre={empresaNombre}
           onSave={handleEditarUsuario}
-          onCancel={() => setShowFormModal(false)}
+          onCancel={() => {
+            setShowFormModal(false);
+            setCorreosSecundarios([]);
+          }}
           isSaving={isSaving}
+          correosSecundarios={correosSecundarios}
         />
       )}
 
