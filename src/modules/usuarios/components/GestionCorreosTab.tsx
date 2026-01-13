@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import type { CorreoUsuario, ConfigurarCorreoData } from '../services/correosUsuarioService';
+import type { CorreoUsuario, ConfigurarCorreoData, UsuarioActivo, UsuarioCompartido, HistorialCorreo } from '../services/correosUsuarioService';
 import { correosUsuarioService } from '../services/correosUsuarioService';
 import type { PlataformaCorreo } from '@/modules/catalogo/services/plataformasService';
 import type { TipoCorreo } from '@/modules/catalogo/services/tiposCorreoService';
@@ -57,11 +57,21 @@ export function GestionCorreosTab({ empresaId, usuarioId, correoUsuario, usuario
   const [showModalDesactivar, setShowModalDesactivar] = useState(false);
   const [showModalHistorial, setShowModalHistorial] = useState(false);
   const [showModalVerConfiguracion, setShowModalVerConfiguracion] = useState(false);
+  const [showModalCompartir, setShowModalCompartir] = useState(false);
   const [correoSeleccionado, setCorreoSeleccionado] = useState<CorreoUsuario | null>(null);
-  const [historialCorreo, setHistorialCorreo] = useState<any[]>([]);
+  const [historialCorreo, setHistorialCorreo] = useState<HistorialCorreo[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [showPasswordEditar, setShowPasswordEditar] = useState(false);
   const [showPasswordVerConfiguracion, setShowPasswordVerConfiguracion] = useState(false);
+  
+  // Estados para compartir correo
+  const [usuariosActivos, setUsuariosActivos] = useState<UsuarioActivo[]>([]);
+  const [usuariosCompartidos, setUsuariosCompartidos] = useState<UsuarioCompartido[]>([]);
+  const [usuariosSeleccionados, setUsuariosSeleccionados] = useState<number[]>([]);
+  const [usuariosADescompartir, setUsuariosADescompartir] = useState<number[]>([]);
+  const [motivoCompartir, setMotivoCompartir] = useState('');
+  const [loadingCompartir, setLoadingCompartir] = useState(false);
+  const [savingCompartir, setSavingCompartir] = useState(false);
   
   // Estado para edición de correo
   const [datosEdicion, setDatosEdicion] = useState({
@@ -198,6 +208,59 @@ export function GestionCorreosTab({ empresaId, usuarioId, correoUsuario, usuario
   useEffect(() => {
     cargarCorreos();
   }, [empresaId, usuarioId, correoUsuario]);
+
+  // Cargar usuarios cuando se abre el modal de compartir
+  useEffect(() => {
+    const loadDatosCompartir = async () => {
+      if (showModalCompartir && correoSeleccionado) {
+        setLoadingCompartir(true);
+        try {
+          console.log('🔍 Cargando usuarios activos para empresaId:', empresaId);
+          console.log('📝 Usuario actual (usuarioId):', usuarioId, 'Tipo:', typeof usuarioId);
+          
+          // Cargar usuarios activos de la empresa
+          const usuarios = await correosUsuarioService.getUsuariosActivos(empresaId);
+          console.log('👥 Usuarios activos recibidos:', usuarios);
+          
+          // Filtrar al usuario actual (dueño del correo)
+          const usuarioIdNum = parseInt(usuarioId);
+          const usuariosFiltrados = usuarios.filter(u => {
+            const esElMismo = u.id === usuarioIdNum;
+            console.log(`Comparando: u.id=${u.id} === usuarioId=${usuarioIdNum} ? ${esElMismo} => ${esElMismo ? 'EXCLUIR' : 'INCLUIR'}`);
+            return !esElMismo; // Excluir si es el mismo usuario
+          });
+          console.log('✅ Usuarios después de filtrar usuario actual:', usuariosFiltrados);
+
+          // Cargar usuarios con los que ya está compartido
+          const compartidos = await correosUsuarioService.getCorreosCompartidos(
+            empresaId,
+            usuarioId,
+            correoSeleccionado.id!
+          );
+          console.log('📤 Usuarios ya compartidos:', compartidos);
+          setUsuariosCompartidos(compartidos);
+          
+          // Filtrar los usuarios activos para no mostrar los que ya tienen acceso
+          const idsCompartidos = compartidos.map(c => c.usuarioId);
+          const usuariosDisponibles = usuariosFiltrados.filter(u => !idsCompartidos.includes(u.id));
+          console.log('🎯 Usuarios disponibles finales:', usuariosDisponibles);
+          setUsuariosActivos(usuariosDisponibles);
+        } catch (error) {
+          console.error('❌ Error al cargar datos de compartir:', error);
+        } finally {
+          setLoadingCompartir(false);
+        }
+      } else {
+        // Resetear cuando se cierra el modal
+        setUsuariosActivos([]);
+        setUsuariosCompartidos([]);
+        setUsuariosSeleccionados([]);
+        setUsuariosADescompartir([]);
+        setMotivoCompartir('');
+      }
+    };
+    loadDatosCompartir();
+  }, [showModalCompartir, correoSeleccionado, empresaId, usuarioId]);
 
   // Cargar usuarios de la empresa cuando se abre el modal de reasignación
   useEffect(() => {
@@ -784,6 +847,7 @@ export function GestionCorreosTab({ empresaId, usuarioId, correoUsuario, usuario
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Protocolo</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Estado</th>
                   <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Principal</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Compartir</th>
                   <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Acciones</th>
                 </tr>
               </thead>
@@ -804,6 +868,27 @@ export function GestionCorreosTab({ empresaId, usuarioId, correoUsuario, usuario
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className="text-2xl" title="Correo Principal">⭐</span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        {correoPrincipal.esCompartido && (
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-medium">
+                            📩 Compartido
+                          </span>
+                        )}
+                        {!correoPrincipal.esCompartido && !correoPrincipal.soloLectura && correoPrincipal.esDuenoActual !== false && (
+                          <button
+                            onClick={() => {
+                              setCorreoSeleccionado(correoPrincipal);
+                              setShowModalCompartir(true);
+                            }}
+                            className="text-gray-600 hover:text-green-600 transition-colors p-1"
+                            title="Compartir correo"
+                          >
+                            🔗
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
@@ -839,6 +924,27 @@ export function GestionCorreosTab({ empresaId, usuarioId, correoUsuario, usuario
                     <td className="px-4 py-3">{getEstadoBadge(correo.estado)}</td>
                     <td className="px-4 py-3 text-center">
                       <span className="text-gray-300">-</span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        {correo.esCompartido && (
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-medium">
+                            📩 Compartido
+                          </span>
+                        )}
+                        {!correo.esCompartido && !correo.soloLectura && correo.esDuenoActual !== false && (
+                          <button
+                            onClick={() => {
+                              setCorreoSeleccionado(correo);
+                              setShowModalCompartir(true);
+                            }}
+                            className="text-gray-600 hover:text-green-600 transition-colors p-1"
+                            title="Compartir correo"
+                          >
+                            🔗
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
@@ -1248,6 +1354,34 @@ export function GestionCorreosTab({ empresaId, usuarioId, correoUsuario, usuario
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     📄 Ver Historial
+                  </button>
+                </>
+              ) : correoSeleccionado.esCompartido && correoSeleccionado.soloLectura ? (
+                <>
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-purple-800 font-medium flex items-center gap-2">
+                      📩 Este correo ha sido compartido contigo
+                    </p>
+                    <p className="text-xs text-purple-700 mt-1">
+                      Propietario: <strong>{correoSeleccionado.propietarioNombre}</strong>
+                    </p>
+                    <p className="text-xs text-purple-700 mt-1">
+                      Solo tienes acceso de visualización. No puedes editar, desactivar ni realizar otras acciones.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setShowModalEditar(false);
+                      setShowModalVerConfiguracion(true);
+                    }}
+                    className="w-full px-4 py-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors flex items-center gap-3 font-medium"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    👁️ Ver Configuración
                   </button>
                 </>
               ) : (
@@ -2115,6 +2249,49 @@ export function GestionCorreosTab({ empresaId, usuarioId, correoUsuario, usuario
                   {/* Timeline items */}
                   <div className="space-y-6">
                     {historialCorreo.map((item, index) => {
+                      // Detectar si este item es parte de un grupo (compartir/descompartir múltiple)
+                      const prevItem = index > 0 ? historialCorreo[index - 1] : null;
+                      const nextItem = index < historialCorreo.length - 1 ? historialCorreo[index + 1] : null;
+                      
+                      const esGrupoCompartir = (item.accion === 'compartido' || item.accion === 'descompartido');
+                      
+                      // Verificar si es parte del mismo grupo que el anterior
+                      const esParteMismoGrupo = prevItem && esGrupoCompartir &&
+                        prevItem.accion === item.accion &&
+                        prevItem.realizadoPorNombre === item.realizadoPorNombre &&
+                        prevItem.motivo === item.motivo &&
+                        new Date(prevItem.fechaCambio || prevItem.fecha_cambio).getTime() === new Date(item.fechaCambio || item.fecha_cambio).getTime();
+                      
+                      // Verificar si el siguiente es parte del mismo grupo
+                      const siguienteEsMismoGrupo = nextItem && esGrupoCompartir &&
+                        nextItem.accion === item.accion &&
+                        nextItem.realizadoPorNombre === item.realizadoPorNombre &&
+                        nextItem.motivo === item.motivo &&
+                        new Date(nextItem.fechaCambio || nextItem.fecha_cambio).getTime() === new Date(item.fechaCambio || item.fecha_cambio).getTime();
+                      
+                      // Si es parte del mismo grupo que el anterior, recopilar todos los usuarios del grupo
+                      if (esParteMismoGrupo) {
+                        return null; // No renderizar, se agrupará con el primero
+                      }
+                      
+                      // Recopilar todos los usuarios afectados del grupo
+                      const usuariosAfectados = [item.usuarioAfectadoNombre || 'N/A'];
+                      if (siguienteEsMismoGrupo) {
+                        let i = index + 1;
+                        while (i < historialCorreo.length) {
+                          const siguienteItem = historialCorreo[i];
+                          const esMismoGrupo = siguienteItem.accion === item.accion &&
+                            siguienteItem.realizadoPorNombre === item.realizadoPorNombre &&
+                            siguienteItem.motivo === item.motivo &&
+                            new Date(siguienteItem.fechaCambio || siguienteItem.fecha_cambio).getTime() === new Date(item.fechaCambio || item.fecha_cambio).getTime();
+                          
+                          if (!esMismoGrupo) break;
+                          
+                          usuariosAfectados.push(siguienteItem.usuarioAfectadoNombre || 'N/A');
+                          i++;
+                        }
+                      }
+                      
                       const isFirst = index === 0;
                       const isLast = index === historialCorreo.length - 1;
                       
@@ -2134,6 +2311,9 @@ export function GestionCorreosTab({ empresaId, usuarioId, correoUsuario, usuario
                           // Marcado principal
                           'marcado_principal': { icon: '⭐', color: 'purple', title: 'Marcado como Principal' },
                           'desmarcado_principal': { icon: '💫', color: 'gray', title: 'Desmarcado como Principal' },
+                          // Compartir
+                          'compartido': { icon: '🔗', color: 'blue', title: 'Compartido' },
+                          'descompartido': { icon: '🔓', color: 'gray', title: 'Descompartido' },
                         };
                         
                         return mapeo[accion.toLowerCase()] || { 
@@ -2242,6 +2422,35 @@ export function GestionCorreosTab({ empresaId, usuarioId, correoUsuario, usuario
                                       <span className="font-semibold text-blue-700 ml-1">
                                         {item.usuarioOrigenNombre}
                                       </span>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Usuario(s) afectado(s) (para compartir/descompartir) */}
+                                {(item.accion === 'compartido' || item.accion === 'descompartido') && usuariosAfectados.length > 0 && (
+                                  <div className="flex items-start gap-2">
+                                    <svg className="w-4 h-4 text-purple-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                    <div className="flex-1">
+                                      <span className="text-gray-600">Usuario(s) involucrado(s):</span>
+                                      {usuariosAfectados.length === 1 ? (
+                                        <span className="font-semibold text-purple-700 ml-1">
+                                          {usuariosAfectados[0]}
+                                        </span>
+                                      ) : (
+                                        <div className="mt-1 space-y-1">
+                                          {usuariosAfectados.map((nombre, idx) => (
+                                            <div key={idx} className="flex items-center gap-2">
+                                              <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                                              <span className="font-semibold text-purple-700">{nombre}</span>
+                                            </div>
+                                          ))}
+                                          <span className="text-xs text-gray-500 italic ml-3.5">
+                                            ({usuariosAfectados.length} usuario{usuariosAfectados.length > 1 ? 's' : ''})
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 )}
@@ -2807,6 +3016,247 @@ export function GestionCorreosTab({ empresaId, usuarioId, correoUsuario, usuario
                 className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? 'Guardando...' : '💾 Guardar Cambios'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Compartir Correo */}
+      {showModalCompartir && correoSeleccionado && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-4 flex justify-between items-center rounded-t-xl">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                🔗 Compartir Correo: {correoSeleccionado.correo || correoSeleccionado.correoElectronico}
+              </h3>
+              <button
+                onClick={async () => {
+                  setShowModalCompartir(false);
+                  setUsuariosSeleccionados([]);
+                  setUsuariosADescompartir([]);
+                  setMotivoCompartir('');
+                }}
+                className="text-white hover:text-gray-200 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {loadingCompartir ? (
+                <div className="py-12 text-center">
+                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-green-600 border-t-transparent"></div>
+                  <p className="mt-4 text-gray-600">Cargando usuarios...</p>
+                </div>
+              ) : (
+                <>
+              {/* Usuarios disponibles para compartir */}
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  👥 Usuarios Activos de la Empresa
+                </h4>
+                <p className="text-sm text-gray-600 mb-4">
+                  Selecciona los usuarios con los que deseas compartir este correo:
+                </p>
+                <div className="border border-gray-200 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Seleccionar</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Nombre</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Correo</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Sede</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Cargo</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Área</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {usuariosActivos.map((usuario) => (
+                        <tr key={usuario.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-2">
+                            <input
+                              type="checkbox"
+                              checked={usuariosSeleccionados.includes(usuario.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setUsuariosSeleccionados([...usuariosSeleccionados, usuario.id]);
+                                } else {
+                                  setUsuariosSeleccionados(usuariosSeleccionados.filter(id => id !== usuario.id));
+                                }
+                              }}
+                              className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                            />
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-900">{usuario.nombre}</td>
+                          <td className="px-4 py-2 text-sm text-gray-700">{usuario.correo}</td>
+                          <td className="px-4 py-2 text-sm text-gray-700">{usuario.sede || '-'}</td>
+                          <td className="px-4 py-2 text-sm text-gray-700">{usuario.cargo || '-'}</td>
+                          <td className="px-4 py-2 text-sm text-gray-700">{usuario.area || '-'}</td>
+                        </tr>
+                      ))}
+                      {usuariosActivos.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                            No hay usuarios disponibles para compartir
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Usuarios con los que ya está compartido */}
+              {usuariosCompartidos.length > 0 && (
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    📤 Ya Compartido Con
+                  </h4>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Usuarios que actualmente tienen acceso. Deselecciona para remover el acceso:
+                  </p>
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-purple-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Mantener</th>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Nombre</th>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Correo</th>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Sede</th>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Compartido desde</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {usuariosCompartidos.map((usuario) => (
+                          <tr key={usuario.id} className="hover:bg-purple-50">
+                            <td className="px-4 py-2">
+                              <input
+                                type="checkbox"
+                                checked={!usuariosADescompartir.includes(usuario.usuarioId)}
+                                onChange={(e) => {
+                                  if (!e.target.checked) {
+                                    setUsuariosADescompartir([...usuariosADescompartir, usuario.usuarioId]);
+                                  } else {
+                                    setUsuariosADescompartir(usuariosADescompartir.filter(id => id !== usuario.usuarioId));
+                                  }
+                                }}
+                                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                              />
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-900">{usuario.nombre}</td>
+                            <td className="px-4 py-2 text-sm text-gray-700">{usuario.correo}</td>
+                            <td className="px-4 py-2 text-sm text-gray-700">{usuario.sede || '-'}</td>
+                            <td className="px-4 py-2 text-sm text-gray-700">
+                              {new Date(usuario.fechaCompartido).toLocaleString('es-PE')}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Motivo obligatorio */}
+              <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4">
+                <label className="block text-sm font-bold text-amber-900 mb-2">
+                  Motivo de la Acción *
+                </label>
+                <textarea
+                  value={motivoCompartir}
+                  onChange={(e) => setMotivoCompartir(e.target.value)}
+                  placeholder="Indique el motivo para compartir o dejar de compartir este correo..."
+                  className="w-full px-4 py-3 border-2 border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+                  rows={3}
+                />
+                <p className="text-xs text-amber-700 mt-2">
+                  Este motivo se registrará en el historial del correo
+                </p>
+              </div>
+                </>
+              )}
+            </div>
+
+            {/* Botones */}
+            <div className="sticky bottom-0 bg-gray-50 px-6 py-4 flex gap-3 rounded-b-xl border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setShowModalCompartir(false);
+                  setUsuariosSeleccionados([]);
+                  setUsuariosADescompartir([]);
+                  setMotivoCompartir('');
+                }}
+                disabled={savingCompartir}
+                className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  if (!motivoCompartir.trim()) {
+                    alert('Por favor indique el motivo de la acción');
+                    return;
+                  }
+
+                  setSavingCompartir(true);
+                  try {
+                    console.log('📤 Preparando para compartir correo...');
+                    console.log('📌 empresaId:', empresaId);
+                    console.log('📌 usuarioId:', usuarioId);
+                    console.log('📌 correoId:', correoSeleccionado.id);
+                    console.log('📌 usuariosSeleccionados:', usuariosSeleccionados);
+                    console.log('📌 usuariosADescompartir:', usuariosADescompartir);
+                    console.log('📌 motivo:', motivoCompartir);
+
+                    // Compartir con nuevos usuarios
+                    if (usuariosSeleccionados.length > 0) {
+                      console.log('➡️ Enviando request de compartir...');
+                      await correosUsuarioService.compartirCorreo(
+                        empresaId,
+                        usuarioId,
+                        correoSeleccionado.id!,
+                        {
+                          usuariosIds: usuariosSeleccionados,
+                          motivo: motivoCompartir
+                        }
+                      );
+                      console.log('✅ Compartido exitosamente');
+                    }
+
+                    // Descompartir usuarios
+                    if (usuariosADescompartir.length > 0) {
+                      await correosUsuarioService.descompartirCorreo(
+                        empresaId,
+                        usuarioId,
+                        correoSeleccionado.id!,
+                        {
+                          usuariosIds: usuariosADescompartir,
+                          motivo: motivoCompartir
+                        }
+                      );
+                    }
+
+                    // Recargar correos
+                    await cargarCorreos();
+                    
+                    setShowModalCompartir(false);
+                    setUsuariosSeleccionados([]);
+                    setUsuariosADescompartir([]);
+                    setMotivoCompartir('');
+                  } catch (error) {
+                    console.error('Error al compartir/descompartir:', error);
+                    alert('Error al procesar la acción');
+                  } finally {
+                    setSavingCompartir(false);
+                  }
+                }}
+                disabled={savingCompartir || !motivoCompartir.trim() || (usuariosSeleccionados.length === 0 && usuariosADescompartir.length === 0)}
+                className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingCompartir ? 'Procesando...' : '✅ Confirmar Cambios'}
               </button>
             </div>
           </div>

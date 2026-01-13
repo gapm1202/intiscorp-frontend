@@ -25,6 +25,15 @@ export interface CorreoUsuario {
   contrasena?: string;
   // Campo del backend para saber si el usuario es el dueño actual del correo
   esDuenoActual?: boolean;
+  // Campos para correos compartidos
+  esCompartido?: boolean;
+  propietarioId?: number;
+  propietarioNombre?: string;
+  soloLectura?: boolean;
+  // Compatibilidad con diferentes formatos de backend
+  correo?: string;
+  password?: string;
+  esPrincipal?: boolean;
 }
 
 export interface ConfigurarCorreoData {
@@ -44,6 +53,47 @@ export interface DesactivarCorreoData {
   fechaDesactivacion?: string;
 }
 
+export interface UsuarioActivo {
+  id: number;
+  nombre: string;
+  correo: string;
+  sede: string;
+  cargo: string;
+  area: string;
+  telefono: string;
+}
+
+export interface UsuarioCompartido {
+  id: number;
+  usuarioId: number;
+  nombre: string;
+  correo: string;
+  sede: string;
+  cargo: string;
+  area: string;
+  telefono: string;
+  fechaCompartido: string;
+}
+
+export interface CompartirCorreoData {
+  usuariosIds: number[];
+  motivo: string;
+}
+
+export interface HistorialCorreo {
+  id: number;
+  correoId: number;
+  accion: string;
+  fechaAccion: string;
+  realizadoPor: string;
+  realizadoPorNombre?: string;
+  motivo?: string;
+  datosAnteriores?: Record<string, any>;
+  datosNuevos?: Record<string, any>;
+  usuarioAfectadoId?: number;
+  usuarioAfectadoNombre?: string;
+}
+
 export interface ReasignarCorreoData {
   nuevoUsuarioId: string;
   nombreBuzon: string;
@@ -54,24 +104,6 @@ export interface ReasignarCorreoData {
   motivoReasignacion: string;
   observaciones?: string;
   ticketRelacionado?: string;
-}
-
-export interface HistorialCorreo {
-  id: string;
-  correoId: string;
-  usuarioId: string;
-  accion: string;
-  motivo?: string;
-  observaciones?: string;
-  ticketRelacionado?: string;
-  realizadoPor: string;
-  realizadoPorNombre: string;
-  fechaCambio: string;
-  origenAccion?: string;
-  // Campos específicos para reasignación
-  usuarioDestinoNombre?: string;
-  usuarioOrigenNombre?: string;
-  correoDestinoNombre?: string;
 }
 
 export const correosUsuarioService = {
@@ -162,6 +194,52 @@ export const correosUsuarioService = {
       data
     );
     return response.data;
+  },
+
+  // Obtener usuarios activos de la empresa
+  getUsuariosActivos: async (empresaId: string): Promise<UsuarioActivo[]> => {
+    const response = await axiosClient.get(
+      `/api/empresas/${empresaId}/usuarios/activos`
+    );
+    return response.data;
+  },
+
+  // Obtener usuarios con los que está compartido el correo
+  getCorreosCompartidos: async (
+    empresaId: string,
+    usuarioId: string,
+    correoId: string
+  ): Promise<UsuarioCompartido[]> => {
+    const response = await axiosClient.get(
+      `/api/empresas/${empresaId}/usuarios/${usuarioId}/correos/${correoId}/compartidos`
+    );
+    return response.data;
+  },
+
+  // Compartir correo con usuarios
+  compartirCorreo: async (
+    empresaId: string,
+    usuarioId: string,
+    correoId: string,
+    data: CompartirCorreoData
+  ): Promise<void> => {
+    await axiosClient.post(
+      `/api/empresas/${empresaId}/usuarios/${usuarioId}/correos/${correoId}/compartir`,
+      data
+    );
+  },
+
+  // Dejar de compartir correo
+  descompartirCorreo: async (
+    empresaId: string,
+    usuarioId: string,
+    correoId: string,
+    data: CompartirCorreoData
+  ): Promise<void> => {
+    await axiosClient.delete(
+      `/api/empresas/${empresaId}/usuarios/${usuarioId}/correos/${correoId}/compartir`,
+      { data }
+    );
   },
 
   // Reasignar un correo
