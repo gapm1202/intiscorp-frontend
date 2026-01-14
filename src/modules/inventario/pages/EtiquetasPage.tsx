@@ -157,11 +157,16 @@ const EtiquetasPage = () => {
         }
       }
 
-      // Build public URL that the QR will point to. The backend expects a token parameter.
-      const FRONTEND_BASE = (import.meta.env.VITE_FRONTEND_URL as string) || 'http://localhost:5173';
-      const publicUrl = token
-        ? `${FRONTEND_BASE}/public/activos?token=${encodeURIComponent(token)}`
-        : `${FRONTEND_BASE}/public/activos`;
+      // Build public URL that the QR will point to - Direct PDF download
+      const BACKEND_BASE = (import.meta.env.VITE_API_URL as string) || 'http://localhost:4000';
+      
+      // Obtener el código del activo (priorizar 'codigo', luego 'assetId', luego id)
+      const assetCode = it.codigo || it.assetId || String(it.id || it._id || '');
+      
+      // El QR apuntará directamente al endpoint público de PDF en el backend
+      const publicUrl = assetCode
+        ? `${BACKEND_BASE}/public/activos/${encodeURIComponent(assetCode)}/pdf`
+        : `${BACKEND_BASE}/public/activos/desconocido/pdf`;
 
       if (!token) {
         console.warn('No token encontrado para activo', { candidateKeys, idx, it });
