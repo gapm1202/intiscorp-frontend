@@ -64,6 +64,17 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
   const [inventarioOpen, setInventarioOpen] = useState(false);
   const [catalogosOpen, setCatalogosOpen] = useState(false);
   const [usuariosOpen, setUsuariosOpen] = useState(false);
+
+  // Mantener el menú de usuarios abierto si estamos en una ruta de usuarios
+  useEffect(() => {
+    if (location.pathname.includes('/usuarios/empresa/') || location.pathname.includes('/admin/usuarios/empresa/')) {
+      setUsuariosOpen(true);
+    }
+    // Mantener el menú de inventario abierto si estamos en una ruta de inventario
+    if (location.pathname.includes('/inventario') || location.pathname.includes('/empresas/') && location.pathname.includes('/inventario')) {
+      setInventarioOpen(true);
+    }
+  }, [location.pathname]);
   type EmpresaItem = { id?: number; _id?: string; nombre?: string; [key: string]: unknown };
   const [empresas, setEmpresas] = useState<EmpresaItem[]>([]);
   const [loadingEmpresas, setLoadingEmpresas] = useState(false);
@@ -229,16 +240,28 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                           <div className="text-xs text-slate-500 py-2">No hay empresas</div>
                         ) : (
                           <ul className="space-y-1">
-                            {empresas.map((e: EmpresaItem) => (
-                              <li key={e.id ?? e._id}>
-                                <button
-                                  onClick={() => guardedNavigate(`/admin/empresas/${e.id ?? e._id}/inventario`)}
-                                  className="w-full text-left text-xs py-2 px-3 rounded-md hover:bg-subtle transition-colors text-slate-700"
-                                >
-                                  {e.nombre ?? "(sin nombre)"}
-                                </button>
-                              </li>
-                            ))}
+                            {empresas.map((e: EmpresaItem) => {
+                              const empresaId = e.id ?? e._id;
+                              const isEmpresaActive = location.pathname.includes(`/empresas/${empresaId}/inventario`);
+                              
+                              return (
+                                <li key={empresaId}>
+                                  <button
+                                    onClick={() => guardedNavigate(`/admin/empresas/${empresaId}/inventario`)}
+                                    className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                                      isEmpresaActive 
+                                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold shadow-md border border-blue-500' 
+                                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700 font-medium border border-transparent'
+                                    }`}
+                                  >
+                                    {isEmpresaActive && (
+                                      <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
+                                    )}
+                                    {e.nombre ?? "(sin nombre)"}
+                                  </button>
+                                </li>
+                              );
+                            })}
                           </ul>
                         )}
                       </div>
@@ -275,16 +298,28 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                           <div className="text-xs text-slate-500 py-2">No hay empresas</div>
                         ) : (
                           <ul className="space-y-1">
-                            {empresas.map((e: EmpresaItem) => (
-                              <li key={e.id ?? e._id}>
-                                <button
-                                  onClick={() => guardedNavigate(`/admin/usuarios/empresa/${e.id ?? e._id}`)}
-                                  className="w-full text-left text-xs py-2 px-3 rounded-md hover:bg-subtle transition-colors text-slate-700"
-                                >
-                                  {e.nombre ?? "(sin nombre)"}
-                                </button>
-                              </li>
-                            ))}
+                            {empresas.map((e: EmpresaItem) => {
+                              const empresaId = e.id ?? e._id;
+                              const isEmpresaActive = location.pathname.includes(`/usuarios/empresa/${empresaId}`);
+                              
+                              return (
+                                <li key={empresaId}>
+                                  <button
+                                    onClick={() => guardedNavigate(`/admin/usuarios/empresa/${empresaId}`)}
+                                    className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                                      isEmpresaActive 
+                                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold shadow-md border border-blue-500' 
+                                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700 font-medium border border-transparent'
+                                    }`}
+                                  >
+                                    {isEmpresaActive && (
+                                      <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
+                                    )}
+                                    {e.nombre ?? "(sin nombre)"}
+                                  </button>
+                                </li>
+                              );
+                            })}
                           </ul>
                         )}
                       </div>

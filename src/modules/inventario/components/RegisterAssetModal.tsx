@@ -138,6 +138,7 @@ const RegisterAssetModal = ({
   const [dynamicArrayFields, setDynamicArrayFields] = useState<Record<string, Array<Record<string, string>>>>({});
   const [showMotivoModal, setShowMotivoModal] = useState(false);
   const [motivo, setMotivo] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Helper para generar una clave interna estable (sin espacios) a partir de la etiqueta
   const getFieldKey = (label: string) => String(label || '').trim().replace(/\s+/g, '_');
@@ -604,6 +605,12 @@ const RegisterAssetModal = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Prevenir double-submit
+    if (isSubmitting) {
+      console.warn('⚠️ Ya se está procesando un submit, ignorando...');
+      return;
+    }
+
     const targetSedeId = sedeId ?? selectedSedeId;
     if (!empresaId || !targetSedeId) {
       alert('Error: No se puede crear activo sin empresa o sede');
@@ -894,6 +901,7 @@ const RegisterAssetModal = ({
       fotosFiles: fotos.length > 0 ? fotos : undefined, // Archivos reales para FormData
     };
 
+    setIsSubmitting(true);
     try {
       const response = await createActivo(eId, sId, newItem);
       
@@ -911,6 +919,8 @@ const RegisterAssetModal = ({
     } catch (error) {
       console.error('❌ Error guardando activo:', error);
       alert('Error al guardar el activo. Revisa la consola para más detalles.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1463,8 +1473,24 @@ const RegisterAssetModal = ({
 
           {/* Actions */}
           <div className="flex justify-end gap-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 border rounded text-sm">Cancelar</button>
-            <button type="submit" className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium text-sm">{editingAsset ? '✅ Actualizar Activo' : '➕ Registrar Activo'}</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 border rounded text-sm" disabled={isSubmitting}>Cancelar</button>
+            <button 
+              type="submit" 
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isSubmitting ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Procesando...
+                </>
+              ) : (
+                editingAsset ? '✅ Actualizar Activo' : '➕ Registrar Activo'
+              )}
+            </button>
           </div>
         </form>
       </div>

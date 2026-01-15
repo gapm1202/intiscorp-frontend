@@ -15,6 +15,7 @@ import { UsuarioForm } from '../components/UsuarioForm';
 import { AsignarActivoModal } from '../components/AsignarActivoModal';
 import { DesactivarUsuarioModal } from '../components/DesactivarUsuarioModal';
 import { HistorialUsuarioModal } from '../components/HistorialUsuarioModal';
+import CredencialesPortalModal from '../components/CredencialesPortalModal';
 
 export default function UsuariosEmpresaPage() {
   const { empresaId } = useParams<{ empresaId: string }>();
@@ -38,6 +39,7 @@ export default function UsuariosEmpresaPage() {
   const [showAsignarActivoModal, setShowAsignarActivoModal] = useState(false);
   const [showDesactivarModal, setShowDesactivarModal] = useState(false);
   const [showHistorialModal, setShowHistorialModal] = useState(false);
+  const [showCredencialesModal, setShowCredencialesModal] = useState(false);
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState<Usuario | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -468,6 +470,15 @@ export default function UsuariosEmpresaPage() {
             Nuevo Usuario
           </button>
           <button
+            onClick={() => setShowCredencialesModal(true)}
+            className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:shadow-lg font-semibold transition-all flex items-center gap-2 hover:scale-105"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+            Credenciales Portal Soporte
+          </button>
+          <button
             onClick={handleActualizar}
             className="px-6 py-3 bg-white border-2 border-accent-green text-accent-green rounded-xl hover:bg-accent-green hover:text-white font-semibold transition-all flex items-center gap-2"
           >
@@ -735,6 +746,18 @@ export default function UsuariosEmpresaPage() {
           onClose={() => {
             setShowHistorialModal(false);
             setUsuarioSeleccionado(null);
+          }}
+        />
+      )}
+
+      {showCredencialesModal && empresaId && (
+        <CredencialesPortalModal
+          isOpen={showCredencialesModal}
+          empresaId={empresaId}
+          empresaNombre={empresaNombre}
+          onClose={() => setShowCredencialesModal(false)}
+          onSuccess={() => {
+            showSuccessToast('Credenciales actualizadas exitosamente');
           }}
         />
       )}

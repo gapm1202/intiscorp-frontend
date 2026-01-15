@@ -103,6 +103,10 @@ const InventarioPage = () => {
     valor_nuevo: string;
     asset_id: string;
   }>>([]);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [showErrorToast, setShowErrorToast] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const isInactiveView = Boolean(sedeId && sedeActivo === false);
 
@@ -2500,33 +2504,102 @@ const InventarioPage = () => {
             </form>
 
             {showPreview && categoryPreview && (
-              <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50">
-                <div className="bg-white rounded-lg w-full max-w-md p-6 border shadow-xl max-h-[80vh] overflow-y-auto">
-                  <h4 className="text-lg font-semibold mb-4">Previsualizar categoría</h4>
-                  <div className="space-y-3 mb-6">
-                    <div>
-                      <span className="text-sm text-gray-600">Nombre:</span>
-                      <p className="font-semibold">{categoryPreview.nombre}</p>
+              <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4">
+                <div className="bg-white rounded-xl w-full max-w-2xl shadow-2xl max-h-[85vh] overflow-hidden flex flex-col">
+                  {/* Header con gradiente */}
+                  <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5">
+                    <h3 className="text-2xl font-bold text-white flex items-center gap-3">
+                      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Previsualizar Categoría
+                    </h3>
+                    <p className="text-blue-100 text-sm mt-1">Revise la información antes de confirmar</p>
+                  </div>
+
+                  {/* Contenido scrolleable */}
+                  <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
+                    {/* Nombre de la categoría */}
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border-l-4 border-blue-500">
+                      <label className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1 block">Nombre</label>
+                      <p className="text-2xl font-bold text-gray-900">{categoryPreview.nombre}</p>
                     </div>
-                    <div>
-                      <span className="text-sm text-gray-600">Subcategorías:</span>
-                      <p className="font-semibold">{categoryPreview.subcategorias.join(', ') || '-'}</p>
+
+                    {/* Grid de 2 columnas para Subcategorías y Fecha */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Subcategorías */}
+                      <div className="bg-white rounded-lg border-2 border-gray-200 p-4 hover:border-blue-300 transition-colors">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
+                          <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                          </svg>
+                          Subcategorías
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {categoryPreview.subcategorias && categoryPreview.subcategorias.length > 0 ? (
+                            categoryPreview.subcategorias.map((sub, idx) => (
+                              <span key={idx} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                                {sub}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-sm text-gray-400 italic">Sin subcategorías</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Fecha/Hora */}
+                      <div className="bg-white rounded-lg border-2 border-gray-200 p-4">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
+                          <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          Fecha / Hora
+                        </label>
+                        <p className="text-base font-semibold text-gray-900">{categoryPreview.createdAt}</p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-sm text-gray-600">Fecha / Hora:</span>
-                      <p className="font-semibold">{categoryPreview.createdAt}</p>
-                    </div>
+
+                    {/* Campos personalizados */}
                     {categoryPreview.campos.length > 0 && (
-                      <div>
-                        <span className="text-sm text-gray-600">Campos personalizados:</span>
-                        <div className="mt-2 space-y-2">
+                      <div className="bg-white rounded-lg border-2 border-gray-200 p-5">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+                          <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                          </svg>
+                          Campos Personalizados
+                          <span className="ml-auto bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs font-bold">
+                            {categoryPreview.campos.length}
+                          </span>
+                        </label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {categoryPreview.campos.map((campo, idx) => (
-                            <div key={idx} className="bg-gray-50 p-2 rounded text-sm">
-                              <span className="font-medium">{campo.nombre}</span>
-                              <span className="text-gray-500"> - {campo.tipo}</span>
-                              {campo.requerido && <span className="text-red-500"> *</span>}
+                            <div key={idx} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-3 border border-gray-200 hover:shadow-md transition-shadow">
+                              <div className="flex items-start justify-between mb-2">
+                                <span className="font-semibold text-gray-900 text-sm">{campo.nombre}</span>
+                                {campo.requerido && (
+                                  <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded">
+                                    Requerido
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-gray-600">
+                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                </svg>
+                                <span className="font-medium capitalize">{campo.tipo}</span>
+                              </div>
                               {campo.opciones && campo.opciones.length > 0 && (
-                                <div className="text-xs text-gray-500 mt-1">Opciones: {campo.opciones.join(', ')}</div>
+                                <div className="mt-2 pt-2 border-t border-gray-300">
+                                  <p className="text-xs text-gray-500 mb-1">Opciones:</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {campo.opciones.map((opt, oidx) => (
+                                      <span key={oidx} className="inline-block bg-white px-2 py-0.5 rounded text-xs text-gray-700 border border-gray-300">
+                                        {opt}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
                               )}
                             </div>
                           ))}
@@ -2534,9 +2607,21 @@ const InventarioPage = () => {
                       </div>
                     )}
                   </div>
-                  <div className="flex justify-end gap-2">
-                    <button className="px-4 py-2 border rounded hover:bg-gray-50" onClick={() => { setCategoryPreview(null); setShowPreview(false); }}>Cancelar</button>
-                    <button className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" onClick={async () => {
+
+                  {/* Footer con botones */}
+                  <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-between items-center">
+                    <button 
+                      className="px-6 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-semibold transition-colors flex items-center gap-2" 
+                      onClick={() => { setCategoryPreview(null); setShowPreview(false); }}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Cancelar
+                    </button>
+                    <button 
+                      className="px-6 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2" 
+                      onClick={async () => {
                       try {
                         
                         if (editingCategoryId) {
@@ -2557,7 +2642,9 @@ const InventarioPage = () => {
                             campos: finalCampos
                           });
                           setCategories(prev => prev.map(c => c.id === editingCategoryId ? updated : c));
-                          alert('✅ Categoría actualizada exitosamente');
+                          setSuccessMessage('Categoría actualizada exitosamente');
+                          setShowSuccessToast(true);
+                          setTimeout(() => setShowSuccessToast(false), 3000);
                         } else {
                           // CREAR nueva categoría
                           
@@ -2590,7 +2677,9 @@ const InventarioPage = () => {
                           
                           const created = await createCategoria(payload as any);
                           setCategories(prev => [created, ...prev]);
-                          alert('✅ Categoría creada exitosamente');
+                          setSuccessMessage('Categoría creada exitosamente');
+                          setShowSuccessToast(true);
+                          setTimeout(() => setShowSuccessToast(false), 3000);
                         }
                         
                         setCategoryPreview(null);
@@ -2601,13 +2690,75 @@ const InventarioPage = () => {
                       } catch (err) {
                         console.error('❌ Error:', err);
                         const errorMsg = err instanceof Error ? err.message : 'Error al guardar la categoría';
-                        alert(`❌ ${errorMsg}`);
+                        setErrorMessage(errorMsg);
+                        setShowErrorToast(true);
+                        setTimeout(() => setShowErrorToast(false), 4000);
                       }
-                    }}>{editingCategoryId ? 'Actualizar' : 'Confirmar y crear'}</button>
+                    }}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      {editingCategoryId ? 'Actualizar Categoría' : 'Confirmar y Crear'}
+                    </button>
                   </div>
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Toast de Éxito */}
+      {showSuccessToast && (
+        <div className="fixed top-4 right-4 z-[70] animate-slide-in-right">
+          <div className="bg-white rounded-lg shadow-2xl border-l-4 border-green-500 p-4 flex items-start gap-3 min-w-[320px] max-w-md">
+            <div className="flex-shrink-0">
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            </div>
+            <div className="flex-1">
+              <h4 className="font-bold text-gray-900 mb-0.5">¡Éxito!</h4>
+              <p className="text-sm text-gray-600">{successMessage}</p>
+            </div>
+            <button 
+              onClick={() => setShowSuccessToast(false)}
+              className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast de Error */}
+      {showErrorToast && (
+        <div className="fixed top-4 right-4 z-[70] animate-slide-in-right">
+          <div className="bg-white rounded-lg shadow-2xl border-l-4 border-red-500 p-4 flex items-start gap-3 min-w-[320px] max-w-md">
+            <div className="flex-shrink-0">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+            </div>
+            <div className="flex-1">
+              <h4 className="font-bold text-gray-900 mb-0.5">Error</h4>
+              <p className="text-sm text-gray-600">{errorMessage}</p>
+            </div>
+            <button 
+              onClick={() => setShowErrorToast(false)}
+              className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         </div>
       )}
