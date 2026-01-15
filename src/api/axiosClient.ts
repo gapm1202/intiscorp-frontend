@@ -11,9 +11,12 @@ const axiosClient = axios.create({
 // Interceptor para agregar el token en cada petición
 axiosClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    // Solo agregar token de admin si no hay uno ya configurado (para portal público)
+    if (!config.headers.Authorization) {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
     const logData = {
       method: config.method?.toUpperCase(),

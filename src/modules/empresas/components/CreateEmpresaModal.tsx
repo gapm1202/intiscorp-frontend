@@ -183,6 +183,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
       contactosAdmin: formData.contactosAdmin,
       autorizacionFacturacion: formData.autorizacionFacturacion,
       contactosTecnicos: formData.contactosTecnicos,
+      contrasenaPortalSoporte: formData.contrasenaPortalSoporte, // ✅ Agregar aquí
     };
 
     try {

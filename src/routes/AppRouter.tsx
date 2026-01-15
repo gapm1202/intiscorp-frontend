@@ -13,6 +13,8 @@ import InventarioPage from "../modules/inventario/pages/InventarioPage";
 import EtiquetasPage from "../modules/inventario/pages/EtiquetasPage";
 import PublicReportPage from "../modules/public/pages/PublicReportPage";
 import PublicTicketStatusPage from "../modules/public/pages/PublicTicketStatusPage";
+import LoginEmpresaPage from "../modules/public/pages/LoginEmpresaPage";
+import ReporteIncidenciaPage from "../modules/public/pages/ReporteIncidenciaPage";
 import CatalogoCategoriasPage from "../modules/catalogo/pages/CatalogoCategoriasPage";
 import CatalogoServiciosPage from "../modules/catalogo/pages/CatalogoServiciosPage";
 import CatalogoCorreosPage from "../modules/catalogo/pages/CatalogoCorreosPage";
@@ -24,6 +26,10 @@ const AppRouter = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      
+      {/* Rutas públicas del portal de soporte */}
+      <Route path="/portal-soporte/login" element={<LoginEmpresaPage />} />
+      <Route path="/portal-soporte/reportar-incidencia" element={<ReporteIncidenciaPage />} />
 
       <Route element={<PrivateRoute />}>
         <Route
