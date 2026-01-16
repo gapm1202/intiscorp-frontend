@@ -34,6 +34,12 @@ export interface Usuario {
   creadoPor?: string;
   createdAt?: string;
   updatedAt?: string;
+  correoEnviado?: boolean;
+  fechaEnvioCorreo?: string;
+  correoPrincipal?: string;
+  correosTotales?: number;
+  tieneActivos?: boolean;
+  tieneCambiosPendientes?: boolean;
 }
 
 export interface UsuarioHistorial {
@@ -139,4 +145,12 @@ export const exportarUsuarios = async (empresaId: string, formato: 'excel' | 'pd
     responseType: 'blob',
   });
   return response.data;
+};
+
+export const enviarCorreoBienvenida = async (empresaId: string, usuarioId: string): Promise<void> => {
+  await axiosClient.post(`/api/empresas/${empresaId}/usuarios/${usuarioId}/enviar-correo-bienvenida`);
+};
+
+export const enviarCorreoActualizacion = async (empresaId: string, usuarioId: string): Promise<void> => {
+  await axiosClient.post(`/api/empresas/${empresaId}/usuarios/${usuarioId}/enviar-actualizacion`);
 };

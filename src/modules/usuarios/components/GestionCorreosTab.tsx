@@ -5,9 +5,11 @@ import { correosUsuarioService } from '../services/correosUsuarioService';
 import type { PlataformaCorreo } from '@/modules/catalogo/services/plataformasService';
 import type { TipoCorreo } from '@/modules/catalogo/services/tiposCorreoService';
 import type { Protocolo } from '@/modules/catalogo/services/protocolosService';
+import type { TipoLicencia } from '@/modules/catalogo/services/tiposLicenciaService';
 import { plataformasService } from '@/modules/catalogo/services/plataformasService';
 import { tiposCorreoService } from '@/modules/catalogo/services/tiposCorreoService';
 import { protocolosService } from '@/modules/catalogo/services/protocolosService';
+import { tiposLicenciaService } from '@/modules/catalogo/services/tiposLicenciaService';
 import { getUsuariosByEmpresa } from '../services/usuariosService';
 
 interface GestionCorreosTabProps {
@@ -123,12 +125,14 @@ export function GestionCorreosTab({ empresaId, usuarioId, correoUsuario, usuario
   const [plataformas, setPlataformas] = useState<PlataformaCorreo[]>([]);
   const [tiposCorreo, setTiposCorreo] = useState<TipoCorreo[]>([]);
   const [protocolos, setProtocolos] = useState<Protocolo[]>([]);
+  const [tiposLicencia, setTiposLicencia] = useState<TipoLicencia[]>([]);
 
   // Formulario
   const [formData, setFormData] = useState<ConfigurarCorreoData>({
     plataformaId: 0,
     tipoCorreoId: 0,
     protocoloId: 0,
+    tipoLicenciaId: 0,
     estado: 'pendiente' as 'activo' | 'inactivo' | 'reasignado',
     observaciones: '',
     usuarioLogin: '',
@@ -139,15 +143,17 @@ export function GestionCorreosTab({ empresaId, usuarioId, correoUsuario, usuario
   useEffect(() => {
     const loadCatalogos = async () => {
       try {
-        const [plat, tipos, prot] = await Promise.all([
+        const [plat, tipos, prot, licencias] = await Promise.all([
           plataformasService.getAll(),
           tiposCorreoService.getAll(),
-          protocolosService.getAll()
+          protocolosService.getAll(),
+          tiposLicenciaService.getAll()
         ]);
 
         setPlataformas(plat.filter(p => p.activo));
         setTiposCorreo(tipos.filter(t => t.activo));
         setProtocolos(prot.filter(p => p.activo));
+        setTiposLicencia(licencias.filter(l => l.activo));
       } catch (error) {
         console.error('Error cargando catálogos:', error);
       }
@@ -181,6 +187,7 @@ export function GestionCorreosTab({ empresaId, usuarioId, correoUsuario, usuario
           plataformaId: correo.plataformaId || 0,
           tipoCorreoId: correo.tipoCorreoId || 0,
           protocoloId: correo.protocoloId || 0,
+          tipoLicenciaId: correo.tipoLicenciaId || 0,
           estado: correo.estado === 'pendiente' 
             ? 'activo' 
             : (correo.estado === 'activo' || correo.estado === 'inactivo' || correo.estado === 'reasignado')
@@ -641,6 +648,25 @@ export function GestionCorreosTab({ empresaId, usuarioId, correoUsuario, usuario
                 {protocolos.map((prot) => (
                   <option key={prot.id} value={prot.id}>
                     {prot.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Tipo de Licencia */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tipo de Licencia
+              </label>
+              <select
+                value={formData.tipoLicenciaId || 0}
+                onChange={(e) => setFormData({ ...formData, tipoLicenciaId: parseInt(e.target.value) })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value={0}>Seleccione un tipo de licencia...</option>
+                {tiposLicencia.map((licencia) => (
+                  <option key={licencia.id} value={licencia.id}>
+                    {licencia.nombre}
                   </option>
                 ))}
               </select>

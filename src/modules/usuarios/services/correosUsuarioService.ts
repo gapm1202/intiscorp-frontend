@@ -10,6 +10,8 @@ export interface CorreoUsuario {
   tipoCorreoNombre?: string;
   protocoloId?: number;
   protocoloNombre?: string;
+  tipoLicenciaId?: number;
+  tipoLicenciaNombre?: string;
   estado: 'pendiente' | 'activo' | 'inactivo' | 'reasignado' | 'alias';
   observaciones?: string;
   esCorreoPrincipal: boolean;
@@ -40,6 +42,7 @@ export interface ConfigurarCorreoData {
   plataformaId: number;
   tipoCorreoId: number;
   protocoloId: number;
+  tipoLicenciaId?: number;
   estado: 'activo' | 'inactivo' | 'reasignado';
   observaciones?: string;
   usuarioLogin?: string;

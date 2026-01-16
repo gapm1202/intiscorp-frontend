@@ -64,15 +64,29 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
   const [inventarioOpen, setInventarioOpen] = useState(false);
   const [catalogosOpen, setCatalogosOpen] = useState(false);
   const [usuariosOpen, setUsuariosOpen] = useState(false);
+  const [usuariosClientesOpen, setUsuariosClientesOpen] = useState(false);
+  const [usuariosInternosOpen, setUsuariosInternosOpen] = useState(false);
+  const [ticketsOpen, setTicketsOpen] = useState(false);
 
-  // Mantener el menú de usuarios abierto si estamos en una ruta de usuarios
+  // Mantener menús abiertos según la ruta actual
   useEffect(() => {
-    if (location.pathname.includes('/usuarios/empresa/') || location.pathname.includes('/admin/usuarios/empresa/')) {
+    if (location.pathname.includes('/usuarios')) {
       setUsuariosOpen(true);
+      if (location.pathname.includes('/usuarios/empresa/')) {
+        setUsuariosClientesOpen(true);
+      }
+      if (location.pathname.includes('/usuarios/internos')) {
+        setUsuariosInternosOpen(true);
+      }
     }
-    // Mantener el menú de inventario abierto si estamos en una ruta de inventario
     if (location.pathname.includes('/inventario') || location.pathname.includes('/empresas/') && location.pathname.includes('/inventario')) {
       setInventarioOpen(true);
+    }
+    if (location.pathname.includes('/tickets')) {
+      setTicketsOpen(true);
+    }
+    if (location.pathname.includes('/catalogo')) {
+      setCatalogosOpen(true);
     }
   }, [location.pathname]);
   type EmpresaItem = { id?: number; _id?: string; nombre?: string; [key: string]: unknown };
@@ -126,10 +140,18 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
     setCatalogosOpen(v => !v);
   };
 
-  const toggleUsuarios = async () => {
+  const toggleTickets = () => {
+    setTicketsOpen(v => !v);
+  };
+
+  const toggleUsuarios = () => {
     setUsuariosOpen(v => !v);
+  };
+
+  const toggleUsuariosClientes = async () => {
+    setUsuariosClientesOpen(v => !v);
     // Cargar empresas cuando se abre el menú (si no están ya cargadas)
-    if (!usuariosOpen && empresas.length === 0) {
+    if (!usuariosClientesOpen && empresas.length === 0) {
       setLoadingEmpresas(true);
       setEmpresasError(null);
       try {
@@ -143,6 +165,10 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
         setLoadingEmpresas(false);
       }
     }
+  };
+
+  const toggleUsuariosInternos = () => {
+    setUsuariosInternosOpen(v => !v);
   };
 
   return (
@@ -206,197 +232,413 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
         {/* Menú de navegación */}
         <nav className="flex-1 p-3 overflow-y-auto">
           <ul className="space-y-1">
-            {menuItems.map((item) => {
-              const isActive = location.pathname === item.path || location.pathname.startsWith(item.path);
-              
-              // Inventario menu with submenu
-              if (item.id === "inventario") {
-                return (
-                  <li key={item.id}>
-                    <div className="flex items-center justify-between">
-                      <button
-                        onClick={toggleInventario}
-                        aria-current={isActive ? 'true' : undefined}
-                        className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${isActive ? 'active' : ''}`}
-                      >
-                        <span className="flex items-center space-x-3">
-                          <div className={`w-9 h-9 rounded-lg ${collapsed ? 'flex items-center justify-center' : 'flex items-center justify-center'} bg-subtle group-hover:bg-primary flex items-center justify-center transition-colors`}> 
-                            <svg className="w-4 h-4 text-slate-600 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              {iconMap[item.id] || iconMap.dashboard}
-                            </svg>
-                          </div>
-                          {!collapsed && <span className="text-sm font-medium text-slate-700 group-hover:text-primary">{item.label}</span>}
-                        </span>
-                        {!collapsed && (String(item.id) === 'tickets' ? <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-semibold">5</span> : <></>)}
-                      </button>
-                    </div>
-                    {item.id === 'inventario' && inventarioOpen && !collapsed && (
-                      <div className="mt-1 ml-11 space-y-1 border-l-2 border-slate-100 pl-3">
-                        {loadingEmpresas ? (
-                          <div className="text-xs text-slate-500 py-2">Cargando empresas...</div>
-                        ) : empresasError ? (
-                          <div className="text-xs text-red-500 py-2">Error cargando empresas</div>
-                        ) : empresas.length === 0 ? (
-                          <div className="text-xs text-slate-500 py-2">No hay empresas</div>
-                        ) : (
-                          <ul className="space-y-1">
-                            {empresas.map((e: EmpresaItem) => {
-                              const empresaId = e.id ?? e._id;
-                              const isEmpresaActive = location.pathname.includes(`/empresas/${empresaId}/inventario`);
-                              
-                              return (
-                                <li key={empresaId}>
-                                  <button
-                                    onClick={() => guardedNavigate(`/admin/empresas/${empresaId}/inventario`)}
-                                    className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
-                                      isEmpresaActive 
-                                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold shadow-md border border-blue-500' 
-                                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700 font-medium border border-transparent'
-                                    }`}
-                                  >
-                                    {isEmpresaActive && (
-                                      <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
-                                    )}
-                                    {e.nombre ?? "(sin nombre)"}
-                                  </button>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
-                      </div>
-                    )}
-                  </li>
-                );
-              }
+            {/* Dashboard */}
+            <li>
+              <button
+                onClick={() => handleNavigation('/dashboard')}
+                aria-current={location.pathname === '/dashboard' ? 'true' : undefined}
+                className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${location.pathname === '/dashboard' ? 'bg-primary/10' : ''}`}
+              >
+                <span className="flex items-center space-x-3">
+                  <div className={`w-9 h-9 rounded-lg ${location.pathname === '/dashboard' ? 'bg-primary' : 'bg-subtle group-hover:bg-primary'} flex items-center justify-center transition-colors`}>
+                    <svg className={`w-5 h-5 ${location.pathname === '/dashboard' ? 'text-white' : 'text-slate-600 group-hover:text-white'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                  </div>
+                  {!collapsed && <span className={`text-sm font-medium ${location.pathname === '/dashboard' ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Dashboard</span>}
+                </span>
+              </button>
+            </li>
 
-              // Usuarios menu with submenu (empresas)
-              if (item.id === "usuarios") {
-                return (
-                  <li key={item.id}>
+            {/* Tickets con submenu */}
+            <li>
+              <button
+                onClick={toggleTickets}
+                className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${location.pathname.includes('/tickets') ? 'bg-primary/10' : ''}`}
+              >
+                <span className="flex items-center space-x-3">
+                  <div className={`w-9 h-9 rounded-lg ${location.pathname.includes('/tickets') ? 'bg-primary' : 'bg-subtle group-hover:bg-primary'} flex items-center justify-center transition-colors`}>
+                    <svg className={`w-5 h-5 ${location.pathname.includes('/tickets') ? 'text-white' : 'text-slate-600 group-hover:text-white'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                    </svg>
+                  </div>
+                  {!collapsed && (
+                    <>
+                      <span className={`text-sm font-medium ${location.pathname.includes('/tickets') ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Tickets</span>
+                      <svg className={`w-4 h-4 transition-transform ${ticketsOpen ? 'rotate-90' : ''} ml-auto`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </>
+                  )}
+                </span>
+              </button>
+              {ticketsOpen && !collapsed && (
+                <ul className="mt-1 ml-11 space-y-1 border-l-2 border-primary/20 pl-3">
+                  <li>
                     <button
-                      onClick={toggleUsuarios}
-                      aria-current={isActive ? 'true' : undefined}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${isActive ? 'active' : ''}`}
+                      onClick={() => guardedNavigate('/admin/tickets')}
+                      className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                        location.pathname === '/admin/tickets'
+                          ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
+                          : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                      }`}
                     >
-                      <span className="flex items-center space-x-3">
-                        <div className="w-8 h-8 rounded-lg bg-subtle group-hover:bg-primary flex items-center justify-center transition-colors">
-                          <svg className="w-4 h-4 text-slate-600 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            {iconMap[item.id] || iconMap.dashboard}
-                          </svg>
-                        </div>
-                        {!collapsed && <span className="text-sm font-medium text-slate-700 group-hover:text-primary">{item.label}</span>}
-                      </span>
+                      {location.pathname === '/admin/tickets' && (
+                        <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
+                      )}
+                      Bandeja de Tickets
                     </button>
-                    {usuariosOpen && !collapsed && (
-                      <div className="mt-1 ml-11 space-y-1 border-l-2 border-slate-100 pl-3">
-                        {loadingEmpresas ? (
-                          <div className="text-xs text-slate-500 py-2">Cargando empresas...</div>
-                        ) : empresasError ? (
-                          <div className="text-xs text-red-500 py-2">Error cargando empresas</div>
-                        ) : empresas.length === 0 ? (
-                          <div className="text-xs text-slate-500 py-2">No hay empresas</div>
-                        ) : (
-                          <ul className="space-y-1">
-                            {empresas.map((e: EmpresaItem) => {
-                              const empresaId = e.id ?? e._id;
-                              const isEmpresaActive = location.pathname.includes(`/usuarios/empresa/${empresaId}`);
-                              
-                              return (
-                                <li key={empresaId}>
-                                  <button
-                                    onClick={() => guardedNavigate(`/admin/usuarios/empresa/${empresaId}`)}
-                                    className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
-                                      isEmpresaActive 
-                                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold shadow-md border border-blue-500' 
-                                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700 font-medium border border-transparent'
-                                    }`}
-                                  >
-                                    {isEmpresaActive && (
-                                      <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
-                                    )}
-                                    {e.nombre ?? "(sin nombre)"}
-                                  </button>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
-                      </div>
-                    )}
                   </li>
-                );
-              }
+                  <li>
+                    <button
+                      onClick={() => guardedNavigate('/admin/tickets/qr')}
+                      className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                        location.pathname === '/admin/tickets/qr'
+                          ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
+                          : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                      }`}
+                    >
+                      {location.pathname === '/admin/tickets/qr' && (
+                        <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
+                      )}
+                      Tickets QR
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => guardedNavigate('/admin/tickets/internos')}
+                      className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                        location.pathname === '/admin/tickets/internos'
+                          ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
+                          : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                      }`}
+                    >
+                      {location.pathname === '/admin/tickets/internos' && (
+                        <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
+                      )}
+                      Tickets Internos
+                    </button>
+                  </li>
+                </ul>
+              )}
+            </li>
 
-              // Catalogos menu with submenu
-              if (item.id === "catalogos") {
-                return (
-                  <li key={item.id}>
+            {/* Inventario con empresas */}
+            <li>
+              <button
+                onClick={toggleInventario}
+                className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${location.pathname.includes('/inventario') ? 'bg-primary/10' : ''}`}
+              >
+                <span className="flex items-center space-x-3">
+                  <div className={`w-9 h-9 rounded-lg ${location.pathname.includes('/inventario') ? 'bg-primary' : 'bg-subtle group-hover:bg-primary'} flex items-center justify-center transition-colors`}>
+                    <svg className={`w-5 h-5 ${location.pathname.includes('/inventario') ? 'text-white' : 'text-slate-600 group-hover:text-white'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  </div>
+                  {!collapsed && (
+                    <>
+                      <span className={`text-sm font-medium ${location.pathname.includes('/inventario') ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Inventario</span>
+                      <svg className={`w-4 h-4 transition-transform ${inventarioOpen ? 'rotate-90' : ''} ml-auto`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </>
+                  )}
+                </span>
+              </button>
+              {inventarioOpen && !collapsed && (
+                <ul className="mt-1 ml-11 space-y-1 border-l-2 border-primary/20 pl-3">
+                  {loadingEmpresas ? (
+                    <li className="text-xs text-slate-500 py-2 px-3">Cargando empresas...</li>
+                  ) : empresasError ? (
+                    <li className="text-xs text-red-500 py-2 px-3">Error cargando empresas</li>
+                  ) : empresas.length === 0 ? (
+                    <li className="text-xs text-slate-500 py-2 px-3">No hay empresas</li>
+                  ) : (
+                    empresas.map((e: EmpresaItem) => {
+                      const empresaId = e.id ?? e._id;
+                      const isEmpresaActive = location.pathname.includes(`/empresas/${empresaId}/inventario`);
+                      
+                      return (
+                        <li key={empresaId}>
+                          <button
+                            onClick={() => guardedNavigate(`/admin/empresas/${empresaId}/inventario`)}
+                            className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                              isEmpresaActive
+                                ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
+                                : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                            }`}
+                          >
+                            {isEmpresaActive && (
+                              <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
+                            )}
+                            {e.nombre ?? "(sin nombre)"}
+                          </button>
+                        </li>
+                      );
+                    })
+                  )}
+                </ul>
+              )}
+            </li>
+
+            {/* Usuarios - Menú principal */}
+            <li>
+              <button
+                onClick={toggleUsuarios}
+                className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${location.pathname.includes('/usuarios') ? 'bg-primary/10' : ''}`}
+              >
+                <span className="flex items-center space-x-3">
+                  <div className={`w-9 h-9 rounded-lg ${location.pathname.includes('/usuarios') ? 'bg-primary' : 'bg-subtle group-hover:bg-primary'} flex items-center justify-center transition-colors`}>
+                    <svg className={`w-5 h-5 ${location.pathname.includes('/usuarios') ? 'text-white' : 'text-slate-600 group-hover:text-white'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  </div>
+                  {!collapsed && (
+                    <>
+                      <span className={`text-sm font-medium ${location.pathname.includes('/usuarios') ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Usuarios</span>
+                      <svg className={`w-4 h-4 transition-transform ${usuariosOpen ? 'rotate-90' : ''} ml-auto`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </>
+                  )}
+                </span>
+              </button>
+              {usuariosOpen && !collapsed && (
+                <div className="mt-1 ml-11 space-y-1 border-l-2 border-primary/20 pl-3">
+                  {/* Usuarios Clientes */}
+                  <div>
                     <button
-                      onClick={toggleCatalogos}
-                      aria-current={isActive ? 'true' : undefined}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${isActive ? 'active' : ''}`}
+                      onClick={toggleUsuariosClientes}
+                      className="w-full flex items-center justify-between py-2 px-3 rounded-md hover:bg-primary/10 transition-all text-left group"
                     >
-                      <span className="flex items-center space-x-3">
-                        <div className="w-8 h-8 rounded-lg bg-subtle group-hover:bg-primary flex items-center justify-center transition-colors">
-                          <svg className="w-4 h-4 text-slate-600 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            {iconMap[item.id] || iconMap.dashboard}
-                          </svg>
-                        </div>
-                        {!collapsed && <span className="text-sm font-medium text-slate-700 group-hover:text-primary">{item.label}</span>}
-                      </span>
-                    </button>
-                    {catalogosOpen && !collapsed && (
-                      <div className="mt-1 ml-11 space-y-1 border-l-2 border-slate-100 pl-3">
-                        <button
-                          onClick={() => guardedNavigate('/admin/catalogo-categorias')}
-                          className="w-full text-left text-xs py-2 px-3 rounded-md hover:bg-subtle transition-colors text-slate-700"
-                        >
-                          Catálogo de Categorías
-                        </button>
-                        <button
-                          onClick={() => guardedNavigate('/admin/catalogo-servicios')}
-                          className="w-full text-left text-xs py-2 px-3 rounded-md hover:bg-subtle transition-colors text-slate-700"
-                        >
-                          Catálogo de Servicios
-                        </button>
-                        <button
-                          onClick={() => guardedNavigate('/admin/catalogo-correos')}
-                          className="w-full text-left text-xs py-2 px-3 rounded-md hover:bg-subtle transition-colors text-slate-700"
-                        >
-                          Catálogo de Correos
-                        </button>
-                      </div>
-                    )}
-                  </li>
-                );
-              }
-              
-              // Regular menu items
-              return (
-                <li key={item.id}>
-                  <button
-                    onClick={() => handleNavigation(item.path)}
-                    aria-current={isActive ? 'true' : undefined}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${isActive ? 'active' : ''}`}
-                  >
-                    <span className="flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded-lg bg-subtle group-hover:bg-primary flex items-center justify-center transition-colors">
-                        <svg className="w-4 h-4 text-slate-600 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          {iconMap[item.id] || iconMap.dashboard}
+                      <span className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-slate-600 group-hover:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                         </svg>
-                      </div>
-                      {!collapsed && <span className="text-sm font-medium text-slate-700 group-hover:text-primary">{item.label}</span>}
-                    </span>
-                    {item.id === "tickets" && (
-                      <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-semibold">
-                        5
+                        <span className="text-xs font-semibold text-slate-700 group-hover:text-primary">Usuarios Clientes</span>
                       </span>
+                      <svg className={`w-3 h-3 transition-transform ${usuariosClientesOpen ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                    {usuariosClientesOpen && (
+                      <ul className="mt-1 ml-6 space-y-1 border-l-2 border-primary/10 pl-2">
+                        {loadingEmpresas ? (
+                          <li className="text-xs text-slate-500 py-2 px-3">Cargando empresas...</li>
+                        ) : empresasError ? (
+                          <li className="text-xs text-red-500 py-2 px-3">Error cargando empresas</li>
+                        ) : empresas.length === 0 ? (
+                          <li className="text-xs text-slate-500 py-2 px-3">No hay empresas</li>
+                        ) : (
+                          empresas.map((e: EmpresaItem) => {
+                            const empresaId = e.id ?? e._id;
+                            const isEmpresaActive = location.pathname.includes(`/usuarios/empresa/${empresaId}`);
+                            
+                            return (
+                              <li key={empresaId}>
+                                <button
+                                  onClick={() => guardedNavigate(`/admin/usuarios/empresa/${empresaId}`)}
+                                  className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                                    isEmpresaActive
+                                      ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
+                                      : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                                  }`}
+                                >
+                                  {isEmpresaActive && (
+                                    <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
+                                  )}
+                                  {e.nombre ?? "(sin nombre)"}
+                                </button>
+                              </li>
+                            );
+                          })
+                        )}
+                      </ul>
                     )}
-                  </button>
-                </li>
-              );
-            })}
+                  </div>
+
+                  {/* Usuarios Internos */}
+                  <div>
+                    <button
+                      onClick={toggleUsuariosInternos}
+                      className="w-full flex items-center justify-between py-2 px-3 rounded-md hover:bg-primary/10 transition-all text-left group"
+                    >
+                      <span className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-slate-600 group-hover:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-xs font-semibold text-slate-700 group-hover:text-primary">Usuarios Internos</span>
+                      </span>
+                      <svg className={`w-3 h-3 transition-transform ${usuariosInternosOpen ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                    {usuariosInternosOpen && (
+                      <ul className="mt-1 ml-6 space-y-1 border-l-2 border-primary/10 pl-2">
+                        <li>
+                          <button
+                            onClick={() => guardedNavigate('/admin/usuarios/internos/administradores')}
+                            className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                              location.pathname === '/admin/usuarios/internos/administradores'
+                                ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
+                                : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                            }`}
+                          >
+                            {location.pathname === '/admin/usuarios/internos/administradores' && (
+                              <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
+                            )}
+                            Administradores
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            onClick={() => guardedNavigate('/admin/usuarios/internos/tecnicos')}
+                            className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                              location.pathname === '/admin/usuarios/internos/tecnicos'
+                                ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
+                                : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                            }`}
+                          >
+                            {location.pathname === '/admin/usuarios/internos/tecnicos' && (
+                              <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
+                            )}
+                            Técnicos
+                          </button>
+                        </li>
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
+            </li>
+
+            {/* Catálogos */}
+            <li>
+              <button
+                onClick={toggleCatalogos}
+                className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${location.pathname.includes('/catalogo') ? 'bg-primary/10' : ''}`}
+              >
+                <span className="flex items-center space-x-3">
+                  <div className={`w-9 h-9 rounded-lg ${location.pathname.includes('/catalogo') ? 'bg-primary' : 'bg-subtle group-hover:bg-primary'} flex items-center justify-center transition-colors`}>
+                    <svg className={`w-5 h-5 ${location.pathname.includes('/catalogo') ? 'text-white' : 'text-slate-600 group-hover:text-white'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                  </div>
+                  {!collapsed && (
+                    <>
+                      <span className={`text-sm font-medium ${location.pathname.includes('/catalogo') ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Catálogos</span>
+                      <svg className={`w-4 h-4 transition-transform ${catalogosOpen ? 'rotate-90' : ''} ml-auto`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </>
+                  )}
+                </span>
+              </button>
+              {catalogosOpen && !collapsed && (
+                <ul className="mt-1 ml-11 space-y-1 border-l-2 border-primary/20 pl-3">
+                  <li>
+                    <button
+                      onClick={() => guardedNavigate('/admin/catalogo-categorias')}
+                      className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                        location.pathname === '/admin/catalogo-categorias'
+                          ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
+                          : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                      }`}
+                    >
+                      {location.pathname === '/admin/catalogo-categorias' && (
+                        <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
+                      )}
+                      Categorías
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => guardedNavigate('/admin/catalogo-servicios')}
+                      className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                        location.pathname === '/admin/catalogo-servicios'
+                          ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
+                          : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                      }`}
+                    >
+                      {location.pathname === '/admin/catalogo-servicios' && (
+                        <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
+                      )}
+                      Servicios
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => guardedNavigate('/admin/catalogo-correos')}
+                      className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                        location.pathname === '/admin/catalogo-correos'
+                          ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
+                          : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                      }`}
+                    >
+                      {location.pathname === '/admin/catalogo-correos' && (
+                        <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
+                      )}
+                      Plataformas de Correo
+                    </button>
+                  </li>
+                </ul>
+              )}
+            </li>
+
+            {/* Empresas */}
+            <li>
+              <button
+                onClick={() => handleNavigation('/empresas')}
+                aria-current={location.pathname === '/empresas' ? 'true' : undefined}
+                className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${location.pathname === '/empresas' ? 'bg-primary/10' : ''}`}
+              >
+                <span className="flex items-center space-x-3">
+                  <div className={`w-9 h-9 rounded-lg ${location.pathname === '/empresas' ? 'bg-primary' : 'bg-subtle group-hover:bg-primary'} flex items-center justify-center transition-colors`}>
+                    <svg className={`w-5 h-5 ${location.pathname === '/empresas' ? 'text-white' : 'text-slate-600 group-hover:text-white'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  </div>
+                  {!collapsed && <span className={`text-sm font-medium ${location.pathname === '/empresas' ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Empresas</span>}
+                </span>
+              </button>
+            </li>
+
+            {/* Reportes */}
+            <li>
+              <button
+                onClick={() => handleNavigation('/reportes')}
+                aria-current={location.pathname === '/reportes' ? 'true' : undefined}
+                className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${location.pathname === '/reportes' ? 'bg-primary/10' : ''}`}
+              >
+                <span className="flex items-center space-x-3">
+                  <div className={`w-9 h-9 rounded-lg ${location.pathname === '/reportes' ? 'bg-primary' : 'bg-subtle group-hover:bg-primary'} flex items-center justify-center transition-colors`}>
+                    <svg className={`w-5 h-5 ${location.pathname === '/reportes' ? 'text-white' : 'text-slate-600 group-hover:text-white'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  {!collapsed && <span className={`text-sm font-medium ${location.pathname === '/reportes' ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Reportes</span>}
+                </span>
+              </button>
+            </li>
+
+            {/* Configuración */}
+            <li>
+              <button
+                onClick={() => handleNavigation('/config')}
+                aria-current={location.pathname === '/config' ? 'true' : undefined}
+                className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg hover:bg-subtle transition-all text-left group ${location.pathname === '/config' ? 'bg-primary/10' : ''}`}
+              >
+                <span className="flex items-center space-x-3">
+                  <div className={`w-9 h-9 rounded-lg ${location.pathname === '/config' ? 'bg-primary' : 'bg-subtle group-hover:bg-primary'} flex items-center justify-center transition-colors`}>
+                    <svg className={`w-5 h-5 ${location.pathname === '/config' ? 'text-white' : 'text-slate-600 group-hover:text-white'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  {!collapsed && <span className={`text-sm font-medium ${location.pathname === '/config' ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Configuración</span>}
+                </span>
+              </button>
+            </li>
           </ul>
         </nav>
 

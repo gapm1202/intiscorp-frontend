@@ -3,23 +3,21 @@ import axiosClient from '@/api/axiosClient';
 export interface ActivoDetalle {
   id: number;
   codigo: string;
-  nombre: string;
-  marca: string;
+  categoria: string;
+  fabricante: string;
   modelo: string;
-  sede: {
-    nombre: string;
-  };
-  area: {
-    nombre: string;
-  };
+  serie: string;
+  estadoActivo: string;
+  estadoOperativo: string;
+  sede: string;
+  area?: string;
   camposPersonalizados: Record<string, any>;
-  anydesk: string;
+  codigoAccesoRemoto?: string;
   usuariosAsignados: {
     id: number;
     nombre: string;
-    correoPrincipal: string;
+    email: string;
     cargo: string;
-    area: string;
   }[];
 }
 

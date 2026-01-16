@@ -51,7 +51,7 @@ export default function ReporteIncidenciaPage() {
       if (!noEsActivo && activoDetalle) {
         incidenciaData.activoAfectado = formData.activoAfectado;
         incidenciaData.contactoNombre = activoDetalle.usuariosAsignados[0]?.nombre || 'N/A';
-        incidenciaData.contactoEmail = activoDetalle.usuariosAsignados[0]?.correoPrincipal || '';
+        incidenciaData.contactoEmail = activoDetalle.usuariosAsignados[0]?.email || '';
         incidenciaData.contactoTelefono = '000000000';
       }
       
@@ -321,8 +321,8 @@ export default function ReporteIncidenciaPage() {
                       <div className="bg-white rounded-lg p-4 mb-3 shadow-sm">
                         <div className="flex items-start justify-between">
                           <div>
-                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Equipo</p>
-                            <p className="font-bold text-gray-900 text-lg">{activoDetalle.nombre}</p>
+                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Equipamiento</p>
+                            <p className="font-bold text-gray-900 text-lg">{activoDetalle.categoria}</p>
                           </div>
                           <div className="text-right">
                             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Código</p>
@@ -335,19 +335,19 @@ export default function ReporteIncidenciaPage() {
                       <div className="grid grid-cols-2 gap-3 mb-3">
                         <div className="bg-white rounded-lg p-3 shadow-sm">
                           <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Sede</p>
-                          <p className="font-semibold text-gray-900">{activoDetalle.sede?.nombre || 'N/A'}</p>
+                          <p className="font-semibold text-gray-900">{activoDetalle.sede || 'N/A'}</p>
                         </div>
                         <div className="bg-white rounded-lg p-3 shadow-sm">
                           <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Área</p>
-                          <p className="font-semibold text-gray-900">{activoDetalle.area?.nombre || 'N/A'}</p>
+                          <p className="font-semibold text-gray-900">{activoDetalle.area || 'N/A'}</p>
                         </div>
                       </div>
 
-                      {/* AnyDesk */}
-                      {activoDetalle.anydesk && (
+                      {/* Código de Acceso Remoto */}
+                      {activoDetalle.codigoAccesoRemoto && (
                         <div className="bg-white rounded-lg p-3 mb-3 shadow-sm">
-                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">AnyDesk</p>
-                          <p className="font-mono font-bold text-gray-900 text-lg">{activoDetalle.anydesk}</p>
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Código Acceso Remoto</p>
+                          <p className="font-mono font-bold text-indigo-600 text-lg">{activoDetalle.codigoAccesoRemoto}</p>
                         </div>
                       )}
 
@@ -397,8 +397,8 @@ export default function ReporteIncidenciaPage() {
                             {activoDetalle.usuariosAsignados.map((user) => (
                               <div key={user.id} className="border-l-4 border-indigo-500 bg-gray-50 rounded-r px-3 py-2">
                                 <p className="font-bold text-gray-900">{user.nombre}</p>
-                                <p className="text-sm text-indigo-600">{user.correoPrincipal}</p>
-                                <p className="text-xs text-gray-600 mt-1">{user.cargo} • {user.area}</p>
+                                <p className="text-sm text-indigo-600">{user.email}</p>
+                                <p className="text-xs text-gray-600 mt-1">{user.cargo}</p>
                               </div>
                             ))}
                           </div>

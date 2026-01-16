@@ -7,7 +7,9 @@ import {
   updateUsuario,
   asignarActivo,
   desactivarUsuario,
-  exportarUsuarios
+  exportarUsuarios,
+  enviarCorreoBienvenida,
+  enviarCorreoActualizacion
 } from '../services/usuariosService';
 import { getEmpresaById } from '@/modules/empresas/services/empresasService';
 import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
@@ -40,8 +42,10 @@ export default function UsuariosEmpresaPage() {
   const [showDesactivarModal, setShowDesactivarModal] = useState(false);
   const [showHistorialModal, setShowHistorialModal] = useState(false);
   const [showCredencialesModal, setShowCredencialesModal] = useState(false);
+  const [showEnviarCorreoModal, setShowEnviarCorreoModal] = useState(false);
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState<Usuario | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [enviandoCorreo, setEnviandoCorreo] = useState(false);
 
   // Toast
   const [showToast, setShowToast] = useState(false);
@@ -667,17 +671,38 @@ export default function UsuariosEmpresaPage() {
                         return fecha ? new Date(fecha).toLocaleDateString('es-PE') : <span className="text-muted">—</span>;
                       })()}
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <button
-                        onClick={() => navigate(`/empresas/${empresaId}/usuarios/${usuario.id || usuario._id}`)}
-                        className="px-4 py-2 bg-[#5061f7] text-white rounded-xl hover:bg-[#4453e6] hover:shadow-lg text-sm font-semibold transition-all inline-flex items-center gap-2"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        Ver
-                      </button>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => navigate(`/empresas/${empresaId}/usuarios/${usuario.id || usuario._id}`)}
+                          className="px-4 py-2 bg-[#5061f7] text-white rounded-xl hover:bg-[#4453e6] hover:shadow-lg text-sm font-semibold transition-all inline-flex items-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          Ver
+                        </button>
+                        {usuario.correoPrincipal && (
+                          <button
+                            onClick={() => {
+                              setUsuarioSeleccionado(usuario);
+                              setShowEnviarCorreoModal(true);
+                            }}
+                            disabled={usuario.correoEnviado && !usuario.tieneCambiosPendientes}
+                            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all inline-flex items-center gap-2 ${
+                              usuario.correoEnviado && !usuario.tieneCambiosPendientes
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white hover:from-blue-600 hover:to-cyan-700 hover:shadow-lg'
+                            }`}
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            {usuario.correoEnviado ? 'Enviar Actualización' : 'Enviar correo'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -748,6 +773,115 @@ export default function UsuariosEmpresaPage() {
             setUsuarioSeleccionado(null);
           }}
         />
+      )}
+
+      {/* Modal de confirmación para enviar correo */}
+      {showEnviarCorreoModal && usuarioSeleccionado && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-cyan-600 px-6 py-5 text-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">
+                    {usuarioSeleccionado.correoEnviado ? 'Enviar Actualización' : 'Enviar Correo de Bienvenida'}
+                  </h3>
+                  <p className="text-blue-100 text-sm mt-0.5">{usuarioSeleccionado.nombreCompleto}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <svg className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <p className="font-semibold text-blue-900 mb-1">¿Completaste toda la información del usuario?</p>
+                    <p className="text-sm text-blue-700">
+                      {usuarioSeleccionado.correoEnviado 
+                        ? 'Se enviará un correo con los cambios realizados desde la última notificación.'
+                        : 'Verifica que todos los datos estén correctos antes de enviar el correo de bienvenida.'
+                      }
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botones */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowEnviarCorreoModal(false);
+                    setUsuarioSeleccionado(null);
+                  }}
+                  className="flex-1 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition-all duration-200 border-2 border-slate-200"
+                >
+                  No
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!empresaId || !usuarioSeleccionado) return;
+                    
+                    try {
+                      setEnviandoCorreo(true);
+                      
+                      if (usuarioSeleccionado.correoEnviado) {
+                        await enviarCorreoActualizacion(empresaId, usuarioSeleccionado.id || usuarioSeleccionado._id!);
+                      } else {
+                        await enviarCorreoBienvenida(empresaId, usuarioSeleccionado.id || usuarioSeleccionado._id!);
+                      }
+                      
+                      // Actualizar lista de usuarios
+                      const usuariosActualizados = await getUsuariosByEmpresa(empresaId);
+                      setUsuarios(usuariosActualizados);
+                      
+                      setToastMessage(
+                        usuarioSeleccionado.correoEnviado 
+                          ? 'Correo de actualización enviado correctamente'
+                          : 'Correo de bienvenida enviado correctamente'
+                      );
+                      setToastType('success');
+                      setShowToast(true);
+                      setTimeout(() => setShowToast(false), 3000);
+                      
+                      setShowEnviarCorreoModal(false);
+                      setUsuarioSeleccionado(null);
+                    } catch (err: any) {
+                      setToastMessage(err?.response?.data?.message || 'Error al enviar el correo');
+                      setToastType('error');
+                      setShowToast(true);
+                      setTimeout(() => setShowToast(false), 3000);
+                    } finally {
+                      setEnviandoCorreo(false);
+                    }
+                  }}
+                  disabled={enviandoCorreo}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {enviandoCorreo ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Enviando...
+                    </>
+                  ) : (
+                    'Sí, enviar'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {showCredencialesModal && empresaId && (
