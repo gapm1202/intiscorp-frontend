@@ -17,6 +17,9 @@ type FormData = z.infer<typeof schema>;
 const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [show2FA, setShow2FA] = useState(false);
+  const [codigo2FA, setCodigo2FA] = useState("");
+  const [tempUserData, setTempUserData] = useState<any>(null);
 
   const { login } = useAuth(); // <-- 3. Obtener la función 'login' del contexto
   const navigate = useNavigate(); // <-- 4. Obtener la función 'navigate' para redirigir
@@ -36,18 +39,44 @@ const Login = () => {
     setLoading(true);
 
     try {
-      // Usar el servicio de login con axios
+      // Validar credenciales y solicitar envío de código 2FA
       const responseData = await loginUser(data.email, data.password);
-
-      // ¡ÉXITO!
-      // 'responseData' debería ser algo como { user: {...}, token: "..." }
       
-      // 6. Guardamos el usuario y token en el contexto
-      login({ user: responseData.user, token: responseData.token });
+      // Guardar datos temporalmente y mostrar modal 2FA
+      setTempUserData(responseData);
+      setShow2FA(true);
+      setError("");
+    } catch (err: unknown) {
+      console.error("Error de login:", err);
+      const e = err as { message?: string };
+      setError(e.message || "Error de conexión con el servidor");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      // 7. Normalizar rol y redirigir
-      const rawUser = responseData.user || {};
-      // El backend puede devolver `rol`, `role` o `roles` (array). Normalizamos sin usar `any`.
+  // Función para verificar código 2FA
+  const onVerify2FA = async () => {
+    if (codigo2FA.length !== 6) {
+      setError("El código debe tener 6 dígitos");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+
+    try {
+      // TODO: Llamar endpoint de verificación 2FA
+      // const result = await verify2FACode(tempUserData.user.id, codigo2FA);
+      
+      // Por ahora, simulamos éxito (el backend debe implementar la verificación)
+      // TEMPORAL: Aceptar cualquier código de 6 dígitos
+      
+      // Guardamos el usuario y token en el contexto
+      login({ user: tempUserData.user, token: tempUserData.token });
+
+      // Normalizar rol y redirigir
+      const rawUser = tempUserData.user || {};
       const u = rawUser as Record<string, unknown>;
       const roleCandidate = u['rol'] ?? u['role'] ?? (Array.isArray(u['roles']) ? (u['roles'] as unknown[])[0] : undefined) ?? '';
       const normalizedRole = String(roleCandidate).toLowerCase();
@@ -55,13 +84,11 @@ const Login = () => {
       if (normalizedRole.includes("admin")) navigate("/admin");
       else if (normalizedRole.includes("tec")) navigate("/tecnico");
       else navigate("/cliente");
-
     } catch (err: unknown) {
-      console.error("Error de login:", err);
+      console.error("Error verificando código:", err);
       const e = err as { message?: string };
-      setError(e.message || "Error de conexión con el servidor");
+      setError(e.message || "Código inválido");
     } finally {
-      // Esto se ejecuta siempre, al final del 'try' o 'catch'
       setLoading(false);
     }
   };
@@ -126,6 +153,90 @@ const Login = () => {
           </button>
         </form>
       </div>
+
+      {/* Modal de Verificación 2FA */}
+      {show2FA && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Verificación de Seguridad</h2>
+              <p className="text-gray-600 text-sm">
+                Hemos enviado un código de 6 dígitos a tu correo principal.
+                <br />
+                <span className="font-semibold text-blue-600">{tempUserData?.user?.correoPrincipal || 'tu correo'}</span>
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 text-center">
+                  Ingresa el código de verificación
+                </label>
+                <input
+                  type="text"
+                  value={codigo2FA}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    setCodigo2FA(value);
+                  }}
+                  className="w-full px-4 py-3 text-center text-2xl font-mono tracking-widest border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="000000"
+                  maxLength={6}
+                  autoFocus
+                />
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-center text-red-600 text-sm font-medium">{error}</p>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShow2FA(false);
+                    setCodigo2FA("");
+                    setTempUserData(null);
+                    setError("");
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={onVerify2FA}
+                  disabled={loading || codigo2FA.length !== 6}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? "Verificando..." : "Verificar"}
+                </button>
+              </div>
+
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setError("");
+                    // TODO: Implementar reenvío de código
+                    alert("Código reenviado (funcionalidad pendiente en backend)");
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  ¿No recibiste el código? Reenviar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

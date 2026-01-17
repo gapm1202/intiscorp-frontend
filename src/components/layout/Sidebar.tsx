@@ -65,7 +65,6 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
   const [catalogosOpen, setCatalogosOpen] = useState(false);
   const [usuariosOpen, setUsuariosOpen] = useState(false);
   const [usuariosClientesOpen, setUsuariosClientesOpen] = useState(false);
-  const [usuariosInternosOpen, setUsuariosInternosOpen] = useState(false);
   const [ticketsOpen, setTicketsOpen] = useState(false);
 
   // Mantener menús abiertos según la ruta actual
@@ -74,9 +73,6 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
       setUsuariosOpen(true);
       if (location.pathname.includes('/usuarios/empresa/')) {
         setUsuariosClientesOpen(true);
-      }
-      if (location.pathname.includes('/usuarios/internos')) {
-        setUsuariosInternosOpen(true);
       }
     }
     if (location.pathname.includes('/inventario') || location.pathname.includes('/empresas/') && location.pathname.includes('/inventario')) {
@@ -165,10 +161,6 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
         setLoadingEmpresas(false);
       }
     }
-  };
-
-  const toggleUsuariosInternos = () => {
-    setUsuariosInternosOpen(v => !v);
   };
 
   return (
@@ -460,53 +452,20 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                   {/* Usuarios Internos */}
                   <div>
                     <button
-                      onClick={toggleUsuariosInternos}
-                      className="w-full flex items-center justify-between py-2 px-3 rounded-md hover:bg-primary/10 transition-all text-left group"
+                      onClick={() => guardedNavigate('/admin/usuarios/internos')}
+                      className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                        location.pathname.startsWith('/admin/usuarios/internos')
+                          ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
+                          : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                      }`}
                     >
                       <span className="flex items-center gap-2">
-                        <svg className="w-4 h-4 text-slate-600 group-hover:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
-                        <span className="text-xs font-semibold text-slate-700 group-hover:text-primary">Usuarios Internos</span>
+                        <span className="font-semibold">Usuarios Internos</span>
                       </span>
-                      <svg className={`w-3 h-3 transition-transform ${usuariosInternosOpen ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
                     </button>
-                    {usuariosInternosOpen && (
-                      <ul className="mt-1 ml-6 space-y-1 border-l-2 border-primary/10 pl-2">
-                        <li>
-                          <button
-                            onClick={() => guardedNavigate('/admin/usuarios/internos/administradores')}
-                            className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
-                              location.pathname === '/admin/usuarios/internos/administradores'
-                                ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
-                                : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
-                            }`}
-                          >
-                            {location.pathname === '/admin/usuarios/internos/administradores' && (
-                              <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
-                            )}
-                            Administradores
-                          </button>
-                        </li>
-                        <li>
-                          <button
-                            onClick={() => guardedNavigate('/admin/usuarios/internos/tecnicos')}
-                            className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
-                              location.pathname === '/admin/usuarios/internos/tecnicos'
-                                ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
-                                : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
-                            }`}
-                          >
-                            {location.pathname === '/admin/usuarios/internos/tecnicos' && (
-                              <span className="inline-block w-2 h-2 rounded-full bg-white mr-2 shadow-sm"></span>
-                            )}
-                            Técnicos
-                          </button>
-                        </li>
-                      </ul>
-                    )}
                   </div>
                 </div>
               )}
