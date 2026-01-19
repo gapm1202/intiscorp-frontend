@@ -34,17 +34,26 @@ export const slaService = {
         };
       }
       
-      const response = await axiosClient.post(`${BASE_URL}/seccion/${empresaId}`, {
+      const payload = {
         seccion,
         data: normalizedData,
         ...(motivo ? { motivo } : {}),
+      };
+      
+      console.log('[slaService] 📤 Enviando a backend:', {
+        empresaId,
+        url: `${BASE_URL}/seccion/${empresaId}`,
+        payload: JSON.stringify(payload, null, 2)
       });
+      
+      const response = await axiosClient.post(`${BASE_URL}/seccion/${empresaId}`, payload);
       return response.data;
     } catch (error: any) {
       console.error('[slaService] guardarSeccion error:', {
         status: error?.response?.status,
         message: error?.response?.data?.message,
         data: error?.response?.data,
+        fullError: error
       });
       throw error;
     }

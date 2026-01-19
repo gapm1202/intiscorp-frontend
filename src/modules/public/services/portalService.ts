@@ -10,6 +10,7 @@ export interface ActivoDetalle {
   estadoActivo: string;
   estadoOperativo: string;
   sede: string;
+  sedeId?: number;
   area?: string;
   camposPersonalizados: Record<string, any>;
   codigoAccesoRemoto?: string;
@@ -28,6 +29,7 @@ export interface UsuarioDetalle {
   cargo: string;
   telefono: string;
   correoPrincipal: string;
+  sedeId?: number;
   sede?: {
     nombre: string;
   };

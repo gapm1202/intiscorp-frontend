@@ -8,6 +8,7 @@ export default function ReporteIncidenciaPage() {
   const navigate = useNavigate();
   const [empresaSession, setEmpresaSession] = useState(authEmpresaService.getSession());
   const [formData, setFormData] = useState({
+    titulo: '',
     descripcion: '',
     activoAfectado: '',
     dni: ''
@@ -38,34 +39,62 @@ export default function ReporteIncidenciaPage() {
     setLoading(true);
     setError('');
     setSuccess(false);
-
     try {
+      // Validaciones: debe existir activo (y haberlo buscado) o usuario por DNI
+      if (!noEsActivo) {
+        if (!activoDetalle) {
+          setError('Debe buscar y seleccionar un activo antes de enviar, o marque Gestión TI');
+          setLoading(false);
+          return;
+        }
+      } else {
+        if (!usuarioDetalle && !formData.dni.trim()) {
+          setError('Debe buscar un usuario por DNI o ingresar un DNI válido');
+          setLoading(false);
+          return;
+        }
+      }
+
       const incidenciaData: any = {
         tipoIncidencia: 'Incidente',
+        titulo: formData.titulo,
         descripcion: formData.descripcion,
-        prioridad: 'normal',
+        prioridad: 'NORMAL',
+        impacto: 'MEDIO',
+        urgencia: 'MEDIA',
         archivos
       };
 
       // Si es un activo
       if (!noEsActivo && activoDetalle) {
-        incidenciaData.activoAfectado = formData.activoAfectado;
+        incidenciaData.asset_id = activoDetalle.codigo; // código del activo
+        incidenciaData.activoAfectado = activoDetalle.codigo;
+        if (activoDetalle.sedeId) {
+          incidenciaData.sedeId = activoDetalle.sedeId;
+        }
         incidenciaData.contactoNombre = activoDetalle.usuariosAsignados[0]?.nombre || 'N/A';
         incidenciaData.contactoEmail = activoDetalle.usuariosAsignados[0]?.email || '';
-        incidenciaData.contactoTelefono = '000000000';
-      }
-      
-      // Si es un usuario
-      if (noEsActivo && usuarioDetalle) {
-        incidenciaData.contactoNombre = usuarioDetalle.nombre;
-        incidenciaData.contactoEmail = usuarioDetalle.correoPrincipal;
-        incidenciaData.contactoTelefono = usuarioDetalle.telefono;
+        incidenciaData.contactoTelefono = activoDetalle.usuariosAsignados[0]?.telefono || '000000000';
       }
 
+      // Si es un usuario
+      if (noEsActivo) {
+        incidenciaData.dni = formData.dni;
+        if (usuarioDetalle && usuarioDetalle.sedeId) {
+          incidenciaData.sedeId = usuarioDetalle.sedeId;
+        }
+        incidenciaData.contactoNombre = usuarioDetalle?.nombre || incidenciaData.contactoNombre || 'N/A';
+        incidenciaData.contactoEmail = usuarioDetalle?.correoPrincipal || incidenciaData.contactoEmail || '';
+        incidenciaData.contactoTelefono = usuarioDetalle?.telefono || incidenciaData.contactoTelefono || '000000000';
+      }
+
+      console.log('📤 DATOS A ENVIAR AL BACKEND:', JSON.stringify(incidenciaData, null, 2));
+
       await incidenciaService.crearIncidencia(incidenciaData);
-      
+
       setSuccess(true);
       setFormData({
+        titulo: '',
         descripcion: '',
         activoAfectado: '',
         dni: ''
@@ -75,7 +104,10 @@ export default function ReporteIncidenciaPage() {
       setUsuarioDetalle(null);
       setNoEsActivo(false);
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Error al reportar incidencia');
+      console.error('❌ ERROR COMPLETO:', err);
+      console.error('❌ Respuesta del servidor:', err?.response?.data);
+      const errorMsg = err?.response?.data?.message || err?.message || 'Error al reportar incidencia';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -200,9 +232,9 @@ export default function ReporteIncidenciaPage() {
             )}
 
             <div className="space-y-6">
-              {/* Checkbox: No es respecto a un activo */}
-              <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4">
-                <label className="flex items-center gap-3 cursor-pointer">
+              {/* Checkbox: No es respecto a un activo específico */}
+              <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border-2 border-amber-300 rounded-lg p-4">
+                <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={noEsActivo}
@@ -210,19 +242,48 @@ export default function ReporteIncidenciaPage() {
                       setNoEsActivo(e.target.checked);
                       setActivoDetalle(null);
                       setUsuarioDetalle(null);
-                      setFormData({ descripcion: formData.descripcion, activoAfectado: '', dni: '' });
+                      setFormData(prev => ({ ...prev, activoAfectado: '', dni: '' }));
                     }}
-                    className="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500"
+                    className="mt-1 w-5 h-5 text-indigo-600 border-2 border-gray-400 rounded focus:ring-2 focus:ring-indigo-500"
                   />
-                  <span className="font-semibold text-gray-700">No es respecto a un activo específico</span>
+                  <div>
+                    <span className="font-bold text-gray-900 text-base">Marca esta opción si la solicitud de atención no es para un equipo. </span>
+                    <p className="text-sm text-gray-700 mt-1">
+                        Esta solicitud esta orientada a Gestion TI/Seguridad. Ingresa tu DNI para identificarte.
+                    </p>
+                  </div>
                 </label>
               </div>
 
-              {/* Si NO es activo: Pedir DNI */}
-              {noEsActivo ? (
+              {/* Pedir código de activo o DNI */}
+              {!noEsActivo ? (
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    ¿Quién eres? Ingresa tu DNI <span className="text-red-500">*</span>
+                    Ingresa el código del activo <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={formData.activoAfectado}
+                      onChange={(e) => setFormData(prev => ({ ...prev, activoAfectado: e.target.value.toUpperCase() }))}
+                      className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                      placeholder="Ingrese el código que se encuentra en la etiqueta de su activo"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={buscarActivo}
+                      disabled={loadingActivo || !formData.activoAfectado.trim()}
+                      className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loadingActivo ? 'Buscando...' : 'Buscar'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    DNI del Usuario <span className="text-red-500">*</span>
                   </label>
                   <div className="flex gap-2">
                     <input
@@ -230,7 +291,7 @@ export default function ReporteIncidenciaPage() {
                       value={formData.dni}
                       onChange={(e) => setFormData(prev => ({ ...prev, dni: e.target.value }))}
                       className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
-                      placeholder="Ej: 12345678"
+                      placeholder="Ingrese DNI"
                       required
                       maxLength={8}
                     />
@@ -243,73 +304,51 @@ export default function ReporteIncidenciaPage() {
                       {loadingUsuario ? 'Buscando...' : 'Buscar'}
                     </button>
                   </div>
+                </div>
+              )}
 
-                  {/* Resumen del Usuario */}
-                  {usuarioDetalle && (
-                    <div className="mt-4 bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
-                      <h4 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        Datos del Usuario
-                      </h4>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <p className="text-gray-600">Nombre:</p>
-                          <p className="font-semibold text-gray-900">{usuarioDetalle.nombre}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Cargo:</p>
+              {/* Resumen del Usuario (DNI) */}
+              {usuarioDetalle && (
+                <div className="mt-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-5 shadow-sm">
+                  <h4 className="font-bold text-blue-900 mb-4 flex items-center gap-2 text-lg">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    Usuario Encontrado
+                  </h4>
+                  
+                  <div className="bg-white rounded-lg p-4 mb-3 shadow-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Nombre Completo</p>
+                        <p className="font-bold text-gray-900 text-lg">{usuarioDetalle.nombre}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">DNI</p>
+                        <p className="font-mono font-bold text-indigo-600">{usuarioDetalle.dni}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Correo</p>
+                        <p className="font-semibold text-gray-900">{usuarioDetalle.correoPrincipal}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Teléfono</p>
+                        <p className="font-semibold text-gray-900">{usuarioDetalle.telefono}</p>
+                      </div>
+                      {usuarioDetalle.cargo && (
+                        <div className="col-span-full">
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Cargo</p>
                           <p className="font-semibold text-gray-900">{usuarioDetalle.cargo}</p>
                         </div>
-                        <div>
-                          <p className="text-gray-600">Correo:</p>
-                          <p className="font-semibold text-blue-700">{usuarioDetalle.correoPrincipal}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Teléfono:</p>
-                          <p className="font-semibold text-gray-900">{usuarioDetalle.telefono || 'N/A'}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Sede:</p>
-                          <p className="font-semibold text-gray-900">{usuarioDetalle.sede?.nombre || 'N/A'}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Área:</p>
-                          <p className="font-semibold text-gray-900">{usuarioDetalle.area?.nombre || 'N/A'}</p>
-                        </div>
-                      </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              ) : (
-                /* Si ES activo: Pedir código */
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Código de Activo Afectado <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={formData.activoAfectado}
-                      onChange={(e) => setFormData(prev => ({ ...prev, activoAfectado: e.target.value.toUpperCase() }))}
-                      className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
-                      placeholder="Ej: ACT-001"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={buscarActivo}
-                      disabled={loadingActivo || !formData.activoAfectado.trim()}
-                      className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {loadingActivo ? 'Buscando...' : 'Buscar'}
-                    </button>
                   </div>
+                </div>
+              )}
 
-                  {/* Resumen del Activo */}
-                  {activoDetalle && (
-                    <div className="mt-4 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-5 shadow-sm">
+              {/* Resumen del Activo */}
+              {activoDetalle && (
+                <div className="mt-4 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-5 shadow-sm">
                       <h4 className="font-bold text-green-900 mb-4 flex items-center gap-2 text-lg">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -406,20 +445,37 @@ export default function ReporteIncidenciaPage() {
                       )}
                     </div>
                   )}
-                </div>
-              )}
+
+              {/* Título del Reporte */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Título del Reporte <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.titulo}
+                  onChange={(e) => setFormData(prev => ({ ...prev, titulo: e.target.value }))}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="Ej: Computadora no enciende, No puedo acceder al correo, etc."
+                  required
+                  maxLength={100}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Breve descripción del problema (máximo 100 caracteres)
+                </p>
+              </div>
 
               {/* Descripción */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Descripción del Problema <span className="text-red-500">*</span>
+                  Descripción del Evento/Incidente <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   value={formData.descripcion}
                   onChange={(e) => setFormData(prev => ({ ...prev, descripcion: e.target.value }))}
                   rows={5}
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
-                  placeholder="Describa detalladamente el problema o incidencia..."
+                  placeholder="Describa detalladamente el evento o incidencia..."
                   required
                 />
               </div>

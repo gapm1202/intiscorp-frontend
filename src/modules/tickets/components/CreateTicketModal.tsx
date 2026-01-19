@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
-import { X, Upload, AlertCircle, Building2, Tag, Wrench, Clock, User, CheckCircle2, XCircle } from 'lucide-react';
+import { X, Upload, AlertCircle, Building2, Tag, Wrench, Clock, User, CheckCircle2, XCircle, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getEmpresas, getEmpresaById } from '@/modules/empresas/services/empresasService';
 import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
 import { getCategorias } from '@/modules/inventario/services/categoriasService';
 import { getInventarioBySede } from '@/modules/inventario/services/inventarioService';
-import { getUsuariosAdministrativos } from '@/modules/auth/services/userService';
+import { getUsuariosInternos } from '@/modules/auth/services/userService';
 import { getSLAByEmpresa } from '@/modules/sla/services/slaService';
 import { getContratoActivo } from '@/modules/empresas/services/contratosService';
 import { getCatalogCategories, getCatalogSubcategories, getTicketTypes } from '@/modules/catalogo/services/catalogoService';
 import { getServicios } from '@/modules/catalogo/services/servicioApi';
+import { portalService, type UsuarioDetalle } from '@/modules/public/services/portalService';
 import type { PrioridadTicket } from '../types';
 
 interface CreateTicketModalProps {
@@ -41,6 +42,11 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
   const [catalogoCategorias, setCatalogoCategorias] = useState<any[]>([]);
   const [catalogoSubcategorias, setCatalogoSubcategorias] = useState<any[]>([]);
   const [serviciosDisponibles, setServiciosDisponibles] = useState<any[]>([]);
+  const [tipoSoporte, setTipoSoporte] = useState<'activos' | 'gestion-ti' | ''>('');
+  const [dniBuscado, setDniBuscado] = useState('');
+  const [usuarioEncontrado, setUsuarioEncontrado] = useState<UsuarioDetalle | null>(null);
+  const [buscandoUsuario, setBuscandoUsuario] = useState(false);
+  const [errorBusqueda, setErrorBusqueda] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
   const navigate = useNavigate();
 
   // Datos del ticket
@@ -173,15 +179,18 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
       
       setUsuariosActivo(todosLosUsuarios);
       
-      // Mantener los usuarios ya seleccionados si siguen estando disponibles
+      // Seleccionar automáticamente a todos los usuarios asignados
       setFormData(prev => {
+        const nuevosCorreos = todosLosUsuarios.map(u => u.correo);
+        // Unir con los usuarios ya seleccionados (evitar duplicados)
+        const correosUnicos = [...new Set([...prev.usuarios_reporta_ids, ...nuevosCorreos])];
+        // Filtrar solo los que siguen disponibles
         const usuariosDisponibles = todosLosUsuarios.map(u => u.correo);
-        const usuariosAMantener = prev.usuarios_reporta_ids.filter(id => 
-          usuariosDisponibles.includes(id)
-        );
+        const correosFinales = correosUnicos.filter(correo => usuariosDisponibles.includes(correo));
+        
         return { 
           ...prev, 
-          usuarios_reporta_ids: usuariosAMantener
+          usuarios_reporta_ids: correosFinales
         };
       });
     } else {
@@ -195,6 +204,24 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
       setFormData(prev => ({ ...prev, categoria_id: '', subcategoria_id: '' }));
     }
   }, [formData.tipo_ticket]);
+
+  // Al cambiar tipo de soporte, resetear datos relevantes
+  useEffect(() => {
+    if (tipoSoporte === 'activos') {
+      // Limpiar datos de DNI
+      setDniBuscado('');
+      setUsuarioEncontrado(null);
+      setFormData(prev => ({ ...prev, usuarios_reporta_ids: [] }));
+    } else if (tipoSoporte === 'gestion-ti') {
+      // Limpiar datos de activos
+      setFormData(prev => ({ 
+        ...prev, 
+        activos_codigos: [],
+        usuarios_reporta_ids: []
+      }));
+      setUsuariosActivo([]);
+    }
+  }, [tipoSoporte]);
 
   // Al cambiar categoría, cargar subcategorías del catálogo
   useEffect(() => {
@@ -253,7 +280,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
       const [empData, catData, tecData, catalogoData, subcatalogoData, tiposData, serviciosData] = await Promise.all([
         getEmpresas(),
         getCategorias(),
-        getUsuariosAdministrativos(),
+        getUsuariosInternos(),
         getCatalogCategories(),
         getCatalogSubcategories(),
         getTicketTypes(),
@@ -268,6 +295,32 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
       console.log('📊 Subcategorías del catálogo:', subcatalogoData);
       console.log('📊 Tipos de ticket cargados:', tiposData);
       console.log('📊 Usuarios cargados (raw):', tecData);
+      console.log('📊 Tipo de datos usuarios:', typeof tecData);
+      console.log('📊 Es array?:', Array.isArray(tecData));
+      
+      // Normalizar respuesta de usuarios - puede venir como array o como objeto con propiedad
+      let usuariosArray = [];
+      if (Array.isArray(tecData)) {
+        usuariosArray = tecData;
+      } else if (tecData?.usuarios && Array.isArray(tecData.usuarios)) {
+        usuariosArray = tecData.usuarios;
+      } else if (tecData?.data && Array.isArray(tecData.data)) {
+        usuariosArray = tecData.data;
+      } else if (typeof tecData === 'object' && tecData !== null) {
+        // Si es un objeto, intentar extraer el primer array que encontremos
+        const valores = Object.values(tecData);
+        const primerArray = valores.find(v => Array.isArray(v));
+        if (primerArray) {
+          usuariosArray = primerArray as any[];
+        }
+      }
+      
+      console.log('📊 Usuarios normalizados:', usuariosArray);
+      console.log('📊 Cantidad total de usuarios:', usuariosArray.length);
+      if (usuariosArray.length > 0) {
+        console.log('📊 Primer usuario ejemplo:', usuariosArray[0]);
+        console.log('📊 Campos del usuario:', Object.keys(usuariosArray[0]));
+      }
       console.log('📊 Servicios cargados:', serviciosData);
       
       setEmpresas(empData);
@@ -278,12 +331,19 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
       console.log('📊 Tipos de ticket activos:', tiposActivos);
       setTiposTicket(tiposActivos);
       
-      // Filtrar técnicos y administradores (case-insensitive)
-      const tecnicosFiltrados = tecData.filter((u: any) => {
-        const rol = String(u.rol || '').toLowerCase();
-        return rol === 'tecnico' || rol === 'administrador';
+      // Filtrar solo usuarios internos con rol de Técnico o Administrador
+      console.log('🔍 Iniciando filtrado de técnicos...');
+      const tecnicosFiltrados = usuariosArray.filter((u: any) => {
+        console.log(`  Usuario: ${u.nombre || u.usuario} - Rol: "${u.rol}" (tipo: ${typeof u.rol})`);
+        const rol = String(u.rol || '').toLowerCase().trim();
+        const esTecnicoOAdmin = (rol === 'tecnico' || rol === 'técnico' || rol === 'administrador');
+        if (esTecnicoOAdmin) {
+          console.log(`    ✅ INCLUIDO: ${u.nombre} - ${u.rol}`);
+        }
+        return esTecnicoOAdmin;
       });
       console.log('📊 Técnicos y administradores filtrados:', tecnicosFiltrados);
+      console.log('📊 Total técnicos disponibles:', tecnicosFiltrados.length);
       setTecnicos(tecnicosFiltrados);
       
       // Guardar categorías del catálogo activas
@@ -434,6 +494,33 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
     }
   };
 
+  const buscarUsuarioPorDNI = async () => {
+    if (!dniBuscado.trim() || !formData.empresa_id) {
+      return;
+    }
+
+    setBuscandoUsuario(true);
+    try {
+      const usuario = await portalService.buscarUsuarioPorDNI(Number(formData.empresa_id), dniBuscado);
+      console.log('👤 Usuario encontrado:', usuario);
+      setUsuarioEncontrado(usuario);
+      // Agregar el correo del usuario encontrado a usuarios_reporta_ids
+      setFormData(prev => ({
+        ...prev,
+        usuarios_reporta_ids: [usuario.correoPrincipal]
+      }));
+    } catch (error: any) {
+      console.error('Error buscando usuario por DNI:', error);
+      setErrorBusqueda({
+        show: true,
+        message: error?.response?.data?.message || 'No se encontró usuario con ese DNI en la empresa'
+      });
+      setUsuarioEncontrado(null);
+    } finally {
+      setBuscandoUsuario(false);
+    }
+  };
+
   // Matriz de Prioridad ITIL (Impacto x Urgencia)
   const calcularPrioridad = (impacto: Impacto, urgencia: Urgencia): PrioridadTicket => {
     const matriz: Record<Impacto, Record<Urgencia, PrioridadTicket>> = {
@@ -460,8 +547,19 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validaciones obligatorias
     if (!formData.empresa_id) {
       alert('Debe seleccionar una empresa');
+      return;
+    }
+    
+    if (!formData.sede_id) {
+      alert('Debe seleccionar una sede');
+      return;
+    }
+    
+    if (!tipoSoporte) {
+      alert('Debe seleccionar el tipo de soporte (Soporte Técnico a Activos o Gestión TI/Seguridad)');
       return;
     }
     
@@ -470,24 +568,91 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
       return;
     }
     
+    if (formData.usuarios_reporta_ids.length === 0) {
+      alert('Debe haber al menos un usuario que reporta el incidente');
+      return;
+    }
+    
+    if (!formData.tipo_ticket || !formData.categoria_id || !formData.subcategoria_id) {
+      alert('Debe completar la clasificación del ticket (Tipo, Categoría y Subcategoría)');
+      return;
+    }
+    
+    if (!formData.impacto || !formData.urgencia) {
+      alert('Debe completar los datos ITIL (Impacto y Urgencia)');
+      return;
+    }
+    
+    if (!formData.servicio_id || !formData.modalidad) {
+      alert('Debe seleccionar el servicio y la modalidad');
+      return;
+    }
+    
+    // Validación específica por tipo de soporte
+    if (tipoSoporte === 'activos' && formData.activos_codigos.length === 0) {
+      alert('Para Soporte Técnico a Activos debe seleccionar al menos un activo');
+      return;
+    }
+    
     setLoading(true);
     try {
       const ticketData = {
-        ...formData,
+        // Identificación
         empresa_id: Number(formData.empresa_id),
-        sede_id: formData.sede_id ? Number(formData.sede_id) : undefined,
-        categoria_id: formData.categoria_id ? Number(formData.categoria_id) : undefined,
-        subcategoria_id: formData.subcategoria_id ? Number(formData.subcategoria_id) : undefined,
+        sede_id: Number(formData.sede_id),
+        
+        // Tipo de soporte
+        tipo_soporte: tipoSoporte,
+        
+        // Descripción
+        titulo: formData.titulo,
+        descripcion: formData.descripcion,
+        
+        // Activos y usuarios
+        activos_codigos: formData.activos_codigos,
+        usuarios_reporta_ids: formData.usuarios_reporta_ids,
+        
+        // Clasificación
+        tipo_ticket: formData.tipo_ticket,
+        categoria_id: Number(formData.categoria_id),
+        subcategoria_id: Number(formData.subcategoria_id),
+        
+        // ITIL
+        impacto: formData.impacto,
+        urgencia: formData.urgencia,
+        prioridad: formData.prioridad,
+        
+        // Servicio
+        servicio_id: Number(formData.servicio_id),
+        tipo_servicio: formData.tipo_servicio,
+        modalidad: formData.modalidad,
+        
+        // SLA
+        aplica_sla: formData.aplica_sla,
+        
+        // Gestión (opcional)
         tecnico_asignado_id: formData.tecnico_asignado_id ? Number(formData.tecnico_asignado_id) : undefined,
+        
+        // Control
+        estado: formData.estado,
+        origen: formData.origen,
+        
+        // Archivos (opcional)
         archivos: archivos.length > 0 ? archivos : undefined
       };
+      
+      console.log('📤 Enviando ticket al backend:', ticketData);
       
       await onSubmit(ticketData);
       resetForm();
       onClose();
-    } catch (error) {
-      console.error('Error creando ticket:', error);
-      alert('Error al crear ticket');
+    } catch (error: any) {
+      console.error('❌ Error creando ticket:', error);
+      console.error('❌ Error response:', error?.response?.data);
+      console.error('❌ Error status:', error?.response?.status);
+      
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.errors?.join(', ') || 'Error al crear ticket';
+      alert(`Error al crear ticket:\n${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -505,20 +670,28 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
       activos_codigos: [],
       ubicacion: '',
       usuarios_reporta_ids: [],
+      servicio_id: '',
+      tipo_servicio: '',
       impacto: '',
       urgencia: '',
       prioridad: '',
       modalidad: '',
       aplica_sla: true,
       tecnico_asignado_id: '',
-      estado: 'ABIERTO'
+      estado: 'ABIERTO',
+      origen: 'INTERNO'
     });
+    setTipoSoporte('');
+    setDniBuscado('');
+    setUsuarioEncontrado(null);
     setArchivos([]);
     setSedes([]);
+    setActivos([]);
+    setUsuariosActivo([]);
     setSubcategorias([]);
     setSlaActivo(null);
-    setShowCustomTipoInput(false);
-    setCustomTipoValue('');
+    setSearchActivos('');
+    setSearchUsuarios('');
   };
 
   const getPrioridadColor = (prioridad: PrioridadTicket | '') => {
@@ -668,7 +841,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                 {/* Sede */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Sede
+                    Sede <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={formData.sede_id}
@@ -711,44 +884,75 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
               )}
             </div>
 
-            {/* 📝 DESCRIPCIÓN */}
+            {/* 🎯 TIPO DE SOPORTE */}
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
               <div className="flex items-center gap-2 mb-4">
-                <Tag className="text-purple-600" size={20} />
-                <h3 className="text-lg font-semibold text-gray-800">Descripción del Problema</h3>
+                <Wrench className="text-blue-600" size={20} />
+                <h3 className="text-lg font-semibold text-gray-800">Tipo de Soporte</h3>
+                <span className="text-red-500 text-sm">* Obligatorio</span>
               </div>
               
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Título <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.titulo}
-                    onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
-                    placeholder="Ej: Impresora no funciona en área de contabilidad"
-                    disabled={isFormBlocked}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  />
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setTipoSoporte('activos')}
+                  disabled={isFormBlocked}
+                  className={`p-4 border-2 rounded-lg text-left transition-all ${
+                    tipoSoporte === 'activos'
+                      ? 'border-blue-500 bg-blue-50 shadow-md'
+                      : 'border-gray-300 hover:border-blue-300 hover:bg-gray-50'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      tipoSoporte === 'activos' ? 'border-blue-500' : 'border-gray-400'
+                    }`}>
+                      {tipoSoporte === 'activos' && (
+                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                      )}
+                    </div>
+                    <span className="font-semibold text-gray-900">Soporte Técnico a Activos</span>
+                  </div>
+                  <p className="text-xs text-gray-600 ml-6">
+                    Seleccione uno o más activos con sus usuarios asignados
+                  </p>
+                </button>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Descripción detallada <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    required
-                    value={formData.descripcion}
-                    onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                    placeholder="Describa el problema con el mayor detalle posible..."
-                    rows={4}
-                    disabled={isFormBlocked}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setTipoSoporte('gestion-ti')}
+                  disabled={isFormBlocked}
+                  className={`p-4 border-2 rounded-lg text-left transition-all ${
+                    tipoSoporte === 'gestion-ti'
+                      ? 'border-green-500 bg-green-50 shadow-md'
+                      : 'border-gray-300 hover:border-green-300 hover:bg-gray-50'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      tipoSoporte === 'gestion-ti' ? 'border-green-500' : 'border-gray-400'
+                    }`}>
+                      {tipoSoporte === 'gestion-ti' && (
+                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                      )}
+                    </div>
+                    <span className="font-semibold text-gray-900">Gestión TI/Seguridad</span>
+                  </div>
+                  <p className="text-xs text-gray-600 ml-6">
+                    Busque usuario por DNI para reportes generales
+                  </p>
+                </button>
+              </div>
+            </div>
 
+            {/* Condicional: Soporte Técnico a Activos */}
+            {tipoSoporte === 'activos' && (
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <div className="flex items-center gap-2 mb-4">
+                <Package className="text-blue-600" size={20} />
+                <h3 className="text-lg font-semibold text-gray-800">Activos y Usuarios</h3>
+              </div>
+              
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1088,10 +1292,15 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                             }).map(usuario => {
                               const usuarioCorreo = usuario.correo;
                               const isSelected = formData.usuarios_reporta_ids.includes(usuarioCorreo);
+                              const esUnicoUsuario = usuariosActivo.length === 1;
                               return (
                                 <label
                                   key={usuarioCorreo}
-                                  className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition-colors"
+                                  className={`flex items-center gap-3 p-3 transition-colors ${
+                                    esUnicoUsuario 
+                                      ? 'bg-green-50 border-l-4 border-green-500' 
+                                      : 'hover:bg-gray-50 cursor-pointer'
+                                  }`}
                                 >
                                   <input
                                   type="checkbox"
@@ -1109,12 +1318,17 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                                       });
                                     }
                                   }}
-                                  disabled={isFormBlocked}
+                                  disabled={isFormBlocked || esUnicoUsuario}
                                   className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                                 <div className="flex-1">
-                                  <div className="text-sm font-medium text-gray-900">
+                                  <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
                                     {usuario.nombre}
+                                    {esUnicoUsuario && (
+                                      <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                                        Requerido
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="text-xs text-gray-500">
                                     {usuario.correo} • {usuario.cargo}
@@ -1155,6 +1369,143 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                     )}
                   </div>
                 </div>
+              </div>
+            )}
+
+                {/* Condicional: Gestión TI/Seguridad - Búsqueda por DNI */}
+                {tipoSoporte === 'gestion-ti' && (
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <User className="text-green-600" size={20} />
+                    <h3 className="text-lg font-semibold text-gray-800">Búsqueda de Usuario</h3>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Buscar Usuario por DNI
+                    </label>
+                    
+                    {/* Buscador de DNI */}
+                    <div className="flex gap-2 mb-3">
+                      <input
+                        type="text"
+                        value={dniBuscado}
+                        onChange={(e) => setDniBuscado(e.target.value.replace(/\D/g, ''))}
+                        maxLength={8}
+                        placeholder="Ingrese DNI (8 dígitos)"
+                        disabled={isFormBlocked || !formData.empresa_id}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      />
+                      <button
+                        type="button"
+                        onClick={buscarUsuarioPorDNI}
+                        disabled={isFormBlocked || buscandoUsuario || !dniBuscado.trim() || !formData.empresa_id || dniBuscado.length !== 8}
+                        className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {buscandoUsuario ? 'Buscando...' : 'Buscar'}
+                      </button>
+                    </div>
+
+                    {/* Usuario encontrado */}
+                    {usuarioEncontrado && (
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-bold text-green-900 flex items-center gap-2">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Usuario Encontrado
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUsuarioEncontrado(null);
+                              setDniBuscado('');
+                              setFormData(prev => ({ ...prev, usuarios_reporta_ids: [] }));
+                            }}
+                            disabled={isFormBlocked}
+                            className="text-red-600 hover:text-red-700 disabled:opacity-50"
+                          >
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-white rounded-lg p-3">
+                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Nombre Completo</p>
+                            <p className="font-bold text-gray-900">{usuarioEncontrado.nombre}</p>
+                          </div>
+                          <div className="bg-white rounded-lg p-3">
+                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">DNI</p>
+                            <p className="font-mono font-bold text-green-600">{usuarioEncontrado.dni}</p>
+                          </div>
+                          <div className="bg-white rounded-lg p-3">
+                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Correo</p>
+                            <p className="font-semibold text-gray-900 text-sm">{usuarioEncontrado.correoPrincipal}</p>
+                          </div>
+                          <div className="bg-white rounded-lg p-3">
+                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Teléfono</p>
+                            <p className="font-semibold text-gray-900">{usuarioEncontrado.telefono}</p>
+                          </div>
+                          {usuarioEncontrado.cargo && (
+                            <div className="col-span-2 bg-white rounded-lg p-3">
+                              <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Cargo</p>
+                              <p className="font-semibold text-gray-900">{usuarioEncontrado.cargo}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {!formData.empresa_id && (
+                      <p className="text-xs text-amber-600 mt-2">
+                        💡 Primero seleccione una empresa para buscar usuarios
+                      </p>
+                    )}
+                  </div>
+                </div>
+                )}
+
+            {/* 📝 DESCRIPCIÓN */}
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <div className="flex items-center gap-2 mb-4">
+                <Tag className="text-purple-600" size={20} />
+                <h3 className="text-lg font-semibold text-gray-800">Descripción del Evento/Incidente</h3>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Título <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.titulo}
+                    onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
+                    placeholder="Ej: Impresora no funciona en área de contabilidad"
+                    disabled={isFormBlocked}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Descripción detallada <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    required
+                    value={formData.descripcion}
+                    onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                    placeholder="Describa el evento/incidente con el mayor detalle posible..."
+                    rows={4}
+                    disabled={isFormBlocked}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                </div>
+
               </div>
             </div>
 
@@ -1269,7 +1620,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Impacto
+                    Impacto <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={formData.impacto}
@@ -1287,7 +1638,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Urgencia
+                    Urgencia <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={formData.urgencia}
@@ -1356,28 +1707,27 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Sin asignar</option>
-                    {tecnicos.map(tec => (
-                      <option key={tec.usuario_id} value={tec.usuario_id}>
-                        {tec.nombre} ({tec.rol})
-                      </option>
-                    ))}
+                    {tecnicos.length === 0 ? (
+                      <option disabled>No hay técnicos disponibles</option>
+                    ) : (
+                      tecnicos.map(tec => {
+                        // Intentar diferentes nombres de campos posibles
+                        const nombre = tec.nombre || tec.nombreCompleto || tec.usuario || tec.username || tec.email || 'Sin nombre';
+                        const rol = tec.rol || 'Sin rol';
+                        return (
+                          <option key={tec.usuario_id || tec.id} value={tec.usuario_id || tec.id}>
+                            {nombre} - {rol}
+                          </option>
+                        );
+                      })
+                    )}
                   </select>
+                  {tecnicos.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      💡 Solo usuarios internos con rol Administrador o Técnico
+                    </p>
+                  )}
                 </div>
-              </div>
-
-              <div className="mt-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.aplica_sla}
-                    onChange={(e) => setFormData({ ...formData, aplica_sla: e.target.checked })}
-                    disabled={isFormBlocked || !slaActivo?.activo}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed"
-                  />
-                  <span className="text-sm font-medium text-gray-700">
-                    Aplicar SLA {!slaActivo?.activo && '(No disponible para esta empresa)'}
-                  </span>
-                </label>
               </div>
             </div>
 
@@ -1447,6 +1797,75 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit }: CreateTicketModalProps
           </div>
         </form>
       </div>
+
+      {/* Modal de Error - Usuario No Encontrado */}
+      {errorBusqueda.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform animate-scale-in">
+            {/* Header con gradiente rojo */}
+            <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-white bg-opacity-20 rounded-full p-2">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-white">Usuario No Encontrado</h3>
+              </div>
+            </div>
+
+            {/* Contenido */}
+            <div className="p-6">
+              <div className="flex items-start gap-4 mb-6">
+                <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-gray-700 text-base leading-relaxed">
+                    {errorBusqueda.message}
+                  </p>
+                  <div className="mt-4 bg-amber-50 border-l-4 border-amber-400 p-3 rounded">
+                    <p className="text-sm text-amber-800">
+                      <span className="font-semibold">DNI buscado:</span> {dniBuscado}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sugerencias */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <p className="text-sm font-semibold text-blue-900 mb-2">💡 Sugerencias:</p>
+                <ul className="text-sm text-blue-800 space-y-1 ml-4 list-disc">
+                  <li>Verifique que el DNI sea correcto (8 dígitos)</li>
+                  <li>Asegúrese que el usuario esté registrado en esta empresa</li>
+                  <li>Contacte al administrador si el problema persiste</li>
+                </ul>
+              </div>
+
+              {/* Botones */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setErrorBusqueda({ show: false, message: '' });
+                    setDniBuscado('');
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 font-semibold shadow-md transition-all"
+                >
+                  Intentar de Nuevo
+                </button>
+                <button
+                  onClick={() => setErrorBusqueda({ show: false, message: '' })}
+                  className="px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

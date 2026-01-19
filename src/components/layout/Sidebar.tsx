@@ -185,7 +185,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
             <div className={`flex items-center justify-center rounded-md ${collapsed ? 'w-10 h-10' : 'w-10 h-10'}`}> 
               <img src="/logo.png" alt="Intis Corp" className="w-10 h-10 object-contain rounded-md" />
             </div>
-            {!collapsed && <h2 className="text-lg font-bold tracking-tight text-slate-800">Intis Corp</h2>}
+            {!collapsed && <h2 className="text-lg font-extrabold tracking-tight text-gray-900">Intis Corp</h2>}
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setCollapsed(v => !v)} className="p-2 rounded hover:bg-subtle" aria-label="Toggle sidebar">
@@ -211,8 +211,8 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
             </div>
             {!collapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate text-slate-800">{user?.nombre}</p>
-                <p className="text-xs text-slate-500 truncate capitalize flex items-center gap-2">
+                <p className="text-sm font-bold truncate text-gray-900">{user?.nombre}</p>
+                <p className="text-xs text-gray-700 font-semibold truncate capitalize flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-accent-green"></span>
                   {user?.rol}
                 </p>
@@ -237,7 +237,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                     </svg>
                   </div>
-                  {!collapsed && <span className={`text-sm font-medium ${location.pathname === '/dashboard' ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Dashboard</span>}
+                  {!collapsed && <span className={`text-sm font-bold ${location.pathname === '/dashboard' ? 'text-primary' : 'text-gray-900 group-hover:text-primary'}`}>Dashboard</span>}
                 </span>
               </button>
             </li>
@@ -256,7 +256,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                   </div>
                   {!collapsed && (
                     <>
-                      <span className={`text-sm font-medium ${location.pathname.includes('/tickets') ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Tickets</span>
+                      <span className={`text-sm font-bold ${location.pathname.includes('/tickets') ? 'text-primary' : 'text-gray-900 group-hover:text-primary'}`}>Tickets</span>
                       <svg className={`w-4 h-4 transition-transform ${ticketsOpen ? 'rotate-90' : ''} ml-auto`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
@@ -269,10 +269,10 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                   <li>
                     <button
                       onClick={() => guardedNavigate('/admin/tickets')}
-                      className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                      className={`w-full text-left text-sm py-2.5 px-3 rounded-md transition-all ${
                         location.pathname === '/admin/tickets'
-                          ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
-                          : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                          ? 'bg-blue-700 text-white font-extrabold shadow-lg'
+                          : 'text-gray-800 hover:bg-primary/10 hover:text-primary font-semibold'
                       }`}
                     >
                       {location.pathname === '/admin/tickets' && (
@@ -284,10 +284,10 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                   <li>
                     <button
                       onClick={() => guardedNavigate('/admin/tickets/qr')}
-                      className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                      className={`w-full text-left text-sm py-2 px-3 rounded-md transition-all ${
                         location.pathname === '/admin/tickets/qr'
-                          ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
-                          : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                          ? 'bg-blue-700 text-white font-extrabold shadow-lg'
+                          : 'text-gray-800 hover:bg-primary/10 hover:text-primary font-semibold'
                       }`}
                     >
                       {location.pathname === '/admin/tickets/qr' && (
@@ -299,10 +299,10 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                   <li>
                     <button
                       onClick={() => guardedNavigate('/admin/tickets/internos')}
-                      className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                      className={`w-full text-left text-sm py-2.5 px-3 rounded-md transition-all ${
                         location.pathname === '/admin/tickets/internos'
-                          ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
-                          : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                          ? 'bg-blue-700 text-white font-extrabold shadow-lg'
+                          : 'text-gray-800 hover:bg-primary/10 hover:text-primary font-semibold'
                       }`}
                     >
                       {location.pathname === '/admin/tickets/internos' && (
@@ -329,7 +329,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                   </div>
                   {!collapsed && (
                     <>
-                      <span className={`text-sm font-medium ${location.pathname.includes('/inventario') ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Inventario</span>
+                      <span className={`text-sm font-bold ${location.pathname.includes('/inventario') ? 'text-primary' : 'text-gray-900 group-hover:text-primary'}`}>Inventario</span>
                       <svg className={`w-4 h-4 transition-transform ${inventarioOpen ? 'rotate-90' : ''} ml-auto`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
@@ -354,10 +354,10 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                         <li key={empresaId}>
                           <button
                             onClick={() => guardedNavigate(`/admin/empresas/${empresaId}/inventario`)}
-                            className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                            className={`w-full text-left text-sm py-2 px-3 rounded-md transition-all ${
                               isEmpresaActive
-                                ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
-                                : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                                ? 'bg-blue-700 text-white font-extrabold shadow-lg'
+                                : 'text-gray-800 hover:bg-primary/10 hover:text-primary font-semibold'
                             }`}
                           >
                             {isEmpresaActive && (
@@ -387,7 +387,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                   </div>
                   {!collapsed && (
                     <>
-                      <span className={`text-sm font-medium ${location.pathname.includes('/usuarios') ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Usuarios</span>
+                      <span className={`text-sm font-bold ${location.pathname.includes('/usuarios') ? 'text-primary' : 'text-gray-900 group-hover:text-primary'}`}>Usuarios</span>
                       <svg className={`w-4 h-4 transition-transform ${usuariosOpen ? 'rotate-90' : ''} ml-auto`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
@@ -430,10 +430,10 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                               <li key={empresaId}>
                                 <button
                                   onClick={() => guardedNavigate(`/admin/usuarios/empresa/${empresaId}`)}
-                                  className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                                  className={`w-full text-left text-sm py-2.5 px-3 rounded-md transition-all ${
                                     isEmpresaActive
-                                      ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
-                                      : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                                      ? 'bg-blue-700 text-white font-extrabold shadow-lg'
+                                      : 'text-gray-800 hover:bg-primary/10 hover:text-primary font-semibold'
                                   }`}
                                 >
                                   {isEmpresaActive && (
@@ -453,10 +453,10 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                   <div>
                     <button
                       onClick={() => guardedNavigate('/admin/usuarios/internos')}
-                      className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                      className={`w-full text-left text-sm py-2 px-3 rounded-md transition-all ${
                         location.pathname.startsWith('/admin/usuarios/internos')
-                          ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
-                          : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                          ? 'bg-blue-700 text-white font-extrabold shadow-lg'
+                          : 'text-gray-800 hover:bg-primary/10 hover:text-primary font-semibold'
                       }`}
                     >
                       <span className="flex items-center gap-2">
@@ -485,7 +485,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                   </div>
                   {!collapsed && (
                     <>
-                      <span className={`text-sm font-medium ${location.pathname.includes('/catalogo') ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Catálogos</span>
+                      <span className={`text-sm font-bold ${location.pathname.includes('/catalogo') ? 'text-primary' : 'text-gray-900 group-hover:text-primary'}`}>Catálogos</span>
                       <svg className={`w-4 h-4 transition-transform ${catalogosOpen ? 'rotate-90' : ''} ml-auto`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
@@ -498,10 +498,10 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                   <li>
                     <button
                       onClick={() => guardedNavigate('/admin/catalogo-categorias')}
-                      className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
+                      className={`w-full text-left text-sm py-2 px-3 rounded-md transition-all ${
                         location.pathname === '/admin/catalogo-categorias'
-                          ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
-                          : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                          ? 'bg-blue-700 text-white font-extrabold shadow-lg'
+                          : 'text-gray-800 hover:bg-primary/10 hover:text-primary font-semibold'
                       }`}
                     >
                       {location.pathname === '/admin/catalogo-categorias' && (
@@ -515,8 +515,8 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                       onClick={() => guardedNavigate('/admin/catalogo-servicios')}
                       className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
                         location.pathname === '/admin/catalogo-servicios'
-                          ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
-                          : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                          ? 'bg-blue-700 text-white font-extrabold shadow-lg'
+                          : 'text-gray-800 hover:bg-primary/10 hover:text-primary font-semibold'
                       }`}
                     >
                       {location.pathname === '/admin/catalogo-servicios' && (
@@ -530,8 +530,8 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                       onClick={() => guardedNavigate('/admin/catalogo-correos')}
                       className={`w-full text-left text-xs py-2 px-3 rounded-md transition-all ${
                         location.pathname === '/admin/catalogo-correos'
-                          ? 'bg-gradient-to-r from-primary to-primary-600 text-white font-bold shadow-md'
-                          : 'text-slate-700 hover:bg-primary/10 hover:text-primary font-medium'
+                          ? 'bg-blue-700 text-white font-extrabold shadow-lg'
+                          : 'text-gray-800 hover:bg-primary/10 hover:text-primary font-semibold'
                       }`}
                     >
                       {location.pathname === '/admin/catalogo-correos' && (
@@ -557,7 +557,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                     </svg>
                   </div>
-                  {!collapsed && <span className={`text-sm font-medium ${location.pathname === '/empresas' ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Empresas</span>}
+                  {!collapsed && <span className={`text-sm font-bold ${location.pathname === '/empresas' ? 'text-primary' : 'text-gray-900 group-hover:text-primary'}`}>Empresas</span>}
                 </span>
               </button>
             </li>
@@ -575,7 +575,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </div>
-                  {!collapsed && <span className={`text-sm font-medium ${location.pathname === '/reportes' ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Reportes</span>}
+                  {!collapsed && <span className={`text-sm font-bold ${location.pathname === '/reportes' ? 'text-primary' : 'text-gray-900 group-hover:text-primary'}`}>Reportes</span>}
                 </span>
               </button>
             </li>
@@ -594,7 +594,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                   </div>
-                  {!collapsed && <span className={`text-sm font-medium ${location.pathname === '/config' ? 'text-primary' : 'text-slate-700 group-hover:text-primary'}`}>Configuración</span>}
+                  {!collapsed && <span className={`text-sm font-bold ${location.pathname === '/config' ? 'text-primary' : 'text-gray-900 group-hover:text-primary'}`}>Configuración</span>}
                 </span>
               </button>
             </li>

@@ -1123,11 +1123,21 @@ const EmpresaDetailPage = () => {
         console.error('Error al guardar SLA:', error);
         console.error('Response data:', error?.response?.data);
         console.error('Response status:', error?.response?.status);
-        const errorMsg = error?.response?.data?.message || 'Error al guardar la sección. Por favor intente nuevamente.';
+        
+        // Extraer mensaje de error del backend
+        let errorMsg = 'Error al guardar la sección. Por favor intente nuevamente.';
+        
+        if (error?.response?.data?.error) {
+          // El backend envió un mensaje de error específico
+          errorMsg = error.response.data.error;
+        } else if (error?.response?.data?.message) {
+          errorMsg = error.response.data.message;
+        }
+        
         setToastMessage('❌ ' + errorMsg);
         setToastType('error');
         setShowToast(true);
-        setTimeout(() => setShowToast(false), 4000);
+        setTimeout(() => setShowToast(false), 5000);
       }
     } else {
       // Es una edición: Pedir motivo

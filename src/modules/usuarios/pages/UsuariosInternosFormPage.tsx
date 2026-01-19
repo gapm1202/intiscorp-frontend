@@ -169,7 +169,7 @@ export default function UsuariosInternosFormPage() {
                   <select
                     value={formData.rol}
                     onChange={(e) => setFormData({ ...formData, rol: e.target.value as any })}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
                   >
                     <option value="tecnico">🔧 Técnico</option>
                     <option value="administrador">👑 Administrador</option>
@@ -236,7 +236,7 @@ export default function UsuariosInternosFormPage() {
                         ...formData,
                         correoPrincipalConfig: { ...formData.correoPrincipalConfig, plataformaId: parseInt(e.target.value) }
                       })}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
                     >
                       <option value={0}>Seleccione...</option>
                       {plataformas.map(p => (
@@ -255,7 +255,7 @@ export default function UsuariosInternosFormPage() {
                         ...formData,
                         correoPrincipalConfig: { ...formData.correoPrincipalConfig, tipoCorreoId: parseInt(e.target.value) }
                       })}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
                     >
                       <option value={0}>Seleccione...</option>
                       {tiposCorreo.map(t => (
@@ -274,7 +274,7 @@ export default function UsuariosInternosFormPage() {
                         ...formData,
                         correoPrincipalConfig: { ...formData.correoPrincipalConfig, protocoloId: parseInt(e.target.value) }
                       })}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
                     >
                       <option value={0}>Seleccione...</option>
                       {protocolos.map(p => (
@@ -293,7 +293,7 @@ export default function UsuariosInternosFormPage() {
                         ...formData,
                         correoPrincipalConfig: { ...formData.correoPrincipalConfig, tipoLicenciaId: parseInt(e.target.value) }
                       })}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
                     >
                       <option value={0}>Seleccione...</option>
                       {tiposLicencia.map(l => (
@@ -331,12 +331,12 @@ export default function UsuariosInternosFormPage() {
                         ]
                       });
                     }}
-                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center gap-2"
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all flex items-center gap-2 shadow-md hover:shadow-lg font-semibold text-base"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
-                    Agregar Correo
+                      Agregar Correo
                   </button>
                 </div>
 
@@ -420,7 +420,7 @@ export default function UsuariosInternosFormPage() {
                                   newCorreos[index].plataformaId = parseInt(e.target.value);
                                   setFormData({ ...formData, correosAdicionales: newCorreos });
                                 }}
-                                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
                               >
                                 <option value={0}>Seleccione...</option>
                                 {plataformas.map(p => (
@@ -440,7 +440,7 @@ export default function UsuariosInternosFormPage() {
                                   newCorreos[index].tipoCorreoId = parseInt(e.target.value);
                                   setFormData({ ...formData, correosAdicionales: newCorreos });
                                 }}
-                                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
                               >
                                 <option value={0}>Seleccione...</option>
                                 {tiposCorreo.map(t => (
@@ -460,7 +460,7 @@ export default function UsuariosInternosFormPage() {
                                   newCorreos[index].protocoloId = parseInt(e.target.value);
                                   setFormData({ ...formData, correosAdicionales: newCorreos });
                                 }}
-                                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
                               >
                                 <option value={0}>Seleccione...</option>
                                 {protocolos.map(p => (
@@ -480,7 +480,7 @@ export default function UsuariosInternosFormPage() {
                                   newCorreos[index].tipoLicenciaId = parseInt(e.target.value);
                                   setFormData({ ...formData, correosAdicionales: newCorreos });
                                 }}
-                                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
                               >
                                 <option value={0}>Seleccione...</option>
                                 {tiposLicencia.map(l => (
@@ -512,12 +512,12 @@ export default function UsuariosInternosFormPage() {
                         telefonos: [...formData.telefonos, { numero: '', tipo: 'movil', descripcion: '', esPrincipal: formData.telefonos.length === 0 }]
                       });
                     }}
-                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center gap-2"
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all flex items-center gap-2 shadow-md hover:shadow-lg font-semibold text-base"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
-                    Agregar Teléfono
+                      Agregar Teléfono
                   </button>
                 </div>
 
@@ -585,7 +585,7 @@ export default function UsuariosInternosFormPage() {
                               newTels[index].tipo = e.target.value as any;
                               setFormData({ ...formData, telefonos: newTels });
                             }}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
                           >
                             <option value="movil">📱 Móvil</option>
                             <option value="fijo">📞 Fijo</option>
@@ -650,7 +650,8 @@ export default function UsuariosInternosFormPage() {
                         setFormData({ ...formData, usuario: value + '@intisoft.com' });
                       }}
                       className="w-full px-4 py-2 pr-32 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      placeholder="usuario"
+                      placeholder="ej. user123"
+                      autoComplete="off"
                       required
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium pointer-events-none">
@@ -670,6 +671,7 @@ export default function UsuariosInternosFormPage() {
                     onChange={(e) => setFormData({ ...formData, contrasena: e.target.value })}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     placeholder="Mínimo 8 caracteres"
+                    autoComplete="new-password"
                     required
                   />
                   <p className="text-xs text-slate-500 mt-1">Se enviará al usuario por correo</p>
@@ -707,32 +709,32 @@ export default function UsuariosInternosFormPage() {
             )}
 
             {/* Botones de navegación */}
-            <div className="flex justify-between mt-8 pt-6 border-t">
+            <div className="flex justify-between mt-8 pt-6 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() => setCurrentTab(Math.max(0, currentTab - 1))}
                 disabled={currentTab === 0}
-                className="px-6 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-8 py-3 text-base font-semibold border-2 border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 hover:border-slate-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
               >
-                Anterior
+                ← Anterior
               </button>
 
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 {currentTab < tabs.length - 1 ? (
                   <button
                     type="button"
                     onClick={() => setCurrentTab(currentTab + 1)}
-                    className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-600"
+                    className="px-8 py-3 text-base font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg"
                   >
-                    Siguiente
+                    Siguiente →
                   </button>
                 ) : (
                   <button
                     type="submit"
                     disabled={loading}
-                    className="px-8 py-2 bg-gradient-to-r from-primary to-primary-600 text-white rounded-lg hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+                    className="px-10 py-3 text-base font-bold bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
                   >
-                    {loading ? 'Creando...' : 'Crear Usuario'}
+                    {loading ? '⏳ Creando...' : '✓ Crear Usuario'}
                   </button>
                 )}
               </div>

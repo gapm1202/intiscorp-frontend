@@ -1,20 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getTickets, createTicket } from '../services/ticketsService';
+import { getTickets, createTicket, cogerTicket } from '../services/ticketsService';
 import { getEmpresas } from '@/modules/empresas/services/empresasService';
 import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
 import { getCategorias } from '@/modules/inventario/services/categoriasService';
 import { getUsuariosAdministrativos } from '@/modules/auth/services/userService';
+import { useAuth } from '@/hooks/useAuth';
 import CreateTicketModal from '../components/CreateTicketModal';
 import type { Ticket, TicketFilter } from '../types';
 
 const TicketsPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const pageSize = 20;
+  const [cogiendoTicket, setCogiendoTicket] = useState<number | null>(null);
 
   // Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -91,6 +94,26 @@ const TicketsPage = () => {
       setTickets([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCogerTicket = async (ticketId: number) => {
+    // Mostrar confirmación antes de coger el ticket
+    if (!confirm('¿Estás seguro de que deseas coger este ticket? Se te asignará automáticamente y cambiará a estado EN PROCESO.')) {
+      return;
+    }
+
+    try {
+      setCogiendoTicket(ticketId);
+      await cogerTicket(ticketId);
+      // Recargar tickets para mostrar el cambio
+      await loadTickets();
+      alert('✅ Ticket tomado correctamente. Ahora está asignado a ti y EN PROCESO.');
+    } catch (error: any) {
+      console.error('Error cogiendo ticket:', error);
+      alert(error.response?.data?.message || '❌ Error al tomar el ticket');
+    } finally {
+      setCogiendoTicket(null);
     }
   };
 
@@ -418,19 +441,19 @@ const TicketsPage = () => {
                   {tickets.map((ticket) => (
                     <tr key={ticket.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{ticket.codigo}</div>
-                        <div className="text-xs text-gray-500">{ticket.tipoTicket}</div>
+                        <div className="text-sm font-medium text-gray-900">{ticket.codigo_ticket}</div>
+                        <div className="text-xs text-gray-500">{ticket.tipo_ticket}</div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm font-medium text-gray-900 max-w-xs truncate">{ticket.titulo}</div>
-                        {ticket.categoriaNombre && (
-                          <div className="text-xs text-gray-500">{ticket.categoriaNombre}</div>
+                        {ticket.categoria_nombre && (
+                          <div className="text-xs text-gray-500">{ticket.categoria_nombre}</div>
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">{ticket.empresaNombre}</div>
-                        {ticket.sedeNombre && (
-                          <div className="text-xs text-gray-500">{ticket.sedeNombre}</div>
+                        <div className="text-sm text-gray-900">{ticket.empresa_nombre}</div>
+                        {ticket.sede_nombre && (
+                          <div className="text-xs text-gray-500">{ticket.sede_nombre}</div>
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -444,31 +467,58 @@ const TicketsPage = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getSLABadgeClass(ticket.estadoSLA)}`}>
-                          {getSLALabel(ticket.estadoSLA)}
+                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getSLABadgeClass(ticket.estado_sla)}`}>
+                          {getSLALabel(ticket.estado_sla)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
-                          {ticket.tecnicoAsignadoNombre || (
+                          {ticket.tecnico_asignado?.nombre || (
                             <span className="text-gray-400 italic">Sin asignar</span>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(ticket.fechaCreacion).toLocaleDateString('es-ES', {
+                        {new Date(ticket.fecha_creacion).toLocaleDateString('es-ES', {
                           day: '2-digit',
                           month: '2-digit',
                           year: 'numeric'
                         })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => navigate(`/admin/tickets/${ticket.id}`)}
-                          className="text-blue-600 hover:text-blue-900 transition-colors"
-                        >
-                          Ver detalle
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          {/* Botón Coger ticket - solo si NO está asignado */}
+                          {!ticket.tecnico_asignado && ticket.estado === 'ABIERTO' && (
+                            <button
+                              onClick={() => handleCogerTicket(ticket.id)}
+                              disabled={cogiendoTicket === ticket.id}
+                              className="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                            >
+                              {cogiendoTicket === ticket.id ? (
+                                <>
+                                  <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  <span>Tomando...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span>Coger ticket</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => navigate(`/admin/tickets/${ticket.id}`)}
+                            className="text-blue-600 hover:text-blue-900 transition-colors font-medium"
+                          >
+                            Ver detalle
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
