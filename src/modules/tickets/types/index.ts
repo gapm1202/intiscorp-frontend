@@ -66,7 +66,7 @@ export interface Ticket {
   tiempo_restante_minutos?: number;
   tiempo_total_sla_minutos?: number;
   estado_sla: EstadoSLA;
-  origen: 'INTERNO' | 'PORTAL_CLIENTE';
+  origen: 'INTERNO' | 'PORTAL_CLIENTE' | 'PORTAL_PUBLICO';
 }
 
 export interface TicketFilter {

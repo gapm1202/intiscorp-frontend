@@ -21,21 +21,35 @@ export const authEmpresaService = {
       usuario: data.ruc,
       contrasena: data.contrasena
     };
-    
-    const response = await axiosClient.post('/api/public/empresas/login', payload);
-    
-    // El backend responde con { ok, token, empresa }
-    const sessionData = {
-      id: response.data.empresa.id,
-      nombre: response.data.empresa.nombre,
-      ruc: response.data.empresa.ruc,
-      token: response.data.token
-    };
-    
-    // Guardar sesión en localStorage
-    localStorage.setItem(AUTH_EMPRESA_KEY, JSON.stringify(sessionData));
-    
-    return sessionData;
+    try {
+      const response = await axiosClient.post('/api/public/empresas/login', payload, { withCredentials: true });
+
+      // El backend responde con { ok, token, empresa }
+      const sessionData = {
+        id: response.data.empresa.id,
+        nombre: response.data.empresa.nombre,
+        ruc: response.data.empresa.ruc,
+        token: response.data.token
+      };
+
+      // Guardar sesión en localStorage
+      localStorage.setItem(AUTH_EMPRESA_KEY, JSON.stringify(sessionData));
+
+      return sessionData;
+    } catch (err: any) {
+      // Normalizar y relanzar un Error legible para la UI
+      const message = err?.response?.data?.message || err?.message || 'Error de autenticación';
+      // Log detallado para debugging en desarrollo
+      // eslint-disable-next-line no-console
+      console.error('[authEmpresaService] login error:', {
+        url: '/api/public/empresas/login',
+        payload,
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message
+      });
+      throw new Error(message);
+    }
   },
 
   logout() {

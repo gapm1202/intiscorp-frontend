@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getTicketById, cogerTicket, cambiarEstado, asignarTecnico, pausarSLA, reanudarSLA, editarTicket } from '../services/ticketsService';
 import type { Ticket } from '../types';
@@ -8,6 +8,7 @@ import PausarSLAModal from '../components/PausarSLAModal';
 import HistorialModal from '../components/HistorialModal';
 import EditarTicketModal from '../components/EditarTicketModal';
 import CancelarTicketModal from '../components/CancelarTicketModal';
+import CreateTicketModal from '../components/CreateTicketModal';
 import SLATimer from '../components/SLATimer';
 import Toast from '@/components/ui/Toast';
 
@@ -31,11 +32,10 @@ export default function TicketDetailPage() {
   const [showHistorialModal, setShowHistorialModal] = useState(false);
   const [showEditarModal, setShowEditarModal] = useState(false);
   const [showCancelarModal, setShowCancelarModal] = useState(false);
+  const [showConfigurarModal, setShowConfigurarModal] = useState(false);
   const [imagenPreview, setImagenPreview] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadTicketDetail();
-  }, [id]);
+  
 
   const showSuccessToast = (message: string) => {
     setToastMessage(message);
@@ -49,7 +49,7 @@ export default function TicketDetailPage() {
     setShowToast(true);
   };
 
-  const loadTicketDetail = async () => {
+  const loadTicketDetail = useCallback(async () => {
     if (!id) return;
     
     try {
@@ -64,8 +64,11 @@ export default function TicketDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
+  useEffect(() => {
+    loadTicketDetail();
+  }, [loadTicketDetail]);
   const getEstadoColor = (estado: string) => {
     const colors: Record<string, string> = {
       'ABIERTO': 'bg-sky-50 text-sky-700 border-sky-300',
@@ -208,12 +211,12 @@ export default function TicketDetailPage() {
     setShowEditarModal(true);
   };
 
-  const handleSubmitEditar = async (payload: any) => {
+  const handleSubmitEditar = async (payload: any, motivo: string) => {
     if (!ticket) return;
 
     try {
       setActionLoading(true);
-      await editarTicket(ticket.id, payload);
+      await editarTicket(ticket.id, payload, motivo);
       await loadTicketDetail();
       setShowEditarModal(false);
       showSuccessToast('Ticket actualizado correctamente');
@@ -457,6 +460,15 @@ export default function TicketDetailPage() {
                 >
                   Historial
                 </button>
+                {/* Botón Configurar - solo si vino del portal */}
+                {ticket.origen === 'PORTAL_PUBLICO' && (
+                  <button
+                    onClick={() => setShowConfigurarModal(true)}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-sm font-medium"
+                  >
+                    Configurar
+                  </button>
+                )}
 
                 {/* Botón Cancelar Ticket - Solo si NO está cerrado o cancelado */}
                 {ticket.estado !== 'CERRADO' && ticket.estado !== 'CANCELADO' && user && (
@@ -503,11 +515,11 @@ export default function TicketDetailPage() {
               <div className="p-6 grid grid-cols-2 gap-6">
                 <div>
                   <label className="text-sm font-medium text-gray-500">Empresa</label>
-                  <p className="text-sm text-gray-900 mt-1">{ticket.empresa_nome || ticket.empresa?.nombre || 'N/A'}</p>
+                  <p className="text-sm text-gray-900 mt-1">{ticket.empresa_nombre || 'N/A'}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">Sede</label>
-                  <p className="text-sm text-gray-900 mt-1">{ticket.sede_nombre || ticket.sede?.nombre || 'N/A'}</p>
+                  <p className="text-sm text-gray-900 mt-1">{ticket.sede_nombre || 'N/A'}</p>
                 </div>
                 <div className="col-span-2">
                   <label className="text-sm font-medium text-gray-500">Título</label>
@@ -608,14 +620,14 @@ export default function TicketDetailPage() {
             )}
 
             {/* Usuarios Reportan */}
-            {ticket.usuarios_reportan && ticket.usuarios_reportan.length > 0 && (
+            {ticket.usuarios_reporta && ticket.usuarios_reporta.length > 0 && (
               <div className="bg-white rounded-lg shadow border border-gray-200">
                 <div className="border-b border-gray-200 px-6 py-4">
-                  <h2 className="text-base font-semibold text-gray-900">Usuarios Afectados ({ticket.usuarios_reportan.length})</h2>
+                  <h2 className="text-base font-semibold text-gray-900">Usuarios Afectados ({ticket.usuarios_reporta.length})</h2>
                 </div>
                 <div className="p-6">
                   <div className="space-y-3">
-                    {ticket.usuarios_reportan.map((usuario: any, index: number) => (
+                    {ticket.usuarios_reporta.map((usuario: any, index: number) => (
                       <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-200">
                         <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
                           <span className="text-blue-600 font-semibold text-sm">
@@ -645,11 +657,28 @@ export default function TicketDetailPage() {
                   <h2 className="text-base font-semibold text-gray-900">Adjuntos ({ticket.adjuntos.length})</h2>
                 </div>
                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {ticket.adjuntos.map((adjunto, index) => {
-                    const fileName = adjunto.split('/').pop() || `Adjunto ${index + 1}`;
-                    const extension = fileName.split('.').pop()?.toLowerCase();
-                    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension || '');
-                    
+                  {ticket.adjuntos.map((adjunto: any, index: number) => {
+                    let fileName = `Adjunto ${index + 1}`;
+                    let extension = '';
+                    let isImage = false;
+                    let href = '#';
+                    let src = undefined;
+
+                    const isObj = typeof adjunto === 'object' && adjunto !== null;
+                    if (isObj) {
+                      fileName = adjunto.nombre || adjunto.name || fileName;
+                      extension = (fileName.split('.').pop() || '').toLowerCase();
+                      isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension);
+                      href = adjunto.id ? `/api/tickets/${ticket.id}/adjuntos/${adjunto.id}/download` : (adjunto.url || '#');
+                      src = adjunto.url || adjunto.path || href;
+                    } else if (typeof adjunto === 'string') {
+                      fileName = adjunto.split('/').pop() || fileName;
+                      extension = fileName.split('.').pop()?.toLowerCase() || '';
+                      isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension);
+                      href = adjunto;
+                      src = adjunto;
+                    }
+
                     return (
                       <div
                         key={index}
@@ -660,10 +689,10 @@ export default function TicketDetailPage() {
                             {/* Preview de imagen */}
                             <div 
                               className="aspect-video bg-gray-100 cursor-pointer relative overflow-hidden"
-                              onClick={() => setImagenPreview(adjunto)}
+                              onClick={() => setImagenPreview(src)}
                             >
                               <img 
-                                src={adjunto} 
+                                src={src} 
                                 alt={fileName} 
                                 className="w-full h-full object-cover transition-transform group-hover:scale-105"
                                 onError={(e) => {
@@ -682,7 +711,7 @@ export default function TicketDetailPage() {
                               <p className="text-sm font-medium text-gray-900 truncate mb-2">{fileName}</p>
                               <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() => setImagenPreview(adjunto)}
+                                  onClick={() => setImagenPreview(src)}
                                   className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
                                 >
                                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -692,7 +721,7 @@ export default function TicketDetailPage() {
                                   Ver
                                 </button>
                                 <a
-                                  href={adjunto}
+                                  href={href}
                                   download={fileName}
                                   className="flex-1 px-3 py-1.5 bg-gray-600 text-white text-xs font-semibold rounded hover:bg-gray-700 transition-colors flex items-center justify-center gap-1"
                                 >
@@ -717,10 +746,10 @@ export default function TicketDetailPage() {
                               <p className="text-xs text-gray-500 uppercase">{extension || 'archivo'}</p>
                             </div>
                             <a
-                              href={adjunto}
-                              download={fileName}
-                              className="px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
-                            >
+                                href={href}
+                                download={fileName}
+                                className="px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
+                              >
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                               </svg>
@@ -825,6 +854,16 @@ export default function TicketDetailPage() {
         onSubmit={handleSubmitEditar}
       />
 
+      <CreateTicketModal
+        isOpen={showConfigurarModal}
+        onClose={() => setShowConfigurarModal(false)}
+        isConfigurar
+        initialData={ticket}
+        initialAdjuntos={ticket.adjuntos}
+        onUpdated={async () => { await loadTicketDetail(); setShowConfigurarModal(false); showSuccessToast('Ticket configurado correctamente'); }}
+        onSubmit={async () => { /* no-op: en modo configurar usamos editarTicket internamente */ }}
+      />
+
       <CancelarTicketModal
         isOpen={showCancelarModal}
         onClose={() => setShowCancelarModal(false)}
@@ -869,12 +908,13 @@ export default function TicketDetailPage() {
       )}
 
       {/* Toast */}
-      <Toast
-        message={toastMessage}
-        type={toastType}
-        isVisible={showToast}
-        onClose={() => setShowToast(false)}
-      />
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          type={toastType}
+          onClose={() => setShowToast(false)}
+        />
+      )}
     </div>
   );
 }
