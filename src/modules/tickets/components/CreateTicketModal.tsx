@@ -65,59 +65,41 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
     // Identificación
     empresa_id: '',
     sede_id: '',
-    
+
     // Clasificación
     tipo_ticket: '',
     categoria_id: '',
     subcategoria_id: '',
-    
+
     // Descripción
     titulo: '',
     descripcion: '',
     activos_codigos: [] as string[], // Array de códigos de activos seleccionados
-    ubicacion: '',
     usuarios_reporta_ids: [] as string[], // Array de IDs de usuarios que reportan
-    
+
     // Servicio
     servicio_id: '',
     tipo_servicio: '', // Solo lectura, se llena automáticamente
-    
+
     // ITIL
     impacto: '' as Impacto | '',
     urgencia: '' as Urgencia | '',
     prioridad: '' as PrioridadTicket | '',
-    
+
     // Servicio
     modalidad: '',
-    
+
     // SLA
     aplica_sla: true,
-    
-    // Gestión
+
     tecnico_asignado_id: '',
-    
+
     // Control
     estado: 'ABIERTO' as const,
-    
+
     // Origen
-    origen: 'INTERNO' as const // Automático: INTERNO desde sistema, QR desde formulario público
+    origen: 'INTERNO' as const,
   });
-
-  // Helpers para seleccionar / deseleccionar activos usando la misma ruta
-  // que usan los inputs/checkboxes del formulario (asimilar a selección manual)
-  const selectActivo = (codigoActivo: string | number) => {
-    const codeStr = String(codigoActivo);
-    setFormData(prev => {
-      const exists = Array.isArray(prev.activos_codigos) && prev.activos_codigos.some((c: any) => String(c) === codeStr);
-      if (exists) return prev;
-      return { ...prev, activos_codigos: [...(prev.activos_codigos || []), codeStr] };
-    });
-  };
-
-  const deselectActivo = (codigoActivo: string | number) => {
-    const codeStr = String(codigoActivo);
-    setFormData(prev => ({ ...prev, activos_codigos: (prev.activos_codigos || []).filter((c: any) => String(c) !== codeStr) }));
-  };
 
   // Selección que recibe el objeto completo del inventario (igual que la selección manual)
   const handleSelectActivoObject = (activoObj: any) => {
@@ -1012,6 +994,13 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
         return;
       }
 
+      // Validación específica en modo configurar: si el ticket es de tipo 'activos',
+      // garantizar que exista al menos un usuario reporta seleccionado antes de guardar.
+      if (tipoSoporte === 'activos' && (!formData.usuarios_reporta_ids || formData.usuarios_reporta_ids.length === 0)) {
+        alert('No se puede guardar: debe quedar al menos un usuario que reporta para los activos seleccionados.');
+        return;
+      }
+
       // Construir objeto de cambios con formato esperado por `editarTicket`
       const cambios: Record<string, { valorAnterior: any; valorNuevo: any }> = {};
       const addCambio = (key: string, nuevo: any) => {
@@ -1566,7 +1555,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                               // seleccionar uno por uno vía la ruta que recibe el objeto completo
                               activosFiltrados.forEach(act => handleSelectActivoObject(act));
                             }}
-                            disabled={isFormBlocked || isConfigMode}
+                            disabled={isFormBlocked || (isConfigMode && usuariosActivo.length <= 1)}
                             className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Seleccionar todos
@@ -1578,7 +1567,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                               const actuales = [...(formData.activos_codigos || [])];
                               actuales.forEach(c => deselectActivo(c));
                             }}
-                            disabled={isFormBlocked || isConfigMode}
+                            disabled={isFormBlocked || (isConfigMode && usuariosActivo.length <= 1)}
                             className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Limpiar selección
@@ -1702,12 +1691,33 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                               <button
                                 type="button"
                                 onClick={() => {
+                                  // En modo configurar y soporte a activos no permitimos eliminar
+                                  // el último usuario. Si hay varios, permitir eliminar.
+                                  if (isConfigMode && tipoSoporte === 'activos') {
+                                    const actuales = formData.usuarios_reporta_ids || [];
+                                    if (actuales.length <= 1) {
+                                      // nada que hacer
+                                      return;
+                                    }
+                                    // eliminar pero garantizar que quede al menos uno
+                                    const nuevos = actuales.filter(c => c !== usuarioCorreo);
+                                    if (nuevos.length === 0 && usuariosActivo.length > 0) {
+                                      // mantener el primero
+                                      setFormData({ ...formData, usuarios_reporta_ids: [usuariosActivo[0].correo] });
+                                    } else {
+                                      setFormData({ ...formData, usuarios_reporta_ids: nuevos });
+                                    }
+                                    return;
+                                  }
+
+                                  // Comportamiento normal fuera de modo configurar
                                   setFormData({
                                     ...formData,
                                     usuarios_reporta_ids: formData.usuarios_reporta_ids.filter(c => c !== usuarioCorreo)
                                   });
                                 }}
-                                className="ml-1 hover:bg-green-200 rounded-full p-1 transition-colors"
+                                disabled={isConfigMode && tipoSoporte === 'activos' && usuariosActivo.length <= 1}
+                                className="ml-1 hover:bg-green-200 rounded-full p-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -1745,12 +1755,15 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                                        cargo.includes(searchLower);
                               });
                               const todosLosCorreos = usuariosFiltrados.map(u => u.correo);
-                              setFormData({
-                                ...formData,
-                                usuarios_reporta_ids: todosLosCorreos
-                              });
+                              // En modo configurar, permitir seleccionar todos solo si hay más de
+                              // un usuario; además mantener al menos uno seleccionado.
+                              if (isConfigMode && usuariosActivo.length > 1) {
+                                setFormData({ ...formData, usuarios_reporta_ids: todosLosCorreos });
+                              } else if (!isConfigMode) {
+                                setFormData({ ...formData, usuarios_reporta_ids: todosLosCorreos });
+                              }
                             }}
-                            disabled={isFormBlocked || isConfigMode}
+                            disabled={isFormBlocked || (isConfigMode && usuariosActivo.length <= 1)}
                             className="px-3 py-1.5 text-xs font-medium text-green-600 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Seleccionar todos
@@ -1758,12 +1771,21 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                           <button
                             type="button"
                             onClick={() => {
-                              setFormData({
-                                ...formData,
-                                usuarios_reporta_ids: []
-                              });
+                              // En modo configurar no permitimos dejar 0 usuarios seleccionados.
+                              if (isConfigMode) {
+                                if (usuariosActivo.length === 1) {
+                                  // nada que hacer: ya está el único usuario seleccionado
+                                  return;
+                                }
+                                // Mantener al menos un usuario seleccionado (elegimos el primero)
+                                const primera = usuariosActivo[0]?.correo;
+                                if (primera) setFormData({ ...formData, usuarios_reporta_ids: [primera] });
+                                return;
+                              }
+
+                              setFormData({ ...formData, usuarios_reporta_ids: [] });
                             }}
-                            disabled={isFormBlocked || isConfigMode}
+                            disabled={isFormBlocked || (isConfigMode && usuariosActivo.length <= 1)}
                             className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Limpiar selección
@@ -1818,13 +1840,22 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                                         usuarios_reporta_ids: [...formData.usuarios_reporta_ids, usuarioCorreo]
                                       });
                                     } else {
+                                      // Evitar dejar 0 usuarios seleccionados en modo configurar
+                                      if (isConfigMode && tipoSoporte === 'activos') {
+                                        const actuales = formData.usuarios_reporta_ids || [];
+                                        if (actuales.length <= 1) {
+                                          alert('Debe quedar al menos un usuario seleccionado para los activos.');
+                                          return;
+                                        }
+                                      }
+
                                       setFormData({
                                         ...formData,
                                         usuarios_reporta_ids: formData.usuarios_reporta_ids.filter(c => c !== usuarioCorreo)
                                       });
                                     }
                                   }}
-                                  disabled={(isFormBlocked || isConfigMode) || esUnicoUsuario}
+                                  disabled={isFormBlocked || (isConfigMode && esUnicoUsuario)}
                                   className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                                 <div className="flex-1">
@@ -2030,7 +2061,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                   <select
                     value={formData.tipo_ticket}
                     onChange={(e) => setFormData({ ...formData, tipo_ticket: e.target.value })}
-                    disabled={isFormBlocked || isConfigMode}
+                    disabled={isFormBlocked}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Seleccionar tipo...</option>
@@ -2049,7 +2080,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                   <select
                     value={formData.categoria_id}
                     onChange={(e) => setFormData({ ...formData, categoria_id: e.target.value })}
-                    disabled={isFormBlocked || isConfigMode}
+                    disabled={isFormBlocked}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Seleccionar categoría...</option>
@@ -2068,7 +2099,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                   <select
                     value={formData.subcategoria_id}
                     onChange={(e) => setFormData({ ...formData, subcategoria_id: e.target.value })}
-                    disabled={(isFormBlocked || isConfigMode) || !formData.categoria_id}
+                    disabled={isFormBlocked || !formData.categoria_id}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Seleccionar subcategoría...</option>
@@ -2089,7 +2120,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                   <select
                     value={formData.servicio_id}
                     onChange={(e) => setFormData({ ...formData, servicio_id: e.target.value })}
-                    disabled={isFormBlocked || isConfigMode}
+                    disabled={isFormBlocked}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Seleccionar servicio...</option>
@@ -2131,7 +2162,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                   <select
                     value={formData.impacto}
                     onChange={(e) => setFormData({ ...formData, impacto: e.target.value as Impacto })}
-                    disabled={isFormBlocked || isConfigMode}
+                    disabled={isFormBlocked}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Seleccionar impacto...</option>
