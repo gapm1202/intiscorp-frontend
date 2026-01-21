@@ -34,6 +34,9 @@ export default function TicketDetailPage() {
   const [showCancelarModal, setShowCancelarModal] = useState(false);
   const [showConfigurarModal, setShowConfigurarModal] = useState(false);
   const [imagenPreview, setImagenPreview] = useState<string | null>(null);
+  // Chat interno (mensajes entre soporte y cliente) - UI only por ahora
+  const [chatMessages, setChatMessages] = useState<Array<{ from: 'client' | 'support'; senderName?: string; text: string; at: string }>>([]);
+  const [chatInput, setChatInput] = useState('');
 
   
 
@@ -69,6 +72,41 @@ export default function TicketDetailPage() {
   useEffect(() => {
     loadTicketDetail();
   }, [loadTicketDetail]);
+
+  // Normalize estado helper (local)
+  const normalizeEstadoLocal = (raw?: string | null) => {
+    if (!raw) return '';
+    return String(raw).toUpperCase().replace(/[_\s]+/g, ' ').trim();
+  };
+
+  // Inicializar chat interno a partir de ticket (si existe) o con mensaje sistema
+  useEffect(() => {
+    if (!ticket) return;
+    // Preferir campo `mensajes` si el backend provee historial
+    const rawMsgs: any[] = (ticket as any).mensajes || (ticket as any).mensajes_chat || [];
+    if (rawMsgs && rawMsgs.length > 0) {
+      const mapped = rawMsgs.map(m => ({
+        from: m.from === 'client' || m.from === 'cliente' ? 'client' : 'support',
+        senderName: m.senderName || m.nombre || m.from || undefined,
+        text: m.text || m.mensaje || m.body || '',
+        at: m.at || m.fecha || new Date().toISOString()
+      }));
+      setChatMessages(mapped);
+      return;
+    }
+
+    // Si no hay historial, inicializar con mensaje de sistema según estado
+    const raw = normalizeEstadoLocal(ticket.estado as any);
+    let sistema = '';
+    if (raw === 'EN ESPERA' || raw === 'ESPERA' || raw === 'CREADO') sistema = 'Tu ticket está en espera de atención.';
+    else if (raw === 'ABIERTO') {
+      if (ticket.tecnico_asignado && (ticket.tecnico_asignado as any).nombre) sistema = `Tu ticket ha sido visualizado y fue asignado a ${(ticket.tecnico_asignado as any).nombre}`;
+      else sistema = 'Tu ticket está siendo visualizado, en breve se te asignará un técnico.';
+    } else if (raw === 'EN PROCESO' || raw === 'EN_PROCESO') sistema = 'Tu ticket ha pasado a estado En Proceso. Escríbenos si olvidaste comentar algo adicional.';
+    else if (raw === 'RESUELTO') sistema = 'Tu ticket ha sido resuelto. Gracias por contactarnos.';
+
+    setChatMessages([{ from: 'support', senderName: 'Soporte', text: sistema, at: new Date().toISOString() }]);
+  }, [ticket]);
   const getEstadoColor = (estado: string) => {
     const colors: Record<string, string> = {
       'ABIERTO': 'bg-sky-50 text-sky-700 border-sky-300',
@@ -460,6 +498,15 @@ export default function TicketDetailPage() {
                 >
                   Historial
                 </button>
+                {/* Botón Ver Chat/Seguimiento público */}
+                {ticket.codigo_ticket && (
+                  <button
+                    onClick={() => window.open(`${window.location.origin}/seguimiento/${ticket.codigo_ticket}`, '_blank')}
+                    className="px-4 py-2 bg-sky-600 text-white rounded hover:bg-sky-700 transition-colors text-sm font-medium"
+                  >
+                    Ver Chat (Seguimiento)
+                  </button>
+                )}
                 {/* Botón Configurar - solo si vino del portal */}
                 {ticket.origen === 'PORTAL_PUBLICO' && (
                   <button
@@ -817,6 +864,79 @@ export default function TicketDetailPage() {
                     </div>
                   </div>
                 )}
+                {(ticket.configurado_por || ticket.configurado_at) && (
+                  <div className="border-t border-gray-200 pt-4">
+                    <label className="text-sm font-medium text-gray-500 mb-3 block">Configuración</label>
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-200">
+                      {ticket.configurado_por && (
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0">
+                            <span className="text-gray-700 font-semibold text-xs">
+                              {ticket.configurado_por.nombre?.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-900 font-medium truncate">{ticket.configurado_por.nombre}</p>
+                            {ticket.configurado_at && (
+                              <p className="text-xs text-gray-600 truncate">{new Date(ticket.configurado_at).toLocaleString()}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {!ticket.configurado_por && ticket.configurado_at && (
+                        <p className="text-sm text-gray-600">{new Date(ticket.configurado_at).toLocaleString()}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {/* Chat interno - sección para que admins/técnicos escriban al usuario */}
+                <div className="border-t border-gray-200 pt-4">
+                  <label className="text-sm font-medium text-gray-500 mb-3 block">Chat con el usuario</label>
+                  <div className="bg-white rounded p-3 border border-gray-200">
+                    <div className="h-56 overflow-y-auto flex flex-col gap-3 p-2">
+                      {chatMessages.map((m, idx) => {
+                        const isSupport = m.from === 'support';
+                        return (
+                          <div key={idx} className={`max-w-full ${isSupport ? 'self-end items-end' : 'self-start items-start'} flex flex-col`}> 
+                            <div className={`p-3 rounded-lg max-w-xl ${isSupport ? 'bg-gradient-to-r from-blue-600 to-sky-500 text-white text-right' : 'bg-gray-100 text-gray-900'}`}>
+                              <div className="text-xs font-semibold mb-1">{m.senderName || (isSupport ? 'Soporte' : 'Cliente')}</div>
+                              <div className="text-sm whitespace-pre-line">{m.text}</div>
+                            </div>
+                            <div className={`text-xs mt-1 ${isSupport ? 'text-white/60 text-right' : 'text-gray-500 text-left'}`}>{new Date(m.at).toLocaleString()}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-3">
+                      <div className="flex items-center gap-3">
+                        <input
+                          value={chatInput}
+                          onChange={e => setChatInput(e.target.value)}
+                          disabled={!(normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO')}
+                          placeholder={normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO' ? 'Escribe un mensaje al usuario...' : 'Chat solo lectura en este estado'}
+                          className="flex-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-300"
+                        />
+                        <button
+                          onClick={() => {
+                            if (!chatInput.trim()) return;
+                            if (!(normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO')) return;
+                            const name = user?.nombre || `${user?.first_name || ''} ${user?.last_name || ''}` || 'Soporte';
+                            const msg = { from: 'support' as const, senderName: name, text: chatInput.trim(), at: new Date().toISOString() };
+                            setChatMessages(prev => [...prev, msg]);
+                            setChatInput('');
+                            // Persistencia se implementará más adelante
+                          }}
+                          disabled={!(normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO') || !chatInput.trim()}
+                          className={`px-4 py-2 rounded-md text-sm font-medium ${normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                        >
+                          Enviar
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">Nota: por ahora los mensajes se guardan solo en la UI; la persistencia se integrará después. Mensajes de soporte aparecen alineados a la derecha; mensajes del usuario a la izquierda.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -30,7 +30,7 @@ interface CreateTicketModalProps {
 type Impacto = 'BAJO' | 'MEDIO' | 'ALTO' | 'CRITICO';
 type Urgencia = 'BAJA' | 'MEDIA' | 'ALTA' | 'CRITICA';
 
-import { editarTicket } from '@/modules/tickets/services/ticketsService';
+import { editarTicket, configurarTicket } from '@/modules/tickets/services/ticketsService';
 
 const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialData, initialAdjuntos, onUpdated }: CreateTicketModalProps) => {
   // Estados del formulario
@@ -1001,29 +1001,23 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
         return;
       }
 
-      // Construir objeto de cambios con formato esperado por `editarTicket`
-      const cambios: Record<string, { valorAnterior: any; valorNuevo: any }> = {};
-      const addCambio = (key: string, nuevo: any) => {
-        const anterior = (initialData as any)?.[key];
-        // comparar como strings para evitar diferencias de tipo
-        if ((anterior ?? null) !== (nuevo ?? null)) {
-          cambios[key] = { valorAnterior: anterior ?? null, valorNuevo: nuevo ?? null };
-        }
+      // Construir payload directo para el endpoint /configurar
+      const payload: any = {
+        servicio_id: formData.servicio_id ? Number(formData.servicio_id) : null,
+        tipo_servicio: formData.tipo_servicio || null,
+        tipo_ticket: formData.tipo_ticket || null,
+        categoria_id: formData.categoria_id ? Number(formData.categoria_id) : null,
+        subcategoria_id: formData.subcategoria_id ? Number(formData.subcategoria_id) : null,
+        impacto: formData.impacto || null,
+        urgencia: formData.urgencia || null,
+        prioridad: formData.prioridad || null,
+        modalidad: formData.modalidad || null,
+        tecnico_asignado_id: formData.tecnico_asignado_id ? Number(formData.tecnico_asignado_id) : null
       };
-
-      addCambio('servicio_id', formData.servicio_id ? Number(formData.servicio_id) : null);
-      addCambio('tipo_ticket', formData.tipo_ticket || null);
-      addCambio('categoria_id', formData.categoria_id ? Number(formData.categoria_id) : null);
-      addCambio('subcategoria_id', formData.subcategoria_id ? Number(formData.subcategoria_id) : null);
-      addCambio('impacto', formData.impacto || null);
-      addCambio('urgencia', formData.urgencia || null);
-      addCambio('prioridad', formData.prioridad || null);
-      addCambio('modalidad', formData.modalidad || null);
-      addCambio('tecnico_asignado_id', formData.tecnico_asignado_id ? Number(formData.tecnico_asignado_id) : null);
 
       setLoading(true);
       try {
-        await editarTicket(ticketId, cambios, 'Configuración desde portal público');
+        await configurarTicket(ticketId, payload);
         if (onUpdated) await onUpdated();
         onClose();
       } catch (error: any) {

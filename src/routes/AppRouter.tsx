@@ -18,6 +18,7 @@ import CatalogoServiciosPage from "../modules/catalogo/pages/CatalogoServiciosPa
 import CatalogoCorreosPage from "../modules/catalogo/pages/CatalogoCorreosPage";
 import TicketsPage from "../modules/tickets/pages/TicketsPage";
 import TicketDetailPage from "../modules/tickets/pages/TicketDetailPage";
+import SeguimientoTicketPage from "../modules/tickets/pages/SeguimientoTicketPage";
 import UsuariosEmpresaPage from "../modules/usuarios/pages/UsuariosEmpresaPage";
 import UsuarioDetailPage from "../modules/usuarios/pages/UsuarioDetailPage";
 import { UsuariosInternosPage } from "../modules/usuarios/pages/UsuariosInternosPage";
@@ -253,6 +254,9 @@ const AppRouter = () => {
           }
         />
       </Route>
+
+      {/* Ruta pública para seguimiento por código (link en correo) */}
+      <Route path="/seguimiento/:codigo" element={<SeguimientoTicketPage />} />
 
 
     </Routes>

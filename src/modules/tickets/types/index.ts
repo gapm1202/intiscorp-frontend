@@ -38,6 +38,11 @@ export interface Ticket {
     id: number;
     nombre: string;
   };
+  configurado_por?: {
+    id: number;
+    nombre: string;
+  };
+  configurado_at?: string;
   // Activos y usuarios relacionados
   activos_codigos?: string[];
   activos?: Array<{

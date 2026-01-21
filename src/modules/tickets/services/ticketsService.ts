@@ -146,6 +146,19 @@ export async function getTicketById(id: number): Promise<Ticket> {
   }
 }
 
+// Obtener ticket por código (seguimiento público)
+export async function getTicketByCodigo(codigo: string): Promise<Ticket | null> {
+  try {
+    const response = await axiosClient.get(`/api/tickets?codigo=${encodeURIComponent(codigo)}`);
+    // Backend returns: { success: true, data: [ { ...ticket } ] }
+    const ticket = response.data?.data && Array.isArray(response.data.data) ? response.data.data[0] : null;
+    return ticket || null;
+  } catch (error) {
+    console.error('Error al obtener ticket por código:', error);
+    throw error;
+  }
+}
+
 export async function createTicket(ticket: Partial<Ticket>): Promise<Ticket> {
   try {
     const response = await axiosClient.post('/api/tickets', ticket);
@@ -265,6 +278,17 @@ export async function editarTicket(ticketId: number, cambios: Record<string, { v
     return response.data;
   } catch (error) {
     console.error('Error al editar ticket:', error);
+    throw error;
+  }
+}
+
+// Configurar ticket público: completar campos NULL provenientes del portal
+export async function configurarTicket(ticketId: number, data: Partial<Ticket>): Promise<Ticket> {
+  try {
+    const response = await axiosClient.put(`/api/tickets/gestion/${ticketId}/configurar`, data);
+    return response.data;
+  } catch (error) {
+    console.error('Error al configurar ticket:', error);
     throw error;
   }
 }
