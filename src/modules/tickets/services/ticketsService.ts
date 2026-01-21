@@ -292,3 +292,37 @@ export async function configurarTicket(ticketId: number, data: Partial<Ticket>):
     throw error;
   }
 }
+
+// Mensajes del ticket (chat)
+export async function getMensajes(ticketId: number): Promise<Array<any>> {
+  try {
+    const response = await axiosClient.get(`/api/tickets/${ticketId}/mensajes`);
+    // Expect array of mensajes in response.data.data or response.data
+    const msgs = response.data?.data || response.data || [];
+    return Array.isArray(msgs) ? msgs : [];
+  } catch (error) {
+    console.error('Error al obtener mensajes del ticket:', error);
+    throw error;
+  }
+}
+
+export async function postMensaje(ticketId: number, payload: { mensaje: string }): Promise<any> {
+  try {
+    const response = await axiosClient.post(`/api/tickets/${ticketId}/mensajes`, payload);
+    return response.data;
+  } catch (error) {
+    console.error('Error al enviar mensaje:', error);
+    throw error;
+  }
+}
+
+// Enviar mensaje desde portal (cliente) - no requiere auth
+export async function postMensajePortal(ticketId: number, payload: { mensaje: string }): Promise<any> {
+  try {
+    const response = await axiosClient.post(`/api/portal/tickets/${ticketId}/mensajes`, payload);
+    return response.data;
+  } catch (error) {
+    console.error('Error al enviar mensaje desde portal:', error);
+    throw error;
+  }
+}

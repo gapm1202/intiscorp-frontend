@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { getTicketByCodigo } from '../services/ticketsService';
+import { getTicketByCodigo, getMensajes, postMensajePortal } from '../services/ticketsService';
 import type { Ticket } from '../types';
 
 const STEPS = ['EN ESPERA', 'ABIERTO', 'EN PROCESO', 'RESUELTO'];
@@ -16,8 +16,8 @@ export default function SeguimientoTicketPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Chat local state (simple, not persisted)
-  const [messages, setMessages] = useState<Array<{ from: 'client'|'support'|'system'; text: string; at: string }>>([]);
+  // Chat messages loaded from backend
+  const [messages, setMessages] = useState<Array<{ emisor_tipo: string; emisor_nombre?: string; mensaje: string; created_at: string }>>([]);
   const [input, setInput] = useState('');
 
   useEffect(() => {
@@ -35,6 +35,20 @@ export default function SeguimientoTicketPage() {
       }
     })();
   }, [codigo]);
+
+  // load messages after ticket is fetched
+  useEffect(() => {
+    if (!ticket) return;
+    (async () => {
+      try {
+        const msgs = await getMensajes(ticket.id);
+        setMessages(Array.isArray(msgs) ? msgs : []);
+      } catch (err) {
+        console.error('Error cargando mensajes:', err);
+        setMessages([]);
+      }
+    })();
+  }, [ticket]);
 
   const estado = useMemo(() => normalizeEstado(ticket?.estado || ticket?.estado), [ticket]);
 
@@ -93,15 +107,15 @@ export default function SeguimientoTicketPage() {
   // Initialize messages with the system/support message when ticket loads.
   useEffect(() => {
     if (!ticket) return;
-    // If there are no messages yet, seed with the system/support message
+    // If there are no messages yet, seed with a SISTEMA message (backend-shaped)
     setMessages(prev => {
       if (prev.length === 0) {
-        return [{ from: 'support', text: systemMessage, at: new Date().toISOString() }];
+        return [{ emisor_tipo: 'SISTEMA', emisor_nombre: 'INTISOFT', mensaje: systemMessage, created_at: new Date().toISOString() }];
       }
-      // If the first message is from support, keep it in sync with the current systemMessage
-      if (prev[0] && prev[0].from === 'support') {
+      // If the first message is a SISTEMA message, keep it in sync
+      if (prev[0] && String(prev[0].emisor_tipo || '').toUpperCase() === 'SISTEMA') {
         const copy = [...prev];
-        copy[0] = { ...copy[0], text: systemMessage };
+        copy[0] = { ...copy[0], mensaje: systemMessage };
         return copy;
       }
       return prev;
@@ -171,18 +185,40 @@ export default function SeguimientoTicketPage() {
               <h2 className="text-lg font-medium text-slate-700 mb-3">Mensajes</h2>
 
               <div className="h-72 overflow-y-auto mb-3 flex flex-col gap-3 px-1">
-                {messages.map((m, i) => (
-                  <div key={i} className={`max-w-xl p-3 rounded-lg ${m.from === 'client' ? 'self-end bg-gradient-to-r from-blue-600 to-sky-500 text-white' : 'self-start bg-sky-50 border border-sky-100 text-sky-800'}`}>
-                    {m.from === 'support' && <strong className="block text-sm">Intisoft</strong>}
-                    <div className="text-sm mt-1 whitespace-pre-line">{m.text}</div>
-                    <div className={`text-xs mt-2 ${m.from === 'client' ? 'text-white/70 text-right' : 'text-gray-500'}`}>{new Date(m.at).toLocaleString()}</div>
-                  </div>
-                ))}
+                {messages.map((m, i) => {
+                  const tipo = String(m.emisor_tipo || '').toUpperCase();
+                  const isSistema = tipo === 'SISTEMA';
+                  const isCliente = tipo === 'CLIENTE';
+                  const isTecnico = tipo === 'TECNICO';
+                  // Render rules: SISTEMA centered, TECNICO left, CLIENTE right
+                  const align = isSistema ? 'self-center' : isTecnico ? 'self-start' : 'self-end';
+                  const bubble = isSistema ? 'bg-gray-100 text-gray-700' : isTecnico ? 'bg-gradient-to-r from-blue-600 to-sky-500 text-white' : 'bg-sky-50 border border-sky-100 text-sky-800';
+                  return (
+                    <div key={i} className={`max-w-xl p-3 rounded-lg ${align} ${bubble}`}>
+                      {m.emisor_nombre && <strong className="block text-sm">{m.emisor_nombre}</strong>}
+                      <div className="text-sm mt-1 whitespace-pre-line">{m.mensaje}</div>
+                      <div className={`text-xs mt-2 ${isSistema ? 'text-gray-500 text-center' : isTecnico ? 'text-white/70 text-left' : 'text-gray-500 text-right'}`}>{new Date(m.created_at).toLocaleString()}</div>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="flex items-center gap-3">
-                <input value={input} onChange={e => setInput(e.target.value)} disabled={chatReadOnly} className="flex-1 px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-300" placeholder={chatReadOnly ? 'Chat deshabilitado en este estado' : 'Escribe tu mensaje...'} />
-                <button type="button" onClick={handleSend} disabled={!chatEnabled || !input.trim()} className={`px-4 py-2 rounded-md text-sm font-medium transition ${chatEnabled ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}>Enviar</button>
+                <input value={input} onChange={e => setInput(e.target.value)} disabled={!chatEnabled} className="flex-1 px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-300" placeholder={!chatEnabled ? 'Chat deshabilitado en este estado' : 'Escribe tu mensaje...'} />
+                <button type="button" onClick={async () => {
+                  if (!input.trim() || !ticket) return;
+                  if (!chatEnabled) return;
+                  try {
+                    // portal endpoint for client messages
+                    await postMensajePortal(ticket.id, { mensaje: input.trim() });
+                    const msgs = await getMensajes(ticket.id);
+                    setMessages(Array.isArray(msgs) ? msgs : []);
+                    setInput('');
+                  } catch (err) {
+                    console.error('Error al enviar mensaje:', err);
+                    // optionally show UI error
+                  }
+                }} disabled={!chatEnabled || !input.trim()} className={`px-4 py-2 rounded-md text-sm font-medium transition ${chatEnabled ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}>Enviar</button>
               </div>
 
               <p className="text-xs text-gray-500 mt-3">Reglas: El chat está habilitado solo cuando el ticket está en estado <strong>EN PROCESO</strong>. En otros estados está deshabilitado o solo lectura.</p>

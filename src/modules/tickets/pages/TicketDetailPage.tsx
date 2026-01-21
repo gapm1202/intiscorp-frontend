@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getTicketById, cogerTicket, cambiarEstado, asignarTecnico, pausarSLA, reanudarSLA, editarTicket } from '../services/ticketsService';
+import { getTicketById, cogerTicket, cambiarEstado, asignarTecnico, pausarSLA, reanudarSLA, editarTicket, getMensajes, postMensaje } from '../services/ticketsService';
 import type { Ticket } from '../types';
 import { useAuth } from '@/hooks/useAuth';
 import AsignarTecnicoModal from '../components/AsignarTecnicoModal';
@@ -34,8 +34,8 @@ export default function TicketDetailPage() {
   const [showCancelarModal, setShowCancelarModal] = useState(false);
   const [showConfigurarModal, setShowConfigurarModal] = useState(false);
   const [imagenPreview, setImagenPreview] = useState<string | null>(null);
-  // Chat interno (mensajes entre soporte y cliente) - UI only por ahora
-  const [chatMessages, setChatMessages] = useState<Array<{ from: 'client' | 'support'; senderName?: string; text: string; at: string }>>([]);
+  // Chat interno (proviene del backend): { emisor_tipo, emisor_nombre, mensaje, created_at }
+  const [chatMessages, setChatMessages] = useState<Array<{ emisor_tipo: string; emisor_nombre?: string; mensaje: string; created_at: string }>>([]);
   const [chatInput, setChatInput] = useState('');
 
   
@@ -79,33 +79,19 @@ export default function TicketDetailPage() {
     return String(raw).toUpperCase().replace(/[_\s]+/g, ' ').trim();
   };
 
-  // Inicializar chat interno a partir de ticket (si existe) o con mensaje sistema
+  // Inicializar chat interno: obtener mensajes desde backend
   useEffect(() => {
     if (!ticket) return;
-    // Preferir campo `mensajes` si el backend provee historial
-    const rawMsgs: any[] = (ticket as any).mensajes || (ticket as any).mensajes_chat || [];
-    if (rawMsgs && rawMsgs.length > 0) {
-      const mapped = rawMsgs.map(m => ({
-        from: m.from === 'client' || m.from === 'cliente' ? 'client' : 'support',
-        senderName: m.senderName || m.nombre || m.from || undefined,
-        text: m.text || m.mensaje || m.body || '',
-        at: m.at || m.fecha || new Date().toISOString()
-      }));
-      setChatMessages(mapped);
-      return;
-    }
-
-    // Si no hay historial, inicializar con mensaje de sistema según estado
-    const raw = normalizeEstadoLocal(ticket.estado as any);
-    let sistema = '';
-    if (raw === 'EN ESPERA' || raw === 'ESPERA' || raw === 'CREADO') sistema = 'Tu ticket está en espera de atención.';
-    else if (raw === 'ABIERTO') {
-      if (ticket.tecnico_asignado && (ticket.tecnico_asignado as any).nombre) sistema = `Tu ticket ha sido visualizado y fue asignado a ${(ticket.tecnico_asignado as any).nombre}`;
-      else sistema = 'Tu ticket está siendo visualizado, en breve se te asignará un técnico.';
-    } else if (raw === 'EN PROCESO' || raw === 'EN_PROCESO') sistema = 'Tu ticket ha pasado a estado En Proceso. Escríbenos si olvidaste comentar algo adicional.';
-    else if (raw === 'RESUELTO') sistema = 'Tu ticket ha sido resuelto. Gracias por contactarnos.';
-
-    setChatMessages([{ from: 'support', senderName: 'Soporte', text: sistema, at: new Date().toISOString() }]);
+    (async () => {
+      try {
+        const msgs = await getMensajes(ticket.id);
+        // msgs expected: [{ emisor_tipo, emisor_nombre, mensaje, created_at }, ...]
+        setChatMessages(Array.isArray(msgs) ? msgs : []);
+      } catch (err) {
+        console.error('Error cargando mensajes del ticket:', err);
+        setChatMessages([]);
+      }
+    })();
   }, [ticket]);
   const getEstadoColor = (estado: string) => {
     const colors: Record<string, string> = {
@@ -895,14 +881,20 @@ export default function TicketDetailPage() {
                   <div className="bg-white rounded p-3 border border-gray-200">
                     <div className="h-56 overflow-y-auto flex flex-col gap-3 p-2">
                       {chatMessages.map((m, idx) => {
-                        const isSupport = m.from === 'support';
+                        const tipo = String(m.emisor_tipo || '').toUpperCase();
+                        const isSistema = tipo === 'SISTEMA';
+                        const isCliente = tipo === 'CLIENTE';
+                        const isTecnico = tipo === 'TECNICO';
+                        // SISTEMA center, TECNICO left, CLIENTE right
+                        const alignClass = isSistema ? 'self-center items-center' : isTecnico ? 'self-start items-start' : 'self-end items-end';
+                        const bubbleClass = isSistema ? 'bg-gray-100 text-gray-700' : isTecnico ? 'bg-gradient-to-r from-blue-600 to-sky-500 text-white text-left' : 'bg-gray-100 text-gray-900';
                         return (
-                          <div key={idx} className={`max-w-full ${isSupport ? 'self-end items-end' : 'self-start items-start'} flex flex-col`}> 
-                            <div className={`p-3 rounded-lg max-w-xl ${isSupport ? 'bg-gradient-to-r from-blue-600 to-sky-500 text-white text-right' : 'bg-gray-100 text-gray-900'}`}>
-                              <div className="text-xs font-semibold mb-1">{m.senderName || (isSupport ? 'Soporte' : 'Cliente')}</div>
-                              <div className="text-sm whitespace-pre-line">{m.text}</div>
+                          <div key={idx} className={`max-w-full ${alignClass} flex flex-col`}> 
+                            <div className={`p-3 rounded-lg max-w-xl ${bubbleClass}`}>
+                              {m.emisor_nombre && <div className="text-xs font-semibold mb-1">{m.emisor_nombre}</div>}
+                              <div className="text-sm whitespace-pre-line">{m.mensaje}</div>
                             </div>
-                            <div className={`text-xs mt-1 ${isSupport ? 'text-white/60 text-right' : 'text-gray-500 text-left'}`}>{new Date(m.at).toLocaleString()}</div>
+                            <div className={`text-xs mt-1 ${isSistema ? 'text-gray-500 text-center' : isCliente ? 'text-gray-500 text-right' : 'text-white/70 text-left'}`}>{new Date(m.created_at).toLocaleString()}</div>
                           </div>
                         );
                       })}
@@ -918,14 +910,18 @@ export default function TicketDetailPage() {
                           className="flex-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-300"
                         />
                         <button
-                          onClick={() => {
+                          onClick={async () => {
                             if (!chatInput.trim()) return;
                             if (!(normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO')) return;
-                            const name = user?.nombre || `${user?.first_name || ''} ${user?.last_name || ''}` || 'Soporte';
-                            const msg = { from: 'support' as const, senderName: name, text: chatInput.trim(), at: new Date().toISOString() };
-                            setChatMessages(prev => [...prev, msg]);
-                            setChatInput('');
-                            // Persistencia se implementará más adelante
+                            try {
+                              await postMensaje(ticket.id, { mensaje: chatInput.trim() });
+                              const msgs = await getMensajes(ticket.id);
+                              setChatMessages(Array.isArray(msgs) ? msgs : []);
+                              setChatInput('');
+                            } catch (err: any) {
+                              console.error('Error enviando mensaje:', err);
+                              showErrorToast(err?.response?.data?.message || 'Error al enviar mensaje');
+                            }
                           }}
                           disabled={!(normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO') || !chatInput.trim()}
                           className={`px-4 py-2 rounded-md text-sm font-medium ${normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
@@ -933,7 +929,7 @@ export default function TicketDetailPage() {
                           Enviar
                         </button>
                       </div>
-                      <p className="text-xs text-gray-500 mt-2">Nota: por ahora los mensajes se guardan solo en la UI; la persistencia se integrará después. Mensajes de soporte aparecen alineados a la derecha; mensajes del usuario a la izquierda.</p>
+                      <p className="text-xs text-gray-500 mt-2">Los mensajes se cargan desde el backend. El frontend no decide el emisor; renderiza según `emisor_tipo`.</p>
                     </div>
                   </div>
                 </div>
