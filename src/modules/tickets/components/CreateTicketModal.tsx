@@ -1080,7 +1080,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
 
     setLoading(true);
     try {
-      const ticketData = {
+      const ticketData: Record<string, any> = {
         // Identificación
         empresa_id: Number(formData.empresa_id),
         sede_id: Number(formData.sede_id),
@@ -1097,7 +1097,8 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
         usuarios_reporta_ids: formData.usuarios_reporta_ids,
         
         // Clasificación
-        tipo_ticket: formData.tipo_ticket,
+        // NOTE: do not force/send `tipo_ticket` when empty; backend will accept NULL for portal-origin tickets.
+        
         categoria_id: Number(formData.categoria_id),
         subcategoria_id: Number(formData.subcategoria_id),
         
@@ -1108,7 +1109,6 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
         
         // Servicio
         servicio_id: Number(formData.servicio_id),
-        tipo_servicio: formData.tipo_servicio,
         modalidad: formData.modalidad,
         
         // SLA
@@ -1124,6 +1124,10 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
         // Archivos (opcional)
         archivos: archivos.length > 0 ? archivos : undefined
       };
+      // Conditionally include tipo_ticket only when provided (avoid sending empty string/null)
+      if (formData.tipo_ticket) {
+        ticketData.tipo_ticket = formData.tipo_ticket;
+      }
       
       console.log('📤 Enviando ticket al backend:', ticketData);
       
