@@ -79,19 +79,29 @@ export default function TicketDetailPage() {
     return String(raw).toUpperCase().replace(/[_\s]+/g, ' ').trim();
   };
 
-  // Inicializar chat interno: obtener mensajes desde backend
+  // Inicializar chat interno: obtener mensajes desde backend y habilitar polling
   useEffect(() => {
     if (!ticket) return;
-    (async () => {
+    let cancelled = false;
+    const fetchMsgs = async () => {
       try {
         const msgs = await getMensajes(ticket.id);
-        // msgs expected: [{ emisor_tipo, emisor_nombre, mensaje, created_at }, ...]
+        if (cancelled) return;
         setChatMessages(Array.isArray(msgs) ? msgs : []);
       } catch (err) {
         console.error('Error cargando mensajes del ticket:', err);
-        setChatMessages([]);
+        if (!cancelled) setChatMessages([]);
       }
-    })();
+    };
+
+    // primera carga inmediata
+    fetchMsgs();
+    // polling cada 3 segundos
+    const intervalId = setInterval(fetchMsgs, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
   }, [ticket]);
   const getEstadoColor = (estado: string) => {
     const colors: Record<string, string> = {
@@ -484,17 +494,9 @@ export default function TicketDetailPage() {
                 >
                   Historial
                 </button>
-                {/* Botón Ver Chat/Seguimiento público */}
-                {ticket.codigo_ticket && (
-                  <button
-                    onClick={() => window.open(`${window.location.origin}/seguimiento/${ticket.codigo_ticket}`, '_blank')}
-                    className="px-4 py-2 bg-sky-600 text-white rounded hover:bg-sky-700 transition-colors text-sm font-medium"
-                  >
-                    Ver Chat (Seguimiento)
-                  </button>
-                )}
-                {/* Botón Configurar - solo si vino del portal */}
-                {ticket.origen === 'PORTAL_PUBLICO' && (
+                {/* Botón Ver Chat/Seguimiento público (eliminado) */}
+                {/* Botón Configurar - mostrar solo si vino del portal y NO está configurado */}
+                {ticket.origen === 'PORTAL_PUBLICO' && !(ticket.configurado_por || ticket.configurado_at) && (
                   <button
                     onClick={() => setShowConfigurarModal(true)}
                     className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-sm font-medium"
@@ -879,7 +881,7 @@ export default function TicketDetailPage() {
                 <div className="border-t border-gray-200 pt-4">
                   <label className="text-sm font-medium text-gray-500 mb-3 block">Chat con el usuario</label>
                   <div className="bg-white rounded p-3 border border-gray-200">
-                    <div className="h-56 overflow-y-auto flex flex-col gap-3 p-2">
+                    <div className="h-[56vh] overflow-y-auto flex flex-col gap-3 p-2">
                       {chatMessages.map((m, idx) => {
                         const tipo = String(m.emisor_tipo || '').toUpperCase();
                         const isSistema = tipo === 'SISTEMA';

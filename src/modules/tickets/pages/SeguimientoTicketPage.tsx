@@ -36,18 +36,24 @@ export default function SeguimientoTicketPage() {
     })();
   }, [codigo]);
 
-  // load messages after ticket is fetched
+  // load messages after ticket is fetched and enable polling so messages arrive without reload
   useEffect(() => {
     if (!ticket) return;
-    (async () => {
+    let cancelled = false;
+    const fetchMsgs = async () => {
       try {
         const msgs = await getMensajes(ticket.id);
+        if (cancelled) return;
         setMessages(Array.isArray(msgs) ? msgs : []);
       } catch (err) {
         console.error('Error cargando mensajes:', err);
-        setMessages([]);
+        if (!cancelled) setMessages([]);
       }
-    })();
+    };
+
+    fetchMsgs();
+    const id = setInterval(fetchMsgs, 3000);
+    return () => { cancelled = true; clearInterval(id); };
   }, [ticket]);
 
   const estado = useMemo(() => normalizeEstado(ticket?.estado || ticket?.estado), [ticket]);
@@ -184,7 +190,7 @@ export default function SeguimientoTicketPage() {
             <div className="bg-white border border-gray-100 rounded-lg p-4 shadow-sm">
               <h2 className="text-lg font-medium text-slate-700 mb-3">Mensajes</h2>
 
-              <div className="h-72 overflow-y-auto mb-3 flex flex-col gap-3 px-1">
+              <div className="h-[70vh] overflow-y-auto mb-3 flex flex-col gap-3 px-1">
                 {messages.map((m, i) => {
                   const tipo = String(m.emisor_tipo || '').toUpperCase();
                   const isSistema = tipo === 'SISTEMA';
