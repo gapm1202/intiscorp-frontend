@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+// removed API_BASE import; asset detail is shown inline now
 import { useParams, useNavigate } from 'react-router-dom';
 import { getTicketById, cogerTicket, cambiarEstado, asignarTecnico, pausarSLA, reanudarSLA, editarTicket, getMensajes, postMensaje } from '../services/ticketsService';
+import { getInventarioBySede } from '@/modules/inventario/services/inventarioService';
 import type { Ticket } from '../types';
 import { useAuth } from '@/hooks/useAuth';
 import AsignarTecnicoModal from '../components/AsignarTecnicoModal';
@@ -34,9 +36,12 @@ export default function TicketDetailPage() {
   const [showCancelarModal, setShowCancelarModal] = useState(false);
   const [showConfigurarModal, setShowConfigurarModal] = useState(false);
   const [imagenPreview, setImagenPreview] = useState<string | null>(null);
+  // Mapa temporal de detalles del inventario por activo_id
+  const [assetMap, setAssetMap] = useState<Record<string, any>>({});
   // Chat interno (proviene del backend): { emisor_tipo, emisor_nombre, mensaje, created_at }
   const [chatMessages, setChatMessages] = useState<Array<{ emisor_tipo: string; emisor_nombre?: string; mensaje: string; created_at: string }>>([]);
   const [chatInput, setChatInput] = useState('');
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
 
   
 
@@ -103,6 +108,49 @@ export default function TicketDetailPage() {
       clearInterval(intervalId);
     };
   }, [ticket]);
+
+  // Cargar detalles del inventario (solo para los activos asociados al ticket)
+  useEffect(() => {
+    if (!ticket || !ticket.activos || ticket.activos.length === 0) return;
+    const empresaId = ticket.empresa_id;
+    const sedeId = ticket.sede_id;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const inv = await getInventarioBySede(empresaId, sedeId, true);
+        const map: Record<string, any> = {};
+
+        const items = Array.isArray(inv) ? inv : (inv && (inv as any).data && Array.isArray((inv as any).data) ? (inv as any).data : []);
+        for (const a of items) {
+          if (!a) continue;
+          const key = String(a.id ?? a.activo_id ?? a.activoId ?? a.activoId);
+          if (key) map[key] = a;
+        }
+        if (!cancelled) setAssetMap(map);
+      } catch (e) {
+        console.error('Error cargando inventario para activos:', e);
+        // no interrumpir la vista; mostrar toast opcional
+        try { showErrorToast('No se pudo cargar detalles de inventario'); } catch(e){}
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [ticket]);
+
+  // scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (!chatContainerRef.current) return;
+    // small timeout to let DOM update
+    const t = setTimeout(() => {
+      try {
+        chatContainerRef.current!.scrollTop = chatContainerRef.current!.scrollHeight;
+      } catch (e) {
+        /* ignore */
+      }
+    }, 50);
+    return () => clearTimeout(t);
+  }, [chatMessages]);
   const getEstadoColor = (estado: string) => {
     const colors: Record<string, string> = {
       'ABIERTO': 'bg-sky-50 text-sky-700 border-sky-300',
@@ -631,24 +679,104 @@ export default function TicketDetailPage() {
                 </div>
                 <div className="p-6">
                   <div className="space-y-3">
-                    {ticket.activos.map((activo: any, index: number) => (
-                      <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-200">
-                        <div className="w-10 h-10 rounded bg-blue-100 flex items-center justify-center flex-shrink-0">
-                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                          </svg>
+                    {ticket.activos.map((activo: any, index: number) => {
+                      const getFirst = (...vals: any[]) => {
+                        for (const v of vals) {
+                          if (v === null || v === undefined) continue;
+                          try {
+                            const s = String(v).trim();
+                            if (s) return s;
+                          } catch (e) {
+                            // ignore
+                          }
+                        }
+                        return '';
+                      };
+
+                      const assetDetail = (() => {
+                        const key = String(activo.activo_id ?? activo.activoId ?? activo.id ?? '');
+                        return assetMap && key && assetMap[key] ? assetMap[key] : null;
+                      })();
+
+                      const code = getFirst(
+                        activo.codigo_acceso_remoto,
+                        activo.codigoAccesoRemoto,
+                        activo.anydesk,
+                        activo.any_desk,
+                        activo.anyDesk,
+                        activo.activo?.codigo_acceso_remoto,
+                        activo.propiedades?.codigo_acceso_remoto,
+                        activo.detalles?.codigo_acceso_remoto,
+                        assetDetail?.codigo_acceso_remoto,
+                        assetDetail?.codigoAccesoRemoto,
+                        assetDetail?.anydesk,
+                        assetDetail?.any_desk,
+                        assetDetail?.anyDesk
+                      );
+                      const usuario = ticket.usuario_nombre || '';
+                      const telefono = ticket.usuario_telefono || '';
+                      const avatarInitial = (usuario && usuario.charAt(0).toUpperCase()) || 'U';
+
+                      const handleCopy = async (text: string, label?: string) => {
+                        if (!text) return;
+                        try {
+                          await navigator.clipboard.writeText(text);
+                          showSuccessToast(`${label || 'Texto'} copiado al portapapeles`);
+                        } catch (e) {
+                          console.error('copy error', e);
+                          showErrorToast('No se pudo copiar al portapapeles');
+                        }
+                      };
+
+                      return (
+                        <div key={index} className="flex items-start gap-3 p-3 bg-white rounded border border-gray-200 shadow-sm">
+                          <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+                            <span className="text-blue-600 font-semibold">{avatarInitial}</span>
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-gray-900 truncate">{activo.activo_nombre || activo.nombre || 'Activo'}</p>
+                                <p className="text-xs text-gray-500 font-mono truncate">{activo.activo_codigo || activo.codigo}</p>
+
+                                <div className="mt-2 flex flex-col sm:flex-row sm:items-center sm:gap-4 text-sm text-gray-600">
+                                  {usuario && (
+                                    <div className="flex items-center gap-2 truncate">
+                                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A10 10 0 1118.88 6.196 10 10 0 015.12 17.804zM15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                      <span className="truncate">{usuario}</span>
+                                    </div>
+                                  )}
+
+                                  {telefono && (
+                                    <a href={`tel:${telefono}`} className="flex items-center gap-2 text-sky-600 hover:text-sky-800 truncate">
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h2.18a2 2 0 011.72.894l1.24 1.86a2 2 0 01-.45 2.48l-1.27 1.08a11.03 11.03 0 005.516 5.516l1.08-1.27a2 2 0 012.48-.45l1.86 1.24A2 2 0 0121 18.82V21a2 2 0 01-2 2H5a2 2 0 01-2-2V5z"/></svg>
+                                      <span className="truncate">{telefono}</span>
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="ml-2 sm:ml-4 flex-shrink-0 text-right">
+                                {code ? (
+                                  <div className="inline-flex items-center gap-2 bg-gray-50 px-3 py-1 rounded border border-gray-200">
+                                    <div className="text-xs text-gray-500">Código Acceso Remoto</div>
+                                    <div className="text-sm font-mono text-gray-900">{code}</div>
+                                    <button onClick={() => handleCopy(code, 'Código')} className="ml-2 text-xs text-sky-600 hover:text-sky-800">Copiar</button>
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-gray-400">Sin código de acceso</div>
+                                )}
+                              </div>
+                            </div>
+
+                            {activo.activo_tipo && (
+                              <div className="mt-2 text-xs text-gray-500">{activo.activo_tipo}</div>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">{activo.activo_nombre || activo.nombre || 'Activo'}</p>
-                          <p className="text-xs text-gray-500 font-mono">{activo.activo_codigo || activo.codigo}</p>
-                        </div>
-                        {activo.activo_tipo && (
-                          <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded border border-gray-200">
-                            {activo.activo_tipo}
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -881,22 +1009,40 @@ export default function TicketDetailPage() {
                 <div className="border-t border-gray-200 pt-4">
                   <label className="text-sm font-medium text-gray-500 mb-3 block">Chat con el usuario</label>
                   <div className="bg-white rounded p-3 border border-gray-200">
-                    <div className="h-[56vh] overflow-y-auto flex flex-col gap-3 p-2">
+                    <div ref={chatContainerRef} className="h-[56vh] overflow-y-auto flex flex-col gap-3 p-2">
                       {chatMessages.map((m, idx) => {
                         const tipo = String(m.emisor_tipo || '').toUpperCase();
                         const isSistema = tipo === 'SISTEMA';
                         const isCliente = tipo === 'CLIENTE';
                         const isTecnico = tipo === 'TECNICO';
-                        // SISTEMA center, TECNICO left, CLIENTE right
-                        const alignClass = isSistema ? 'self-center items-center' : isTecnico ? 'self-start items-start' : 'self-end items-end';
-                        const bubbleClass = isSistema ? 'bg-gray-100 text-gray-700' : isTecnico ? 'bg-gradient-to-r from-blue-600 to-sky-500 text-white text-left' : 'bg-gray-100 text-gray-900';
-                        return (
-                          <div key={idx} className={`max-w-full ${alignClass} flex flex-col`}> 
-                            <div className={`p-3 rounded-lg max-w-xl ${bubbleClass}`}>
-                              {m.emisor_nombre && <div className="text-xs font-semibold mb-1">{m.emisor_nombre}</div>}
-                              <div className="text-sm whitespace-pre-line">{m.mensaje}</div>
+
+                        const displayName = m.emisor_nombre || (isCliente ? ticket.creado_por?.nombre : isTecnico ? ticket.tecnico_asignado?.nombre : undefined) || '';
+                        const initial = displayName ? displayName.charAt(0).toUpperCase() : (isSistema ? 'I' : '?');
+
+                        if (isSistema) {
+                          return (
+                            <div key={idx} className="flex justify-center">
+                              <div className="bg-gray-100 text-gray-700 px-3 py-2 rounded-md text-sm max-w-prose text-center">
+                                {m.mensaje}
+                                <div className="text-xs text-gray-500 mt-1">{new Date(m.created_at).toLocaleString()}</div>
+                              </div>
                             </div>
-                            <div className={`text-xs mt-1 ${isSistema ? 'text-gray-500 text-center' : isCliente ? 'text-gray-500 text-right' : 'text-white/70 text-left'}`}>{new Date(m.created_at).toLocaleString()}</div>
+                          );
+                        }
+
+                        const isRight = isCliente;
+                        return (
+                          <div key={idx} className={`flex ${isRight ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`flex items-end gap-3 max-w-[80%] ${isRight ? 'flex-row-reverse' : 'flex-row'}`}>
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${isRight ? 'bg-sky-100 text-sky-800' : 'bg-blue-600 text-white'}`}>
+                                {initial}
+                              </div>
+                              <div className="flex flex-col">
+                                <div className="text-xs font-semibold text-gray-700">{displayName}</div>
+                                <div className={`mt-1 px-3 py-2 rounded-lg ${isTecnico ? 'bg-gradient-to-r from-blue-600 to-sky-500 text-white' : 'bg-sky-50 border border-sky-100 text-sky-800'}`}>{m.mensaje}</div>
+                                <div className="text-xs text-gray-500 mt-1">{new Date(m.created_at).toLocaleString()}</div>
+                              </div>
+                            </div>
                           </div>
                         );
                       })}
@@ -981,6 +1127,8 @@ export default function TicketDetailPage() {
         onUpdated={async () => { await loadTicketDetail(); setShowConfigurarModal(false); showSuccessToast('Ticket configurado correctamente'); }}
         onSubmit={async () => { /* no-op: en modo configurar usamos editarTicket internamente */ }}
       />
+
+      {/* Asset detail modal removed — asset info now shown inline beside each activo */}
 
       <CancelarTicketModal
         isOpen={showCancelarModal}
