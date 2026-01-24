@@ -56,6 +56,20 @@ export default function SeguimientoTicketPage() {
     return () => { cancelled = true; clearInterval(id); };
   }, [ticket]);
 
+  // send handler for portal follow-up chat (used by button and Enter key)
+  const handleSendPortal = async () => {
+    if (!input.trim() || !ticket) return;
+    if (!chatEnabled) return;
+    try {
+      await postMensajePortal(ticket.id, { mensaje: input.trim() });
+      const msgs = await getMensajes(ticket.id);
+      setMessages(Array.isArray(msgs) ? msgs : []);
+      setInput('');
+    } catch (err) {
+      console.error('Error al enviar mensaje:', err);
+    }
+  };
+
   const estado = useMemo(() => normalizeEstado(ticket?.estado || ticket?.estado), [ticket]);
 
   // Determine active step index
@@ -210,21 +224,20 @@ export default function SeguimientoTicketPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <input value={input} onChange={e => setInput(e.target.value)} disabled={!chatEnabled} className="flex-1 px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-300" placeholder={!chatEnabled ? 'Chat deshabilitado en este estado' : 'Escribe tu mensaje...'} />
-                <button type="button" onClick={async () => {
-                  if (!input.trim() || !ticket) return;
-                  if (!chatEnabled) return;
-                  try {
-                    // portal endpoint for client messages
-                    await postMensajePortal(ticket.id, { mensaje: input.trim() });
-                    const msgs = await getMensajes(ticket.id);
-                    setMessages(Array.isArray(msgs) ? msgs : []);
-                    setInput('');
-                  } catch (err) {
-                    console.error('Error al enviar mensaje:', err);
-                    // optionally show UI error
-                  }
-                }} disabled={!chatEnabled || !input.trim()} className={`px-4 py-2 rounded-md text-sm font-medium transition ${chatEnabled ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}>Enviar</button>
+                <input
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      await handleSendPortal();
+                    }
+                  }}
+                  disabled={!chatEnabled}
+                  className="flex-1 px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-300"
+                  placeholder={!chatEnabled ? 'Chat deshabilitado en este estado' : 'Escribe tu mensaje...'}
+                />
+                <button type="button" onClick={handleSendPortal} disabled={!chatEnabled || !input.trim()} className={`px-4 py-2 rounded-md text-sm font-medium transition ${chatEnabled ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}>Enviar</button>
               </div>
 
               <p className="text-xs text-gray-500 mt-3">Reglas: El chat está habilitado solo cuando el ticket está en estado <strong>EN PROCESO</strong>. En otros estados está deshabilitado o solo lectura.</p>

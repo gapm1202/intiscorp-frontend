@@ -157,6 +157,34 @@ export default function TicketDetailPage() {
     }, 50);
     return () => clearTimeout(t);
   }, [chatMessages]);
+
+  // Send chat message (used by button and Enter key)
+  const handleSendChat = async () => {
+    if (!ticket) return;
+    if (!chatInput.trim()) return;
+    const estadoEnProceso = normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO';
+    const isCreator = !!(user && ticket.creado_por && user.id === ticket.creado_por.id);
+    const isAssignedTech = !!(user && ticket.tecnico_asignado_id != null && user.id === ticket.tecnico_asignado_id);
+    const canSend = estadoEnProceso && (isAssignedTech || isCreator) && !chatDisabled && normalizeEstadoLocal(ticket.estado as any) !== 'RESUELTO';
+    if (!canSend) return;
+
+    try {
+      await postMensaje(ticket.id, { mensaje: chatInput.trim() });
+      const msgs = await getMensajes(ticket.id);
+      setChatMessages(Array.isArray(msgs) ? msgs : []);
+      setChatInput('');
+    } catch (err: any) {
+      console.error('Error enviando mensaje:', err);
+      const status = err?.response?.status;
+      if (status === 403) {
+        setChatDisabled(true);
+        setChatDisabledMessage('Este ticket fue reasignado a otro técnico y ya no puedes enviar mensajes.');
+        showErrorToast('No autorizado: ya no puedes enviar mensajes en este ticket');
+      } else {
+        showErrorToast(err?.response?.data?.message || 'Error al enviar mensaje');
+      }
+    }
+  };
   const getEstadoColor = (estado: string) => {
     const colors: Record<string, string> = {
       'ABIERTO': 'bg-sky-50 text-sky-700 border-sky-300',
@@ -1062,32 +1090,18 @@ export default function TicketDetailPage() {
                               <input
                                 value={chatInput}
                                 onChange={e => setChatInput(e.target.value)}
+                                onKeyDown={async (e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    await handleSendChat();
+                                  }
+                                }}
                                 disabled={!canSend}
                                 placeholder={chatDisabledMessage || (canSend ? 'Escribe un mensaje al usuario...' : (estadoEnProceso ? 'No estás autorizado para enviar mensajes en este ticket' : 'Chat solo lectura en este estado'))}
                                 className="flex-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-300"
                               />
                               <button
-                                onClick={async () => {
-                                  if (!chatInput.trim()) return;
-                                  if (!canSend) return;
-                                  try {
-                                    await postMensaje(ticket.id, { mensaje: chatInput.trim() });
-                                    const msgs = await getMensajes(ticket.id);
-                                    setChatMessages(Array.isArray(msgs) ? msgs : []);
-                                    setChatInput('');
-                                  } catch (err: any) {
-                                    console.error('Error enviando mensaje:', err);
-                                    // If backend forbids (403) because of reassignment, disable input and show informative message
-                                    const status = err?.response?.status;
-                                    if (status === 403) {
-                                      setChatDisabled(true);
-                                      setChatDisabledMessage('Este ticket fue reasignado a otro técnico y ya no puedes enviar mensajes.');
-                                      showErrorToast('No autorizado: ya no puedes enviar mensajes en este ticket');
-                                    } else {
-                                      showErrorToast(err?.response?.data?.message || 'Error al enviar mensaje');
-                                    }
-                                  }
-                                }}
+                                onClick={handleSendChat}
                                 disabled={!canSend || !chatInput.trim()}
                                 className={`px-4 py-2 rounded-md text-sm font-medium ${canSend ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
                               >
