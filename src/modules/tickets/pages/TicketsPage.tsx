@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getTickets, createTicket, cogerTicket } from '../services/ticketsService';
+import { getTickets, createTicket, cogerTicket, asignarTecnico } from '../services/ticketsService';
 import { getEmpresas } from '@/modules/empresas/services/empresasService';
 import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
 import { getCategorias } from '@/modules/inventario/services/categoriasService';
 import { getUsuariosAdministrativos } from '@/modules/auth/services/userService';
 import { useAuth } from '@/hooks/useAuth';
 import CreateTicketModal from '../components/CreateTicketModal';
+import AsignarTecnicoModal from '../components/AsignarTecnicoModal';
 import type { Ticket, TicketFilter } from '../types';
 
 const TicketsPage = () => {
@@ -21,6 +22,12 @@ const TicketsPage = () => {
 
   // Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Asignar técnico desde la tabla
+  const [showAsignarModal, setShowAsignarModal] = useState(false);
+  const [asignarTicketId, setAsignarTicketId] = useState<number | null>(null);
+  const [asignarTecnicoActual, setAsignarTecnicoActual] = useState<{ id: number; nombre: string } | null>(null);
+  const [asignando, setAsignando] = useState(false);
 
   // Datos para filtros
   const [empresas, setEmpresas] = useState<any[]>([]);
@@ -114,6 +121,31 @@ const TicketsPage = () => {
       alert(error.response?.data?.message || '❌ Error al tomar el ticket');
     } finally {
       setCogiendoTicket(null);
+    }
+  };
+
+  const openAsignarModal = (ticket: Ticket) => {
+    setAsignarTicketId(ticket.id);
+    setAsignarTecnicoActual(ticket.tecnico_asignado ? { id: ticket.tecnico_asignado.id, nombre: ticket.tecnico_asignado.nombre } : null);
+    setShowAsignarModal(true);
+  };
+
+  const showSuccessToast = (message: string) => { alert(message); };
+  const showErrorToast = (message: string) => { alert(message); };
+
+  const handleAsignarTecnico = async (tecnicoId: number) => {
+    if (!asignarTicketId) return;
+    try {
+      setAsignando(true);
+      await asignarTecnico(asignarTicketId, tecnicoId);
+      setShowAsignarModal(false);
+      await loadTickets();
+      showSuccessToast('Técnico asignado correctamente');
+    } catch (error: any) {
+      console.error('Error al asignar técnico:', error);
+      showErrorToast(error?.response?.data?.message || 'Error al asignar técnico');
+    } finally {
+      setAsignando(false);
     }
   };
 
@@ -424,22 +456,22 @@ const TicketsPage = () => {
           <>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="bg-gradient-to-r from-indigo-50 to-white">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Título</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Empresa / Sede</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prioridad</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SLA</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Técnico</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Código</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Título</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Empresa / Sede</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Estado</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Prioridad</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">SLA</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Técnico</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Fecha</th>
+                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {tickets.map((ticket) => (
-                    <tr key={ticket.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={ticket.id} className="group hover:bg-gray-50 transition-colors odd:bg-white even:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{ticket.codigo_ticket}</div>
                         <div className="text-xs text-gray-500">{ticket.tipo_ticket}</div>
@@ -488,7 +520,7 @@ const TicketsPage = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end gap-2">
                           {/* Botón Coger ticket - solo si NO está asignado */}
-                          {!ticket.tecnico_asignado && ticket.estado === 'ABIERTO' && (
+                          {(ticket.tecnico_asignado_id == null) && ticket.estado === 'ABIERTO' && (
                             <button
                               onClick={() => handleCogerTicket(ticket.id)}
                               disabled={cogiendoTicket === ticket.id}
@@ -512,9 +544,22 @@ const TicketsPage = () => {
                               )}
                             </button>
                           )}
+                          {/* Asignar Técnico - mostrar para administradores cuando NO está asignado */}
+                          {user && user.rol && user.rol.toLowerCase().includes('admin') && (ticket.tecnico_asignado_id == null) && (
+                            <button
+                              onClick={() => openAsignarModal(ticket)}
+                              className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7l-4 4-4-4m0 6l4-4 4 4" />
+                              </svg>
+                              <span>Asignar</span>
+                            </button>
+                          )}
+
                           <button
                             onClick={() => navigate(`/admin/tickets/${ticket.id}`)}
-                            className="text-blue-600 hover:text-blue-900 transition-colors font-medium"
+                            className="px-3 py-1.5 border border-transparent hover:border-gray-200 bg-white text-sm text-blue-600 rounded hover:bg-gray-50 transition-colors font-medium"
                           >
                             Ver detalle
                           </button>
@@ -610,6 +655,14 @@ const TicketsPage = () => {
       </div>
 
       {/* Modal Crear Ticket */}
+      {/* Modal Asignar Técnico (desde la tabla) */}
+      <AsignarTecnicoModal
+        isOpen={showAsignarModal}
+        onClose={() => setShowAsignarModal(false)}
+        onConfirm={handleAsignarTecnico}
+        ticketId={asignarTicketId ?? 0}
+        tecnicoActual={asignarTecnicoActual}
+      />
       <CreateTicketModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}

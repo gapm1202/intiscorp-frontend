@@ -1,16 +1,16 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 // removed API_BASE import; asset detail is shown inline now
 import { useParams, useNavigate } from 'react-router-dom';
-import { getTicketById, cogerTicket, cambiarEstado, asignarTecnico, pausarSLA, reanudarSLA, editarTicket, getMensajes, postMensaje } from '../services/ticketsService';
+import { getTicketById, cogerTicket, cambiarEstado, pausarSLA, reanudarSLA, editarTicket, getMensajes, postMensaje, asignarTecnico } from '../services/ticketsService';
 import { getInventarioBySede } from '@/modules/inventario/services/inventarioService';
 import type { Ticket } from '../types';
 import { useAuth } from '@/hooks/useAuth';
-import AsignarTecnicoModal from '../components/AsignarTecnicoModal';
 import PausarSLAModal from '../components/PausarSLAModal';
 import HistorialModal from '../components/HistorialModal';
 import EditarTicketModal from '../components/EditarTicketModal';
 import CancelarTicketModal from '../components/CancelarTicketModal';
 import CreateTicketModal from '../components/CreateTicketModal';
+import AsignarTecnicoModal from '../components/AsignarTecnicoModal';
 import SLATimer from '../components/SLATimer';
 import Toast from '@/components/ui/Toast';
 
@@ -29,15 +29,18 @@ export default function TicketDetailPage() {
   const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success');
   
   // Estados para los modales
-  const [showAsignarModal, setShowAsignarModal] = useState(false);
   const [showPausarSLAModal, setShowPausarSLAModal] = useState(false);
   const [showHistorialModal, setShowHistorialModal] = useState(false);
   const [showEditarModal, setShowEditarModal] = useState(false);
   const [showCancelarModal, setShowCancelarModal] = useState(false);
   const [showConfigurarModal, setShowConfigurarModal] = useState(false);
+  const [showAsignarModal, setShowAsignarModal] = useState(false);
+  const [asignando, setAsignando] = useState(false);
   const [imagenPreview, setImagenPreview] = useState<string | null>(null);
   // Mapa temporal de detalles del inventario por activo_id
   const [assetMap, setAssetMap] = useState<Record<string, any>>({});
+  const [chatDisabled, setChatDisabled] = useState(false);
+  const [chatDisabledMessage, setChatDisabledMessage] = useState<string | null>(null);
   // Chat interno (proviene del backend): { emisor_tipo, emisor_nombre, mensaje, created_at }
   const [chatMessages, setChatMessages] = useState<Array<{ emisor_tipo: string; emisor_nombre?: string; mensaje: string; created_at: string }>>([]);
   const [chatInput, setChatInput] = useState('');
@@ -66,6 +69,9 @@ export default function TicketDetailPage() {
       const data = await getTicketById(Number(id));
       console.log('📋 Detalle del ticket:', data);
       setTicket(data);
+      // Reset any chat-disabled flags when reloading ticket details
+      setChatDisabled(false);
+      setChatDisabledMessage(null);
     } catch (err: any) {
       console.error('Error cargando detalle del ticket:', err);
       setError(err.response?.data?.message || 'Error al cargar el ticket');
@@ -259,17 +265,6 @@ export default function TicketDetailPage() {
   };
 
   // Handlers para los modales
-  const handleAsignarTecnico = async (tecnicoId: number) => {
-    try {
-      await asignarTecnico(ticket!.id, tecnicoId);
-      await loadTicketDetail();
-      setShowAsignarModal(false);
-      showSuccessToast('Técnico asignado correctamente');
-    } catch (error: any) {
-      console.error('Error al asignar técnico:', error);
-      showErrorToast(error.response?.data?.message || 'Error al asignar técnico');
-    }
-  };
 
   const handlePausarSLA = async (motivo: string) => {
     try {
@@ -450,15 +445,7 @@ export default function TicketDetailPage() {
 
               {/* Botones de acción */}
               <div className="flex gap-2 ml-6 flex-wrap">
-                {/* Botón "Asignar Técnico" - Solo para admins cuando NO hay técnico asignado */}
-                {!ticket.tecnico_asignado && user && user.rol && user.rol.toLowerCase().includes('admin') && (
-                  <button 
-                    onClick={() => setShowAsignarModal(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm font-medium"
-                  >
-                    Asignar Técnico
-                  </button>
-                )}
+                {/* Asignación de técnico ahora se hace desde la tabla de tickets */}
 
                 {/* Botón "Coger ticket / Pasar a proceso" - Solo si tiene técnico asignado y está ABIERTO */}
                 {ticket.estado === 'ABIERTO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id && (
@@ -499,15 +486,7 @@ export default function TicketDetailPage() {
                   </button>
                 )}
 
-                {/* Botón Reasignar - Solo para admins cuando YA hay técnico asignado */}
-                {ticket.tecnico_asignado && user && user.rol && user.rol.toLowerCase().includes('admin') && (
-                  <button 
-                    onClick={() => setShowAsignarModal(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm font-medium"
-                  >
-                    Reasignar Técnico
-                  </button>
-                )}
+                {/* Reasignación ahora se hace desde la tabla de tickets */}
 
                 {/* Botón Editar - Para admins y técnico asignado */}
                 {user && (
@@ -563,6 +542,17 @@ export default function TicketDetailPage() {
                     className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm font-medium"
                   >
                     Cancelar Ticket
+                  </button>
+                )}
+                {/* Mostrar Reasignar solo si tecnico_asignado_id tiene valor */}
+                {user && user.rol && user.rol.toLowerCase().includes('admin') && ticket.tecnico_asignado_id != null && (
+                  <button
+                    onClick={() => {
+                      setShowAsignarModal(true);
+                    }}
+                    className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors text-sm font-medium"
+                  >
+                    Reasignar técnico
                   </button>
                 )}
               </div>
@@ -1062,33 +1052,54 @@ export default function TicketDetailPage() {
 
                     <div className="mt-3">
                       <div className="flex items-center gap-3">
-                        <input
-                          value={chatInput}
-                          onChange={e => setChatInput(e.target.value)}
-                          disabled={!(normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO')}
-                          placeholder={normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO' ? 'Escribe un mensaje al usuario...' : 'Chat solo lectura en este estado'}
-                          className="flex-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-300"
-                        />
-                        <button
-                          onClick={async () => {
-                            if (!chatInput.trim()) return;
-                            if (!(normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO')) return;
-                            try {
-                              await postMensaje(ticket.id, { mensaje: chatInput.trim() });
-                              const msgs = await getMensajes(ticket.id);
-                              setChatMessages(Array.isArray(msgs) ? msgs : []);
-                              setChatInput('');
-                            } catch (err: any) {
-                              console.error('Error enviando mensaje:', err);
-                              showErrorToast(err?.response?.data?.message || 'Error al enviar mensaje');
-                            }
-                          }}
-                          disabled={!(normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO') || !chatInput.trim()}
-                          className={`px-4 py-2 rounded-md text-sm font-medium ${normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
-                        >
-                          Enviar
-                        </button>
+                        {(() => {
+                          const estadoEnProceso = normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO';
+                          const isCreator = !!(user && ticket.creado_por && user.id === ticket.creado_por.id);
+                          const isAssignedTech = !!(user && ticket.tecnico_asignado_id != null && user.id === ticket.tecnico_asignado_id);
+                          const canSend = estadoEnProceso && (isAssignedTech || isCreator) && !chatDisabled && normalizeEstadoLocal(ticket.estado as any) !== 'RESUELTO';
+                          return (
+                            <>
+                              <input
+                                value={chatInput}
+                                onChange={e => setChatInput(e.target.value)}
+                                disabled={!canSend}
+                                placeholder={chatDisabledMessage || (canSend ? 'Escribe un mensaje al usuario...' : (estadoEnProceso ? 'No estás autorizado para enviar mensajes en este ticket' : 'Chat solo lectura en este estado'))}
+                                className="flex-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-300"
+                              />
+                              <button
+                                onClick={async () => {
+                                  if (!chatInput.trim()) return;
+                                  if (!canSend) return;
+                                  try {
+                                    await postMensaje(ticket.id, { mensaje: chatInput.trim() });
+                                    const msgs = await getMensajes(ticket.id);
+                                    setChatMessages(Array.isArray(msgs) ? msgs : []);
+                                    setChatInput('');
+                                  } catch (err: any) {
+                                    console.error('Error enviando mensaje:', err);
+                                    // If backend forbids (403) because of reassignment, disable input and show informative message
+                                    const status = err?.response?.status;
+                                    if (status === 403) {
+                                      setChatDisabled(true);
+                                      setChatDisabledMessage('Este ticket fue reasignado a otro técnico y ya no puedes enviar mensajes.');
+                                      showErrorToast('No autorizado: ya no puedes enviar mensajes en este ticket');
+                                    } else {
+                                      showErrorToast(err?.response?.data?.message || 'Error al enviar mensaje');
+                                    }
+                                  }
+                                }}
+                                disabled={!canSend || !chatInput.trim()}
+                                className={`px-4 py-2 rounded-md text-sm font-medium ${canSend ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                              >
+                                Enviar
+                              </button>
+                            </>
+                          );
+                        })()}
                       </div>
+                      {chatDisabledMessage && (
+                        <div className="mt-2 text-sm text-red-600">{chatDisabledMessage}</div>
+                      )}
                       <p className="text-xs text-gray-500 mt-2">Los mensajes se cargan desde el backend. El frontend no decide el emisor; renderiza según `emisor_tipo`.</p>
                     </div>
                   </div>
@@ -1099,14 +1110,30 @@ export default function TicketDetailPage() {
         </div>
       </div>
 
-      {/* Modales */}
       <AsignarTecnicoModal
         isOpen={showAsignarModal}
         onClose={() => setShowAsignarModal(false)}
-        onConfirm={handleAsignarTecnico}
-        ticketId={ticket.id}
-        tecnicoActual={ticket.tecnico_asignado || null}
+        onConfirm={async (tecnicoId: number) => {
+          if (!ticket) return;
+          try {
+            setAsignando(true);
+            await asignarTecnico(ticket.id, tecnicoId);
+            await loadTicketDetail();
+            showSuccessToast('Técnico asignado correctamente');
+            setShowAsignarModal(false);
+          } catch (err: any) {
+            console.error('Error reasignando técnico:', err);
+            showErrorToast(err?.response?.data?.message || 'Error al reasignar técnico');
+          } finally {
+            setAsignando(false);
+          }
+        }}
+        ticketId={ticket?.id ?? 0}
+        tecnicoActual={ticket?.tecnico_asignado ? { id: ticket.tecnico_asignado.id, nombre: ticket.tecnico_asignado.nombre } : null}
       />
+
+      {/* Modales */}
+      {/* La asignación de técnicos se realiza desde la tabla de tickets. */}
 
       <PausarSLAModal
         isOpen={showPausarSLAModal}

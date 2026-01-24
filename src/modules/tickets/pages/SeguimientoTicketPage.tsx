@@ -81,12 +81,12 @@ export default function SeguimientoTicketPage() {
     }
     if (raw === 'ABIERTO') {
       if (ticket.tecnico_asignado && (ticket.tecnico_asignado as any).nombre) {
-        return `Tu ticket ha sido visualizado y fue asignado a ${(ticket.tecnico_asignado as any).nombre}`;
+        return `Tu ticket ha sido configurado y fue asignado a ${(ticket.tecnico_asignado as any).nombre}. Ten listo tu código de acceso(ej. anydesk,rundesk,etc.)`;
       }
-      return 'Tu ticket está siendo visualizado, en breve se te asignará un técnico.';
+      return 'Tu ticket está siendo visualizado, en breve se te asignará un técnico. Ten listo tu código de acceso(ej. anydesk,rundesk,etc.)';
     }
     if (raw === 'EN PROCESO' || raw === 'EN_PROCESO') {
-      return 'Tu ticket ha pasado a estado En Proceso. Escríbenos si olvidaste comentar algo adicional.';
+      return 'Tu ticket esta en Proceso. Escríbenos si olvidaste comentar algo adicional.';
     }
     if (raw === 'RESUELTO') {
       return 'Tu ticket ha sido resuelto. Gracias por contactarnos.';
