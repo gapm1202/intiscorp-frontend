@@ -48,6 +48,12 @@ const TicketsPage = () => {
   // Cargar datos iniciales
   useEffect(() => {
     loadInitialData();
+    const onAssigned = () => {
+      // when assignment happens elsewhere, refresh tickets
+      loadTickets();
+    };
+    window.addEventListener('ticketAssigned', onAssigned as EventListener);
+    return () => window.removeEventListener('ticketAssigned', onAssigned as EventListener);
   }, []);
 
   // Cargar tickets cuando cambian filtros o página
@@ -520,7 +526,7 @@ const TicketsPage = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end gap-2">
                           {/* Botón Coger ticket - solo si NO está asignado */}
-                          {(ticket.tecnico_asignado_id == null) && ticket.estado === 'ABIERTO' && (
+                          {(Object.prototype.hasOwnProperty.call(ticket, 'tecnico_asignado_id') && ticket.tecnico_asignado_id === null) && ticket.estado === 'ABIERTO' && (
                             <button
                               onClick={() => handleCogerTicket(ticket.id)}
                               disabled={cogiendoTicket === ticket.id}
@@ -545,7 +551,7 @@ const TicketsPage = () => {
                             </button>
                           )}
                           {/* Asignar Técnico - mostrar para administradores cuando NO está asignado */}
-                          {user && user.rol && user.rol.toLowerCase().includes('admin') && (ticket.tecnico_asignado_id == null) && (
+                          {user && user.rol && user.rol.toLowerCase().includes('admin') && (Object.prototype.hasOwnProperty.call(ticket, 'tecnico_asignado_id') && ticket.tecnico_asignado_id === null) && (
                             <button
                               onClick={() => openAsignarModal(ticket)}
                               className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded hover:bg-indigo-700 transition-colors flex items-center gap-2"

@@ -1135,6 +1135,8 @@ export default function TicketDetailPage() {
             await loadTicketDetail();
             showSuccessToast('Técnico asignado correctamente');
             setShowAsignarModal(false);
+            // notify other pages (e.g., TicketsPage) that assignment changed
+            try { window.dispatchEvent(new CustomEvent('ticketAssigned', { detail: { ticketId: ticket.id } })); } catch (e) { /* ignore */ }
           } catch (err: any) {
             console.error('Error reasignando técnico:', err);
             showErrorToast(err?.response?.data?.message || 'Error al reasignar técnico');
