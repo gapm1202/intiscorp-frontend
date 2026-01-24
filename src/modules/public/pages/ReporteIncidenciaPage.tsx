@@ -22,6 +22,9 @@ export default function ReporteIncidenciaPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [pendingModalVisible, setPendingModalVisible] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState('');
+  const [pendingTicketCodigo, setPendingTicketCodigo] = useState<string | null>(null);
 
   useEffect(() => {
     if (!empresaSession) {
@@ -106,8 +109,30 @@ export default function ReporteIncidenciaPage() {
     } catch (err: any) {
       console.error('❌ ERROR COMPLETO:', err);
       console.error('❌ Respuesta del servidor:', err?.response?.data);
-      const errorMsg = err?.response?.data?.message || err?.message || 'Error al reportar incidencia';
-      setError(errorMsg);
+      // Backend-driven rule: if status 409 and code === 'TICKET_PENDIENTE', show info modal and DO NOT clear form or retry
+      const respData = err?.response?.data;
+      if (err?.response?.status === 409 && respData && respData.code === 'TICKET_PENDIENTE') {
+        setPendingMessage(respData.message || 'Tienes un ticket pendiente');
+        // Try multiple possible keys for ticket code returned by backend
+        // Intentar localizar el código de ticket en varias formas y niveles
+        const codigo = respData.ticket_codigo
+          || respData.codigo_ticket
+          || respData.codigo
+          || respData.codigoTicket
+          || respData.ticket?.codigo_ticket
+          || respData.ticket?.codigo
+          || respData.data?.ticket_codigo
+          || respData.data?.codigo_ticket
+          || respData.data?.codigo
+          || respData.data?.ticket?.codigo_ticket
+          || respData.data?.ticket?.codigo
+          || null;
+        setPendingTicketCodigo(codigo ?? null);
+        setPendingModalVisible(true);
+      } else {
+        const errorMsg = respData?.message || err?.message || 'Error al reportar incidencia';
+        setError(errorMsg);
+      }
     } finally {
       setLoading(false);
     }
@@ -503,7 +528,7 @@ export default function ReporteIncidenciaPage() {
               <div className="flex gap-3 pt-4">
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || pendingModalVisible}
                   className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 font-bold shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {loading ? (
@@ -526,6 +551,46 @@ export default function ReporteIncidenciaPage() {
               </div>
             </div>
           </form>
+
+          {/* Modal informativo cuando backend retorna TICKET_PENDIENTE */}
+          {pendingModalVisible && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/10 backdrop-blur-sm">
+              <div className="max-w-lg w-full mx-4">
+                <div className="bg-slate-900/95 border border-slate-800 rounded-xl shadow-2xl p-6">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-amber-600 flex items-center justify-center">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 100-16 8 8 0 000 16z"/></svg>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-xl font-bold text-white" style={{ color: '#ffffff' }}>Ticket pendiente</h3>
+                      <p className="mt-3 text-sm text-white/90 leading-relaxed">{pendingMessage}</p>
+
+                      <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
+                        {pendingTicketCodigo ? (
+                          <button
+                            onClick={() => {
+                              setPendingModalVisible(false);
+                              navigate(`/seguimiento/${pendingTicketCodigo}`);
+                            }}
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600 transition"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+                            Ver mi ticket
+                          </button>
+                        ) : null}
+
+                        <button
+                          onClick={() => setPendingModalVisible(false)}
+                          className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-white/20 bg-white/5 text-white rounded-md hover:bg-white/10 transition"
+                        >Cerrar</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
