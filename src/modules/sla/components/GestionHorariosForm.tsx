@@ -57,6 +57,7 @@ function normalizeInitialData(data?: HorariosData | LegacyHorariosData): Horario
   // Si no existe dato o es objeto vacío, usar default
   if (!data || Object.keys(data).length === 0) return defaultData;
   const maybeLegacy = data as LegacyHorariosData;
+  // Legacy format: dias as array of day names
   if (Array.isArray(maybeLegacy.dias)) {
     const base = { ...defaultDias } as Record<DiaSemana, DiaConfig>;
     DIAS.forEach((d) => {
@@ -73,6 +74,48 @@ function normalizeInitialData(data?: HorariosData | LegacyHorariosData): Horario
       calendarioFeriados: maybeLegacy.calendarioFeriados ?? [],
       atencionFueraHorario: maybeLegacy.atencionFueraHorario ?? false,
       aplicaSLAFueraHorario: maybeLegacy.aplicaSLAFueraHorario ?? false,
+    };
+  }
+
+  // Newer backend shape (EmpresaDetailPage): { inicio, fin, diasLaborables: "1,2,3" | number[] }
+  const anyData = data as any;
+  if (anyData && (anyData.diasLaborables !== undefined || (anyData.dias && typeof anyData.dias === 'string'))) {
+    // Normalize diasLaborables to array of numbers or strings
+    let diasArray: Array<number | string> = [];
+    if (Array.isArray(anyData.diasLaborables)) diasArray = anyData.diasLaborables;
+    else if (typeof anyData.diasLaborables === 'string') diasArray = anyData.diasLaborables.split(',').map((s: string) => s.trim());
+    else if (typeof anyData.dias === 'string') diasArray = anyData.dias.split(',').map((s: string) => s.trim());
+
+    // Map numeric day-of-week (1=Lunes .. 7=Domingo) to our DiaSemana names
+    const numToDia: Record<string, DiaSemana> = {
+      '1': 'Lunes',
+      '2': 'Martes',
+      '3': 'Miercoles',
+      '4': 'Jueves',
+      '5': 'Viernes',
+      '6': 'Sabado',
+      '7': 'Domingo',
+    };
+
+    const base = { ...defaultDias } as Record<DiaSemana, DiaConfig>;
+    DIAS.forEach((d) => {
+      // check if diasArray contains the name or the numeric mapping
+      const includesName = diasArray.includes(d);
+      const includesNum = Object.entries(numToDia).some(([num, name]) => name === d && diasArray.includes(num));
+      const active = includesName || includesNum;
+      base[d] = {
+        atiende: active,
+        horaInicio: anyData.inicio || anyData.horaInicio || defaultDias[d].horaInicio,
+        horaFin: anyData.fin || anyData.horaFin || defaultDias[d].horaFin,
+      };
+    });
+
+    return {
+      dias: base,
+      excluirFeriados: anyData.incluyeFestivos === false ? false : (anyData.excluirFeriados ?? true),
+      calendarioFeriados: anyData.calendarioFeriados ?? [],
+      atencionFueraHorario: anyData.atencionFueraHorario ?? false,
+      aplicaSLAFueraHorario: anyData.aplicaSLAFueraHorario ?? false,
     };
   }
   return data as HorariosData;

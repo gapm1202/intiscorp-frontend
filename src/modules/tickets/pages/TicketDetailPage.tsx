@@ -591,12 +591,14 @@ export default function TicketDetailPage() {
               <div className="mt-6">
                 <SLATimer
                   estadoSLA={ticket.estado_sla}
-                  tiempoTotalMinutos={(ticket.tiempo_transcurrido_minutos || 0) + (ticket.tiempo_restante_minutos || 0)}
-                  tiempoTranscurridoMinutos={ticket.tiempo_transcurrido_minutos || 0}
-                  tiempoRestanteMinutos={ticket.tiempo_restante_minutos || 0}
-                  fechaCreacion={ticket.fecha_creacion}
-                  enHorarioLaboral={isEnHorarioLaboral()}
-                  motivoPausa={undefined} // TODO: Obtener del backend si está pausado
+                  porcentajeConsumido={ticket.porcentaje_consumido ?? ticket.porcentaje_sla ?? (ticket.porcentaje as any)}
+                  tiempoTranscurridoMinutos={ticket.tiempo_transcurrido_minutos}
+                  tiempoRestanteMinutos={ticket.tiempo_restante_minutos}
+                  fechaLimite={ticket.fecha_limite_sla ?? ticket.fecha_limite}
+                  slaPausado={ticket.estado_sla === 'PAUSADO' || ticket.estado_sla === 'pausado' || !!ticket.sla_pausado}
+                  motivoPausa={ticket.motivo_pausa ?? ticket.sla_motivo_pausa}
+                  alertas={ticket.sla_alertas}
+                  historialPausas={ticket.sla_historial_pausas}
                 />
               </div>
             )}
