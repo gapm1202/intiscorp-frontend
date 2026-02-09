@@ -592,9 +592,10 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
         s => String(s.id) === String(formData.servicio_id)
       );
       if (servicioSeleccionado) {
-        setFormData(prev => ({ 
-          ...prev, 
-          tipo_servicio: servicioSeleccionado.tipoServicio || '' 
+        const tipoServicio = servicioSeleccionado.tipoServicio || servicioSeleccionado.tipo_servicio || '';
+        setFormData(prev => ({
+          ...prev,
+          tipo_servicio: tipoServicio
         }));
       }
     } else {
@@ -753,15 +754,30 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
     console.log('🔍 Evaluando SLA Status - Contrato:', contrato);
     
     // 1️⃣ Sin SLA configurado (debe tener las 3 secciones guardadas)
-    // Verificar que existan las 3 secciones requeridas: alcance, tiempos y horarios
-    const seccionesRequeridas = ['alcance', 'tiempos', 'horarios'];
+    // Verificar que existan las 3 secciones requeridas: alcance, tiempos y horarios.
+    // getSLAByEmpresa usa getResumen(), así que validamos usando los flags del resumen cuando existan.
     const isEmptyObject = (obj: any) => !obj || typeof obj !== 'object' || Object.keys(obj).length === 0;
-    
-    const seccionesConfiguraDas = seccionesRequeridas.filter(seccion => !isEmptyObject(sla?.[seccion]));
-    const slaCompleto = seccionesConfiguraDas.length === 6;
-    
+    const hasResumenFlags =
+      typeof sla?.alcance_configurado === 'boolean' ||
+      typeof sla?.tiempos_configurados === 'number' ||
+      typeof sla?.horarios_configurados === 'number' ||
+      typeof sla?.configurado === 'boolean';
+
+    const alcanceConfigurado = hasResumenFlags
+      ? Boolean(sla?.alcance_configurado)
+      : !isEmptyObject(sla?.alcance);
+    const tiemposConfigurados = hasResumenFlags
+      ? Number(sla?.tiempos_configurados || 0) > 0
+      : !isEmptyObject(sla?.tiempos);
+    const horariosConfigurados = hasResumenFlags
+      ? Number(sla?.horarios_configurados || 0) > 0
+      : !isEmptyObject(sla?.horarios);
+
+    const slaCompleto = alcanceConfigurado && tiemposConfigurados && horariosConfigurados;
+    const seccionesConfiguradasCount = [alcanceConfigurado, tiemposConfigurados, horariosConfigurados].filter(Boolean).length;
+
     if (!sla || !slaCompleto) {
-      console.log('⚠️ SLA no configurado - Secciones encontradas:', seccionesConfiguraDas.length, '/ 6');
+      console.log('⚠️ SLA no configurado - Secciones encontradas:', seccionesConfiguradasCount, '/ 3');
       setSlaStatus('sin-configurar');
       setFormData(prev => ({ ...prev, aplica_sla: false }));
       return;
@@ -1031,6 +1047,11 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
     }
 
     // Validaciones obligatorias para creación normal
+    if (isFormBlocked) {
+      alert('SLA no ha sido configurado\n\nPor favor complete la configuración del SLA para esta empresa.');
+      return;
+    }
+
     // Validaciones obligatorias
     if (!formData.empresa_id) {
       alert('Debe seleccionar una empresa');
@@ -1080,6 +1101,11 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
 
     setLoading(true);
     try {
+      const selectedServicio = serviciosDisponibles.find(
+        s => String(s.id) === String(formData.servicio_id)
+      );
+      const tipoServicioFinal = formData.tipo_servicio || selectedServicio?.tipoServicio || selectedServicio?.tipo_servicio || '';
+
       const ticketData: Record<string, any> = {
         // Identificación
         empresa_id: Number(formData.empresa_id),
@@ -1109,6 +1135,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
         
         // Servicio
         servicio_id: Number(formData.servicio_id),
+        tipo_servicio: tipoServicioFinal,
         modalidad: formData.modalidad,
         
         // SLA
@@ -2352,7 +2379,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
             </button>
             <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || (!isConfigMode && isFormBlocked)}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
               >
                 {loading ? (isConfigMode ? 'Guardando...' : 'Creando...') : (isConfigMode ? 'Guardar cambios' : 'Crear Ticket')}

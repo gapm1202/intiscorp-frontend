@@ -1,5 +1,3 @@
-import { useEffect, useState } from 'react';
-
 interface SLATimerProps {
   estadoSLA: string;
   porcentajeConsumido?: number; // preferido: backend debe enviar
@@ -16,6 +14,7 @@ interface SLATimerProps {
 export default function SLATimer({
   estadoSLA,
   porcentajeConsumido,
+  label,
   tiempoTranscurridoMinutos,
   tiempoRestanteMinutos,
   fechaLimite,
