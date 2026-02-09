@@ -12,16 +12,11 @@ import { AlcanceSLAForm } from "@/modules/sla/components/AlcanceSLAForm";
 import { GestionTiemposForm } from "@/modules/sla/components/GestionTiemposForm";
 import { GestionHorariosForm } from "@/modules/sla/components/GestionHorariosForm";
 // Requisitos, Exclusiones y Alertas forms removed from SLA tab per request
-import { slaService } from "@/modules/sla/services/slaService";
+import { slaService, type ResumenSLA } from "@/modules/sla/services/slaService";
 import { useNavGuard } from "@/context/NavGuardContext";
 import MantenimientoSubTabs from "@/modules/mantenimiento/components/MantenimientoSubTabs";
 
 const SLA_SECCIONES: Array<keyof typeof INITIAL_SLA_MODES> = ['alcance', 'tiempos', 'horarios'];
-const SLA_CONFIG_KEY: Record<string, string> = {
-  alcance: 'alcance',
-  tiempos: 'tiempos',
-  horarios: 'horarios',
-};
 
 const INITIAL_SLA_MODES = {
   alcance: true,
@@ -150,13 +145,25 @@ const EmpresaDetailPage = () => {
   const [slaEditModes, setSlaEditModes] = useState({ ...INITIAL_SLA_MODES });
   const [slaIsEditing, setSlaIsEditing] = useState({ ...INITIAL_SLA_IS_EDITING }); // Track si dio clic en "Editar"
   const [historialSLA, setHistorialSLA] = useState<HistorialSLAItem[]>([]);
+  const [slaResumen, setSlaResumen] = useState<ResumenSLA | null>(null);
   const [slaConfiguracion, setSlaConfiguracion] = useState<any>(null);
   
-  // Normaliza la configuración SLA para asegurar claves esperadas
-  const normalizeSLAConfig = (cfg: any) => {
-    if (!cfg) return null;
-    return cfg;
+  const isSlaSectionConfigured = (
+    resumen: ResumenSLA | null,
+    section: keyof typeof INITIAL_SLA_MODES
+  ) => {
+    if (!resumen) return false;
+    if (section === 'alcance') return Boolean(resumen.alcance_configurado);
+    if (section === 'tiempos') return Number(resumen.tiempos_configurados || 0) > 0;
+    if (section === 'horarios') return Number(resumen.horarios_configurados || 0) > 0;
+    return false;
   };
+
+  const getSlaEditModesFromResumen = (resumen: ResumenSLA | null) => ({
+    alcance: !isSlaSectionConfigured(resumen, 'alcance'),
+    tiempos: !isSlaSectionConfigured(resumen, 'tiempos'),
+    horarios: !isSlaSectionConfigured(resumen, 'horarios'),
+  });
   
   // Estados para modal de documentos
   const [showDocumentosModal, setShowDocumentosModal] = useState(false);
@@ -703,35 +710,27 @@ const EmpresaDetailPage = () => {
     const fetchSLAConfig = async () => {
       setSlaLoading(true);
       try {
-        const rawConfig = await slaService.getConfiguracion(empresaId);
-        const config = normalizeSLAConfig(rawConfig);
-        
-        if (config) {
-          setSlaConfiguracion(config);
-          console.error('🔵 [SLA CONFIG LOADED]:', JSON.stringify(config, null, 2));
-          
+        const resumen = await slaService.getResumen(empresaId);
+
+        if (resumen) {
+          setSlaResumen(resumen);
+          setSlaConfiguracion(null);
+          console.error('🔵 [SLA RESUMEN LOADED]:', JSON.stringify(resumen, null, 2));
+
           // Cargar historial
           const historial = await slaService.getHistorial(empresaId);
           if (historial?.items) {
             setHistorialSLA(mapHistorialItems(historial.items));
           }
-          // Cada formulario se muestra si NO está guardado, o se oculta si SÍ está guardado
-          // Backend devuelve {} para no guardados, así que debemos verificar si tiene propiedades
-          const isEmptyObject = (obj: any) => {
-            if (!obj || typeof obj !== 'object') return true;
-            return Object.keys(obj).length === 0;
-          };
-          
-          const editModes = {
-            alcance: isEmptyObject(config.alcance),        // true si vacío → muestra formulario
-            horarios: isEmptyObject(config.horarios),
-          };
+
+          const editModes = getSlaEditModesFromResumen(resumen);
           console.error('🔵 [EDIT MODES]:', editModes);
           setSlaEditModes(editModes);
           // Resetear flags de "editando" porque es carga inicial o post-refresh
           setSlaIsEditing({ ...INITIAL_SLA_IS_EDITING });
         } else {
           // No hay configuración → todos los formularios en modo edición (primera vez)
+          setSlaResumen(null);
           setSlaConfiguracion(null);
           setSlaEditModes({ ...INITIAL_SLA_MODES });
           setSlaIsEditing({ ...INITIAL_SLA_IS_EDITING });
@@ -881,14 +880,8 @@ const EmpresaDetailPage = () => {
     });
 
   const getSeccionesGuardadas = () => {
-    if (!slaConfiguracion) return [] as string[];
-    // Devolver las claves normales - el backend las mapea a columnas de BD
-    const guardadas = SLA_SECCIONES.filter((sec) => {
-      const clave = SLA_CONFIG_KEY[sec];
-      const valor = slaConfiguracion?.[clave];
-      return Boolean(valor);
-    });
-    return guardadas;
+    if (!slaResumen) return [] as string[];
+    return SLA_SECCIONES.filter((sec) => isSlaSectionConfigured(slaResumen, sec));
   };
 
   const hasUnsavedChangesInSLA = () => {
@@ -901,15 +894,9 @@ const EmpresaDetailPage = () => {
 
     // Contar secciones guardadas en el backend
     // Backend devuelve {} para no guardadas, así que debemos verificar si tienen propiedades
-    const cfg = normalizeSLAConfig(slaConfiguracion);
-    const isEmptyObject = (obj: any) => {
-      if (!obj || typeof obj !== 'object') return true;
-      return Object.keys(obj).length === 0;
-    };
-    
-    const seccionesGuardadas = cfg ? SLA_SECCIONES.filter(
-      (s) => !isEmptyObject(cfg[SLA_CONFIG_KEY[s]])
-    ).length : 0;
+    const seccionesGuardadas = slaResumen
+      ? SLA_SECCIONES.filter((s) => isSlaSectionConfigured(slaResumen, s)).length
+      : 0;
 
     // Solo bloquear si hay al menos 1 sección guardada y no están todas guardadas (incompleto)
     const bloquear = seccionesGuardadas >= 1 && seccionesGuardadas < SLA_SECCIONES.length;
@@ -936,14 +923,17 @@ const EmpresaDetailPage = () => {
         await slaService.limpiarSecciones(empresaId, todasLasSecciones);
         
         // Recargar configuración desde el backend (debería ser null)
-        const rawConfig = await slaService.getConfiguracion(empresaId);
-        const config = normalizeSLAConfig(rawConfig);
-        setSlaConfiguracion(config);
-        
-        if (!config) {
+        const resumen = await slaService.getResumen(empresaId);
+        setSlaResumen(resumen);
+        setSlaConfiguracion(null);
+
+        if (!resumen) {
           // Si es null, setear todos en modo edición (primera vez)
           setSlaEditModes({ ...INITIAL_SLA_MODES });
-          setSlaIsEditing({ alcance: false, horarios: false });
+          setSlaIsEditing({ ...INITIAL_SLA_IS_EDITING });
+        } else {
+          setSlaEditModes(getSlaEditModesFromResumen(resumen));
+          setSlaIsEditing({ ...INITIAL_SLA_IS_EDITING });
         }
       }
     } catch (error) {
@@ -1001,7 +991,7 @@ const EmpresaDetailPage = () => {
     return () => {
       clearGuard();
     };
-  }, [activeTab, slaEditModes, slaConfiguracion, slaLoading]);
+  }, [activeTab, slaEditModes, slaConfiguracion, slaResumen, slaLoading]);
 
   // NO hay beforeunload ni auto-cleanup
   // Simplemente: cargar la config al entrar a SLA y mostrar los formularios
@@ -1072,7 +1062,8 @@ const EmpresaDetailPage = () => {
 
   const handleSlaCancel = (section: keyof typeof slaEditModes) => {
     // Salir del modo edición sin guardar
-    setSlaEditModes((prev) => ({ ...prev, [section]: false }));
+    const shouldShowForm = !isSlaSectionConfigured(slaResumen, section);
+    setSlaEditModes((prev) => ({ ...prev, [section]: shouldShowForm }));
     setSlaIsEditing((prev) => ({ ...prev, [section]: false }));
   };
 
@@ -1090,16 +1081,21 @@ const EmpresaDetailPage = () => {
         
         if (section === 'alcance') {
           const formData = data as any;
+          const normalizeId = (value: unknown) => {
+            if (typeof value === 'number') return value;
+            const text = String(value ?? '').trim();
+            return /^\d+$/.test(text) ? Number(text) : text;
+          };
           backendData = {
             tiposTicket: formData.tiposTicket || [],
             servicios: formData.serviciosCatalogoSLA?.tipo === 'seleccionados' 
-              ? (formData.serviciosCatalogoSLA.servicios?.map((s: string) => parseInt(s)) || [])
+              ? (formData.serviciosCatalogoSLA.servicios?.map(normalizeId) || [])
               : undefined,
             categorias: formData.activosCubiertos?.tipo === 'porCategoria'
-              ? (formData.activosCubiertos.categorias?.map((c: string) => parseInt(c)) || [])
+              ? (formData.activosCubiertos.categorias?.map(normalizeId) || [])
               : undefined,
             sedes: formData.sedesCubiertas?.tipo === 'seleccionadas'
-              ? (formData.sedesCubiertas.sedes?.map((s: string) => parseInt(s)) || [])
+              ? (formData.sedesCubiertas.sedes?.map(normalizeId) || [])
               : undefined,
             aplica_todos_servicios: formData.serviciosCatalogoSLA?.tipo === 'todos',
             aplica_todas_categorias: formData.activosCubiertos?.tipo === 'todos',
@@ -1180,10 +1176,14 @@ const EmpresaDetailPage = () => {
         // Al guardar por primera vez, no es una edición posterior
         setSlaIsEditing((prev) => ({ ...prev, [section]: false }));
         
-        // Recargar configuración
-        const rawConfig = await slaService.getConfiguracion(empresaId);
-        const config = normalizeSLAConfig(rawConfig);
-        setSlaConfiguracion(config);
+        // Recargar resumen
+        const resumen = await slaService.getResumen(empresaId);
+        setSlaResumen(resumen);
+        setSlaConfiguracion(null);
+
+        if (resumen) {
+          setSlaEditModes(getSlaEditModesFromResumen(resumen));
+        }
         
         setToastMessage('✅ Sección guardada exitosamente');
         setToastType('success');

@@ -74,6 +74,24 @@ export function AlcanceSLAForm({
       ...getDefaultAlcanceData(),
       ...initialData,
     };
+    const normalizeIds = (values?: unknown[]) => (values ?? []).map((v) => String(v));
+    data = {
+      ...data,
+      tiposTicket: normalizeIds(data.tiposTicket),
+      serviciosCatalogoSLA: {
+        ...data.serviciosCatalogoSLA,
+        servicios: normalizeIds(data.serviciosCatalogoSLA?.servicios),
+      },
+      activosCubiertos: {
+        ...data.activosCubiertos,
+        categorias: normalizeIds(data.activosCubiertos?.categorias),
+        categoriasPersonalizadas: normalizeIds(data.activosCubiertos?.categoriasPersonalizadas),
+      },
+      sedesCubiertas: {
+        ...data.sedesCubiertas,
+        sedes: normalizeIds(data.sedesCubiertas?.sedes),
+      },
+    };
     // Si el contrato no está completo, SLA siempre inactivo
     if (!contratoCompleto) {
       data.slaActivo = false;
@@ -86,7 +104,7 @@ export function AlcanceSLAForm({
   };
 
   const [formData, setFormData] = useState<AlcanceSLAData>(getInitialData());
-  const [availableCategories, setAvailableCategories] = useState<string[]>(categorias ?? []);
+  const [availableCategories, setAvailableCategories] = useState<Array<{ id: string; nombre: string }>>([]);
   const [availableTypes, setAvailableTypes] = useState<any[]>([]);
   const [availableServicios, setAvailableServicios] = useState<any[]>([]);
 
@@ -105,14 +123,14 @@ export function AlcanceSLAForm({
   useEffect(() => {
     // Si nos pasan categorías como prop las usamos; si no, intentamos cargar del módulo Catálogo
     if (categorias && categorias.length) {
-      setAvailableCategories(categorias);
+      setAvailableCategories(categorias.map((nombre) => ({ id: nombre, nombre })));
     } else {
       let mounted = true;
       const load = async () => {
         try {
           const cats = await getCatalogCategories();
           if (!mounted) return;
-          setAvailableCategories(cats.map((c: any) => c.nombre));
+          setAvailableCategories(cats.map((c: any) => ({ id: String(c.id ?? c._id ?? c.nombre), nombre: c.nombre })));
         } catch (e) {
           console.warn('[AlcanceSLAForm] no se pudieron cargar categorías del catálogo', e);
         }
@@ -175,7 +193,7 @@ export function AlcanceSLAForm({
         ...prev,
         activosCubiertos: {
           ...prev.activosCubiertos,
-          categorias: availableCategories,
+          categorias: availableCategories.map((c) => c.id),
         },
       }));
     }
@@ -201,14 +219,16 @@ export function AlcanceSLAForm({
   };
 
   // Alterna una categoría individual en la selección (más cómodo en UI con checkboxes)
-  const handleToggleCategoriaSelection = (categoria: string) => {
+  const handleToggleCategoriaSelection = (categoriaId: string) => {
     setFormData((prev) => {
       const actuales = prev.activosCubiertos.categorias || [];
       return {
         ...prev,
         activosCubiertos: {
           ...prev.activosCubiertos,
-          categorias: actuales.includes(categoria) ? actuales.filter((c) => c !== categoria) : [...actuales, categoria],
+          categorias: actuales.includes(categoriaId)
+            ? actuales.filter((c) => c !== categoriaId)
+            : [...actuales, categoriaId],
         },
       };
     });
@@ -246,7 +266,28 @@ export function AlcanceSLAForm({
 
   const handleSave = () => {
     if (onSave) {
-      onSave(formData);
+      if (formData.activosCubiertos.tipo === 'porCategoria' && (formData.activosCubiertos.categorias || []).length === 0) {
+        alert('Seleccione al menos una categoria para guardar el alcance.');
+        return;
+      }
+      const normalizeIds = (values?: unknown[]) => (values ?? []).map((v) => String(v));
+      onSave({
+        ...formData,
+        tiposTicket: normalizeIds(formData.tiposTicket),
+        serviciosCatalogoSLA: {
+          ...formData.serviciosCatalogoSLA,
+          servicios: normalizeIds(formData.serviciosCatalogoSLA.servicios),
+        },
+        activosCubiertos: {
+          ...formData.activosCubiertos,
+          categorias: normalizeIds(formData.activosCubiertos.categorias),
+          categoriasPersonalizadas: normalizeIds(formData.activosCubiertos.categoriasPersonalizadas),
+        },
+        sedesCubiertas: {
+          ...formData.sedesCubiertas,
+          sedes: normalizeIds(formData.sedesCubiertas.sedes),
+        },
+      });
     }
   };
 
@@ -459,7 +500,7 @@ export function AlcanceSLAForm({
                         activosCubiertos: {
                           ...prev.activosCubiertos,
                           tipo: 'todos',
-                          categorias: availableCategories,
+                          categorias: availableCategories.map((c) => c.id),
                         },
                       }))
                     }
@@ -499,14 +540,14 @@ export function AlcanceSLAForm({
                       <p className="text-sm text-gray-500">No hay categorías disponibles en Catálogo.</p>
                     )}
                     {availableCategories.map((categoria) => (
-                      <label key={categoria} className="flex items-center gap-2 p-2 rounded hover:bg-white cursor-pointer">
+                      <label key={categoria.id} className="flex items-center gap-2 p-2 rounded hover:bg-white cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={(formData.activosCubiertos.categorias || []).includes(categoria)}
-                          onChange={() => handleToggleCategoriaSelection(categoria)}
+                          checked={(formData.activosCubiertos.categorias || []).includes(categoria.id)}
+                          onChange={() => handleToggleCategoriaSelection(categoria.id)}
                           className="w-4 h-4 text-blue-600 rounded"
                         />
-                        <span className="text-sm text-gray-700">{categoria}</span>
+                        <span className="text-sm text-gray-700">{categoria.nombre}</span>
                       </label>
                     ))}
                   </div>
