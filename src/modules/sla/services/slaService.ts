@@ -2,102 +2,203 @@ import axiosClient from '../../../api/axiosClient';
 
 const BASE_URL = '/api/sla';
 
-export interface SLASeccionPayload {
-  seccion: string;
-  data: unknown;
-  motivo?: string;
+// ==========================================
+// TIPOS DE DATOS
+// ==========================================
+
+export interface AlcanceData {
+  tiposTicket: string[];  // UUID[] - OBLIGATORIO
+  servicios?: number[];
+  categorias?: number[];
+  sedes?: number[];
+  aplica_todos_servicios: boolean;
+  aplica_todas_categorias: boolean;
+  aplica_todas_sedes: boolean;
+  observaciones?: string;
 }
 
+export interface TiempoData {
+  prioridad: 'CRITICA' | 'ALTA' | 'MEDIA' | 'BAJA';
+  tiempo_respuesta_minutos: number;
+  tiempo_resolucion_minutos: number;
+  escalamiento: boolean;
+  tiempo_escalamiento_minutos?: number;  // Requerido si escalamiento = true
+}
+
+export interface TiemposData {
+  tiempos: TiempoData[];
+}
+
+export interface HorarioData {
+  day_of_week: number;  // 0-6 (0 = Domingo, 6 = Sábado)
+  atiende: boolean;
+  hora_inicio?: string;  // 'HH:MM:SS' - requerido si atiende = true
+  hora_fin?: string;     // 'HH:MM:SS' - requerido si atiende = true
+  es_feriado: boolean;
+}
+
+export interface HorariosData {
+  horarios: HorarioData[];
+}
+
+export interface ResumenSLA {
+  configurado: boolean;
+  activo: boolean;
+  nombre: string;
+  alcance_configurado: boolean;
+  tiempos_configurados: number;
+  horarios_configurados: number;
+}
+
+// ==========================================
+// SERVICIO SLA
+// ==========================================
+
 export const slaService = {
-  // Obtener configuración SLA
-  async getConfiguracion(empresaId: string) {
+  // ========== ALCANCE ==========
+  async getAlcance(empresaId: string): Promise<AlcanceData | null> {
     try {
-      const response = await axiosClient.get(`${BASE_URL}/configuracion/${empresaId}`);
+      const response = await axiosClient.get(`${BASE_URL}/${empresaId}/alcance`);
       return response.data;
     } catch (error: any) {
-      console.error('[slaService] getConfiguracion error:', error?.response?.data || error?.message);
+      console.error('[slaService] getAlcance error:', error?.response?.data || error?.message);
+      return null;
+    }
+  },
+
+  async guardarAlcance(empresaId: string, data: AlcanceData) {
+    try {
+      console.log('[slaService] 📤 Guardando alcance:', { empresaId, data });
+      const response = await axiosClient.post(`${BASE_URL}/${empresaId}/alcance`, data);
+      return response.data;
+    } catch (error: any) {
+      console.error('[slaService] guardarAlcance error:', error?.response?.data || error?.message);
       throw error;
     }
   },
 
-  // Guardar sección específica
-  async guardarSeccion(empresaId: string, seccion: string, data: unknown, motivo?: string) {
+  // ========== TIEMPOS ==========
+  async getTiempos(empresaId: string): Promise<TiemposData | null> {
     try {
-      // Normalizar datos según la sección para cumplir con estructura mínima del backend
-      let normalizedData = data;
-      
-      if (seccion === 'incidentes' || seccion === 'gestionIncidentes' || seccion === 'gestion_incidentes') {
-        // Asegurar estructura mínima para Gestión de Incidentes
-        normalizedData = {
-          tipos: [],
-          ...(typeof data === 'object' && data !== null ? data : {})
-        };
-      }
-      
-      const payload = {
-        seccion,
-        data: normalizedData,
-        ...(motivo ? { motivo } : {}),
-      };
-      
-      console.log('[slaService] 📤 Enviando a backend:', {
-        empresaId,
-        url: `${BASE_URL}/seccion/${empresaId}`,
-        payload: JSON.stringify(payload, null, 2)
-      });
-      
-      const response = await axiosClient.post(`${BASE_URL}/seccion/${empresaId}`, payload);
+      const response = await axiosClient.get(`${BASE_URL}/${empresaId}/tiempos`);
       return response.data;
     } catch (error: any) {
-      console.error('[slaService] guardarSeccion error:', {
-        status: error?.response?.status,
-        message: error?.response?.data?.message,
-        data: error?.response?.data,
-        fullError: error
-      });
+      console.error('[slaService] getTiempos error:', error?.response?.data || error?.message);
+      return null;
+    }
+  },
+
+  async guardarTiempos(empresaId: string, data: TiemposData) {
+    try {
+      console.log('[slaService] 📤 Guardando tiempos:', { empresaId, data });
+      const response = await axiosClient.post(`${BASE_URL}/${empresaId}/tiempos`, data);
+      return response.data;
+    } catch (error: any) {
+      console.error('[slaService] guardarTiempos error:', error?.response?.data || error?.message);
       throw error;
     }
   },
 
-  // Registrar edición (motivo)
-  async registrarEdicion(empresaId: string, seccion: string, motivo: string) {
-    const response = await axiosClient.post(`${BASE_URL}/editar/${empresaId}`, {
-      seccion,
-      motivo,
-    });
-    return response.data;
+  // ========== HORARIOS ==========
+  async getHorarios(empresaId: string): Promise<HorariosData | null> {
+    try {
+      const response = await axiosClient.get(`${BASE_URL}/${empresaId}/horarios`);
+      return response.data;
+    } catch (error: any) {
+      console.error('[slaService] getHorarios error:', error?.response?.data || error?.message);
+      return null;
+    }
   },
 
-  // Limpiar sección
-  async limpiarSeccion(empresaId: string, seccion: string) {
-    const response = await axiosClient.post(`${BASE_URL}/limpiar/${empresaId}`, {
-      seccion,
-    });
-    return response.data;
+  async guardarHorarios(empresaId: string, data: HorariosData) {
+    try {
+      console.log('[slaService] 📤 Guardando horarios:', { empresaId, data });
+      const response = await axiosClient.post(`${BASE_URL}/${empresaId}/horarios`, data);
+      return response.data;
+    } catch (error: any) {
+      console.error('[slaService] guardarHorarios error:', error?.response?.data || error?.message);
+      throw error;
+    }
   },
 
-  // Limpiar múltiples secciones
-  async limpiarSecciones(empresaId: string, secciones: string[]) {
-    const response = await axiosClient.post(`${BASE_URL}/limpiar/${empresaId}`, {
-      secciones,
-    });
-    return response.data;
+  // ========== RESUMEN ==========
+  async getResumen(empresaId: string): Promise<ResumenSLA | null> {
+    try {
+      const response = await axiosClient.get(`${BASE_URL}/${empresaId}/resumen`);
+      return response.data;
+    } catch (error: any) {
+      console.error('[slaService] getResumen error:', error?.response?.data || error?.message);
+      return null;
+    }
   },
 
-  // Obtener historial
+  // ========== ACTIVAR/DESACTIVAR ==========
+  async toggleActivo(empresaId: string, activo: boolean) {
+    try {
+      console.log('[slaService] 🔄 Toggle SLA:', { empresaId, activo });
+      const response = await axiosClient.patch(`${BASE_URL}/${empresaId}/toggle`, { activo });
+      return response.data;
+    } catch (error: any) {
+      console.error('[slaService] toggleActivo error:', error?.response?.data || error?.message);
+      throw error;
+    }
+  },
+
+  // ========== HISTORIAL (si sigue siendo compatible) ==========
   async getHistorial(empresaId: string, params?: { limit?: number; skip?: number; seccion?: string }) {
-    const response = await axiosClient.get(`${BASE_URL}/historial/${empresaId}`, { params });
-    return response.data;
+    try {
+      const response = await axiosClient.get(`${BASE_URL}/historial/${empresaId}`, { params });
+      return response.data;
+    } catch (error: any) {
+      console.error('[slaService] getHistorial error:', error?.response?.data || error?.message);
+      return [];
+    }
+  },
+
+  // ========== MÉTODOS LEGACY (deprecados - mantener temporalmente para compatibilidad) ==========
+  
+  /** @deprecated Usar getResumen() en su lugar */
+  async getConfiguracion(empresaId: string) {
+    console.warn('[slaService] ⚠️ getConfiguracion está deprecado. Usar getResumen(), getAlcance(), getTiempos() o getHorarios()');
+    return this.getResumen(empresaId);
+  },
+
+  /** @deprecated Los formularios ahora se guardan en endpoints independientes */
+  async guardarSeccion(empresaId: string, seccion: string, data: unknown, motivo?: string) {
+    console.warn('[slaService] ⚠️ guardarSeccion está deprecado. Usar guardarAlcance(), guardarTiempos() o guardarHorarios()');
+    
+    // Intentar mapear a nuevo sistema
+    if (seccion === 'alcance') {
+      return this.guardarAlcance(empresaId, data as AlcanceData);
+    } else if (seccion === 'tiempos') {
+      return this.guardarTiempos(empresaId, data as TiemposData);
+    } else if (seccion === 'horarios') {
+      return this.guardarHorarios(empresaId, data as HorariosData);
+    }
+    
+    throw new Error(`Sección "${seccion}" no soportada en nuevo sistema`);
+  },
+
+  /** @deprecated Ya no hay endpoint de limpieza general */
+  async limpiarSeccion(empresaId: string, seccion: string) {
+    console.warn('[slaService] ⚠️ limpiarSeccion está deprecado. Eliminar datos manualmente o usar endpoints específicos');
+    throw new Error('Método no soportado en nuevo sistema');
+  },
+
+  /** @deprecated Ya no hay endpoint de limpieza general */
+  async limpiarSecciones(empresaId: string, secciones: string[]) {
+    console.warn('[slaService] ⚠️ limpiarSecciones está deprecado');
+    throw new Error('Método no soportado en nuevo sistema');
   },
 };
 
-// Función helper para obtener SLA por empresa
+// ==========================================
+// FUNCIONES HELPER
+// ==========================================
+
+/** @deprecated Usar slaService.getResumen() */
 export async function getSLAByEmpresa(empresaId: number) {
-  try {
-    const response = await axiosClient.get(`${BASE_URL}/configuracion/${empresaId}`);
-    return response.data;
-  } catch (error: any) {
-    console.error('[getSLAByEmpresa] error:', error?.response?.data || error?.message);
-    return null;
-  }
+  console.warn('[getSLAByEmpresa] ⚠️ Función deprecada. Usar slaService.getResumen()');
+  return slaService.getResumen(String(empresaId));
 }
+

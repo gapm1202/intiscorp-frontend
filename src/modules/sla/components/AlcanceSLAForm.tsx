@@ -5,12 +5,7 @@ import { getServicios } from '@/modules/catalogo/services/servicioApi';
 interface AlcanceSLAData {
   slaActivo: boolean;
   aplicaA: 'incidentes';
-  tiposTicketCubiertos: string[];
-  serviciosCubiertos: {
-    soporteRemoto: boolean;
-    soportePresencial: boolean;
-    atencionEnSede: boolean;
-  };
+  tiposTicket: string[];  // UUIDs de tipos de ticket
   serviciosCatalogoSLA: {
     tipo: 'todos' | 'seleccionados';
     servicios?: string[]; // IDs de servicios seleccionados
@@ -40,12 +35,7 @@ interface AlcanceSLAFormProps {
 const getDefaultAlcanceData = (): AlcanceSLAData => ({
   slaActivo: false,
   aplicaA: 'incidentes',
-  tiposTicketCubiertos: ['incidente'],
-  serviciosCubiertos: {
-    soporteRemoto: false,
-    soportePresencial: false,
-    atencionEnSede: false,
-  },
+  tiposTicket: [],  // Se llenará con UUIDs al cargar tipos
   serviciosCatalogoSLA: {
     tipo: 'todos',
     servicios: [],
@@ -144,10 +134,12 @@ export function AlcanceSLAForm({
         console.log('[AlcanceSLAForm] Tipos de ticket activos cargados:', tiposActivos);
         setAvailableTypes(tiposActivos);
         
-        // Si no hay tipos seleccionados, seleccionar el primero por defecto
-        if (!formData.tiposTicketCubiertos || !formData.tiposTicketCubiertos.length) {
-          const primerTipo = tiposActivos[0]?.nombre || 'incidente';
-          setFormData((prev) => ({ ...prev, tiposTicketCubiertos: [primerTipo] }));
+        // Si no hay tipos seleccionados, seleccionar el primero por defecto usando su UUID
+        if (!formData.tiposTicket || !formData.tiposTicket.length) {
+          const primerTipoUUID = tiposActivos[0]?.id;  // Usar UUID, no nombre
+          if (primerTipoUUID) {
+            setFormData((prev) => ({ ...prev, tiposTicket: [primerTipoUUID] }));
+          }
         }
       } catch (e) {
         console.warn('[AlcanceSLAForm] no se pudieron cargar tipos del catálogo', e);
@@ -194,16 +186,6 @@ export function AlcanceSLAForm({
     setFormData((prev) => ({
       ...prev,
       slaActivo: !prev.slaActivo,
-    }));
-  };
-
-  const handleToggleServicio = (servicio: keyof typeof formData.serviciosCubiertos) => {
-    setFormData((prev) => ({
-      ...prev,
-      serviciosCubiertos: {
-        ...prev.serviciosCubiertos,
-        [servicio]: !prev.serviciosCubiertos[servicio],
-      },
     }));
   };
 
@@ -356,16 +338,16 @@ export function AlcanceSLAForm({
                   <label key={tipo.id} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
                     <input
                       type="checkbox"
-                      checked={(formData.tiposTicketCubiertos || []).includes(tipo.nombre)}
-                      onChange={() => {
+                      checked={(formData.tiposTicket || []).includes(tipo.id)}
+                      onChange={() =>
                         setFormData((prev) => {
-                          const curr = prev.tiposTicketCubiertos || [];
+                          const curr = prev.tiposTicket || [];
                           return {
                             ...prev,
-                            tiposTicketCubiertos: curr.includes(tipo.nombre) ? curr.filter((x) => x !== tipo.nombre) : [...curr, tipo.nombre],
+                            tiposTicket: curr.includes(tipo.id) ? curr.filter((x) => x !== tipo.id) : [...curr, tipo.id],
                           };
-                        });
-                      }}
+                        })
+                      }
                       className="w-5 h-5 text-blue-600"
                     />
                     <span className="text-sm text-gray-700">{tipo.nombre}</span>
@@ -375,36 +357,7 @@ export function AlcanceSLAForm({
             </div>
           </div>
 
-          {/* 3. Servicios Cubiertos */}
-          <div className="border-b pb-6">
-            <label className="text-sm font-semibold text-gray-900 block mb-4">Servicios Cubiertos</label>
-            <div className="space-y-3">
-              {[
-                { key: 'soporteRemoto', label: '🌐 Soporte Remoto' },
-                { key: 'soportePresencial', label: '👤 Soporte Presencial' },
-                { key: 'atencionEnSede', label: '🏢 Atención en Sede' },
-              ].map((servicio) => (
-                <label
-                  key={servicio.key}
-                  className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                >
-                  <input
-                    type="checkbox"
-                    checked={
-                      formData.serviciosCubiertos[servicio.key as keyof typeof formData.serviciosCubiertos]
-                    }
-                    onChange={() =>
-                      handleToggleServicio(servicio.key as keyof typeof formData.serviciosCubiertos)
-                    }
-                    className="w-5 h-5 text-blue-600 rounded"
-                  />
-                  <span className="text-sm text-gray-700">{servicio.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* 3.5 Servicios cubiertos por el SLA (Origen: Catálogo de Servicios) */}
+          {/* 3. Servicios cubiertos por el SLA (Origen: Catálogo de Servicios) */}
           <div className="border-b pb-6">
             <label className="text-sm font-semibold text-gray-900 block mb-4">
               Servicios cubiertos por el SLA
@@ -663,12 +616,7 @@ export function AlcanceSLAForm({
               slaActivo: false,
               aplicaA: 'incidentes',
               tipoServicioCubierto: 'incidente',
-              tiposTicketCubiertos: ['incidente'],
-              serviciosCubiertos: {
-                soporteRemoto: false,
-                soportePresencial: false,
-                atencionEnSede: false,
-              },
+              tiposTicket: [],
               serviciosCatalogoSLA: {
                 tipo: 'todos',
                 servicios: [],

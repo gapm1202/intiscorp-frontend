@@ -40,7 +40,7 @@ const TicketsPage = () => {
   const [showFilters, setShowFilters] = useState(false);
 
   // Estados disponibles (como arrays de strings)
-  const estados = ['ABIERTO', 'EN_PROCESO', 'PENDIENTE_CLIENTE', 'RESUELTO', 'CERRADO', 'CANCELADO'];
+  const estados = ['ESPERA', 'ABIERTO', 'EN_PROCESO', 'PENDIENTE_CLIENTE', 'RESUELTO', 'CERRADO', 'CANCELADO'];
   const prioridades = ['BAJA', 'MEDIA', 'ALTA', 'CRITICA'];
   const estadosSLA = ['EN_TIEMPO', 'PROXIMO_VENCER', 'VENCIDO', 'NO_APLICA'];
   const tiposTicket = ['SOPORTE', 'INCIDENTE', 'REQUERIMIENTO', 'CONSULTA'];
@@ -60,6 +60,16 @@ const TicketsPage = () => {
   useEffect(() => {
     loadTickets();
   }, [filters, page]);
+
+  // Polling para refrescar porcentajes SLA en tiempo real (cada 30s)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!loading) {
+        loadTickets();
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [loading, filters, page]);
 
   // Cargar sedes cuando cambia empresa seleccionada
   useEffect(() => {
@@ -167,6 +177,7 @@ const TicketsPage = () => {
 
   const getEstadoBadgeClass = (estado: string): string => {
     const classes: Record<string, string> = {
+      ESPERA: 'bg-purple-100 text-purple-800',
       ABIERTO: 'bg-blue-100 text-blue-800',
       EN_PROCESO: 'bg-yellow-100 text-yellow-800',
       PENDIENTE_CLIENTE: 'bg-orange-100 text-orange-800',
@@ -205,6 +216,15 @@ const TicketsPage = () => {
       NO_APLICA: 'N/A'
     };
     return labels[estadoSLA] || estadoSLA;
+  };
+
+  const getSLAColorClass = (pct?: number, paused?: boolean) => {
+    if (paused) return 'bg-gray-400';
+    const raw = typeof pct === 'number' ? pct : 0;
+    if (raw < 70) return 'bg-emerald-500';
+    if (raw >= 70 && raw < 90) return 'bg-amber-500';
+    if (raw >= 90 && raw < 100) return 'bg-orange-500';
+    return 'bg-rose-600';
   };
 
   const totalPages = Math.ceil(total / pageSize);
@@ -460,9 +480,74 @@ const TicketsPage = () => {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Mobile: card list */}
+            <div className="md:hidden space-y-3">
+              {tickets.map(ticket => (
+                <div key={ticket.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">{ticket.codigo_ticket}</div>
+                          <div className="text-xs text-gray-500">{ticket.tipo_ticket}</div>
+                        </div>
+                        <div className="ml-auto text-sm">
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getEstadoBadgeClass(ticket.estado)}`}>
+                            {ticket.estado.replace('_', ' ')}
+                          </span>
+                        </div>
+                      </div>
+                            <div className="mt-2">
+                              <div className="text-sm font-medium text-gray-900 truncate">{ticket.titulo}</div>
+                              <div className="text-xs text-gray-500">{ticket.empresa_nombre}{ticket.sede_nombre ? ` / ${ticket.sede_nombre}` : ''}</div>
+                              {/* Mini SLA bar according to estado */}
+                              {(ticket.estado === 'ESPERA' || ticket.estado === 'ABIERTO') && (
+                                <div className="mt-2">
+                                  <div className="flex items-center justify-between">
+                                    <div className="text-xs text-gray-500">Respuesta</div>
+                                    <div className="text-xs text-gray-600">{typeof ticket.porcentaje_tiempo_respuesta === 'number' ? `${ticket.porcentaje_tiempo_respuesta.toFixed(1)}%` : 'N/A'}</div>
+                                  </div>
+                                  <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-1">
+                                    <div className={`absolute top-0 left-0 h-full transition-all ${getSLAColorClass(ticket.porcentaje_tiempo_respuesta, ticket.pausado)}`} style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_respuesta ?? 0))}%` }} />
+                                  </div>
+                                </div>
+                              )}
+                              {ticket.estado === 'EN_PROCESO' && (
+                                <div className="mt-2">
+                                  <div className="flex items-center justify-between">
+                                    <div className="text-xs text-gray-500">Resolución</div>
+                                    <div className="text-xs text-gray-600">{typeof ticket.porcentaje_tiempo_resolucion === 'number' ? `${ticket.porcentaje_tiempo_resolucion.toFixed(1)}%` : 'N/A'}</div>
+                                  </div>
+                                  <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-1">
+                                    <div className={`absolute top-0 left-0 h-full transition-all ${getSLAColorClass(ticket.porcentaje_tiempo_resolucion, ticket.pausado)}`} style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_resolucion ?? 0))}%` }} />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getPrioridadBadgeClass(ticket.prioridad)}`}>{ticket.prioridad}</span>
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getSLABadgeClass(ticket.estado_sla)}`}>{getSLALabel(ticket.estado_sla)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {(Object.prototype.hasOwnProperty.call(ticket, 'tecnico_asignado_id') && ticket.tecnico_asignado_id === null) && ticket.estado === 'ABIERTO' && (
+                        <button onClick={() => handleCogerTicket(ticket.id)} disabled={cogiendoTicket === ticket.id} className="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                          {cogiendoTicket === ticket.id ? 'Tomando...' : 'Coger ticket'}
+                        </button>
+                      )}
+                      <button onClick={() => navigate(`/admin/tickets/${ticket.id}`)} className="px-3 py-1.5 border border-transparent bg-white text-sm text-blue-600 rounded hover:bg-gray-50 transition-colors">Ver detalle</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gradient-to-r from-indigo-50 to-white">
+                <thead className="bg-linear-to-r from-indigo-50 to-white">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Código</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Título</th>
@@ -498,6 +583,21 @@ const TicketsPage = () => {
                         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getEstadoBadgeClass(ticket.estado)}`}>
                           {ticket.estado.replace('_', ' ')}
                         </span>
+                        {/* Mini SLA bar in table row */}
+                        {(ticket.estado === 'ESPERA' || ticket.estado === 'ABIERTO') && (
+                          <div className="mt-2">
+                            <div className="relative w-40 h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div className={`absolute top-0 left-0 h-full ${getSLAColorClass(ticket.porcentaje_tiempo_respuesta, ticket.pausado)}`} style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_respuesta ?? 0))}%` }} />
+                            </div>
+                          </div>
+                        )}
+                        {ticket.estado === 'EN_PROCESO' && (
+                          <div className="mt-2">
+                            <div className="relative w-40 h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div className={`absolute top-0 left-0 h-full ${getSLAColorClass(ticket.porcentaje_tiempo_resolucion, ticket.pausado)}`} style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_resolucion ?? 0))}%` }} />
+                            </div>
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getPrioridadBadgeClass(ticket.prioridad)}`}>

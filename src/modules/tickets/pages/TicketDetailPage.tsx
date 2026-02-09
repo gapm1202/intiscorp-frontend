@@ -84,6 +84,16 @@ export default function TicketDetailPage() {
     loadTicketDetail();
   }, [loadTicketDetail]);
 
+  // Polling para refrescar detalle del ticket (SLA, porcentajes) cada 30s
+  useEffect(() => {
+    const idNum = id ? Number(id) : null;
+    if (!idNum) return;
+    const interval = setInterval(() => {
+      loadTicketDetail();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [id, loadTicketDetail]);
+
   // Normalize estado helper (local)
   const normalizeEstadoLocal = (raw?: string | null) => {
     if (!raw) return '';
@@ -187,6 +197,7 @@ export default function TicketDetailPage() {
   };
   const getEstadoColor = (estado: string) => {
     const colors: Record<string, string> = {
+      'ESPERA': 'bg-purple-50 text-purple-700 border-purple-300',
       'ABIERTO': 'bg-sky-50 text-sky-700 border-sky-300',
       'EN_PROCESO': 'bg-amber-50 text-amber-700 border-amber-300',
       'PENDIENTE_CLIENTE': 'bg-orange-50 text-orange-700 border-orange-300',
@@ -196,18 +207,27 @@ export default function TicketDetailPage() {
     return colors[estado] || 'bg-slate-50 text-slate-700 border-slate-300';
   };
 
+  const getSLAColorClass = (pct?: number, paused?: boolean) => {
+    if (paused) return 'bg-gray-400';
+    const raw = typeof pct === 'number' ? pct : 0;
+    if (raw < 70) return 'bg-emerald-500';
+    if (raw >= 70 && raw < 90) return 'bg-amber-500';
+    if (raw >= 90 && raw < 100) return 'bg-orange-500';
+    return 'bg-rose-600';
+  };
+
   const getPrioridadColor = (prioridad: string) => {
     const colors: Record<string, string> = {
-      'CRITICA': 'bg-gradient-to-r from-rose-600 to-red-600 text-white border-red-700 shadow-lg shadow-red-200',
-      'ALTA': 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-600 shadow-lg shadow-orange-200',
-      'MEDIA': 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-blue-600 shadow-lg shadow-blue-200',
-      'BAJA': 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-emerald-600 shadow-lg shadow-emerald-200',
-      'urgente': 'bg-gradient-to-r from-rose-600 to-red-600 text-white border-red-700 shadow-lg shadow-red-200',
-      'alta': 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-600 shadow-lg shadow-orange-200',
-      'media': 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-blue-600 shadow-lg shadow-blue-200',
-      'baja': 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-emerald-600 shadow-lg shadow-emerald-200'
+      'CRITICA': 'bg-linear-to-r from-rose-600 to-red-600 text-white border-red-700 shadow-lg shadow-red-200',
+      'ALTA': 'bg-linear-to-r from-orange-500 to-amber-500 text-white border-orange-600 shadow-lg shadow-orange-200',
+      'MEDIA': 'bg-linear-to-r from-blue-500 to-cyan-500 text-white border-blue-600 shadow-lg shadow-blue-200',
+      'BAJA': 'bg-linear-to-r from-emerald-500 to-teal-500 text-white border-emerald-600 shadow-lg shadow-emerald-200',
+      'urgente': 'bg-linear-to-r from-rose-600 to-red-600 text-white border-red-700 shadow-lg shadow-red-200',
+      'alta': 'bg-linear-to-r from-orange-500 to-amber-500 text-white border-orange-600 shadow-lg shadow-orange-200',
+      'media': 'bg-linear-to-r from-blue-500 to-cyan-500 text-white border-blue-600 shadow-lg shadow-blue-200',
+      'baja': 'bg-linear-to-r from-emerald-500 to-teal-500 text-white border-emerald-600 shadow-lg shadow-emerald-200'
     };
-    return colors[prioridad] || 'bg-gradient-to-r from-slate-500 to-gray-500 text-white border-slate-600';
+    return colors[prioridad] || 'bg-linear-to-r from-slate-500 to-gray-500 text-white border-slate-600';
   };
 
   const getEstadoSLAInfo = (estadoSLA: string) => {
@@ -273,9 +293,9 @@ export default function TicketDetailPage() {
 
   const getSLAProgressColor = () => {
     const progress = calculateSLAProgress();
-    if (progress >= 90) return 'bg-gradient-to-r from-rose-500 to-red-500';
-    if (progress >= 70) return 'bg-gradient-to-r from-amber-500 to-orange-500';
-    return 'bg-gradient-to-r from-emerald-500 to-teal-500';
+    if (progress >= 90) return 'bg-linear-to-r from-rose-500 to-red-500';
+    if (progress >= 70) return 'bg-linear-to-r from-amber-500 to-orange-500';
+    return 'bg-linear-to-r from-emerald-500 to-teal-500';
   };
 
   // Verificar si estamos en horario laboral
@@ -352,16 +372,18 @@ export default function TicketDetailPage() {
 
   const handleCogerTicket = async () => {
     if (!ticket || actionLoading) return;
-    
-    if (!confirm('¿Estás seguro que deseas tomar este ticket? Cambiará a estado EN PROCESO y comenzará el conteo de tiempo de atención.')) {
+
+    if (!confirm('¿Estás seguro que deseas tomar este ticket? Cambiará a estado EN_PROCESO y comenzará el conteo de tiempo de atención.')) {
       return;
     }
 
     try {
       setActionLoading(true);
+      // Llamar únicamente al endpoint `cogerTicket`; el backend controla la transición ESPERA -> EN_PROCESO.
       await cogerTicket(ticket.id);
+
       await loadTicketDetail();
-      showSuccessToast('Ticket tomado correctamente. Ahora está EN PROCESO.');
+      showSuccessToast('Ticket tomado correctamente. Ahora está EN_PROCESO.');
     } catch (error: any) {
       console.error('Error al coger ticket:', error);
       showErrorToast(error.response?.data?.message || 'Error al coger ticket');
@@ -372,7 +394,12 @@ export default function TicketDetailPage() {
 
   const handleMarcarResuelto = async () => {
     if (!ticket || actionLoading) return;
-    
+    // Si es ticket público, requerir que haya sido configurado con el botón "Configurar"
+    if (ticket.origen === 'PORTAL_PUBLICO' && !(ticket.configurado_por || ticket.configurado_at)) {
+      showErrorToast('Debe usar el botón "Configurar" y guardar la configuración antes de culminar este ticket.');
+      return;
+    }
+
     const resumen = prompt('Ingresa un breve resumen de la solución aplicada:');
     if (!resumen || !resumen.trim()) {
       showErrorToast('Debe ingresar un resumen de la solución');
@@ -443,8 +470,8 @@ export default function TicketDetailPage() {
             <span className="font-medium">Volver a tickets</span>
           </button>
           
-          <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-            <div className="flex items-start justify-between">
+            <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
               <div className="flex-1">
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">
                   {ticket.codigo_ticket || `Ticket #${ticket.id}`}
@@ -461,22 +488,51 @@ export default function TicketDetailPage() {
                     minute: '2-digit'
                   })}
                 </p>
-                <div className="flex gap-2 mt-3">
-                  <span className={`px-3 py-1 rounded text-sm font-medium ${getEstadoColor(ticket.estado)}`}>
-                    {ticket.estado.replace('_', ' ')}
-                  </span>
-                  <span className={`px-3 py-1 rounded text-sm font-medium ${getPrioridadColor(ticket.prioridad)}`}>
-                    {ticket.prioridad}
-                  </span>
+                <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-3 py-1 rounded text-sm font-medium ${getEstadoColor(ticket.estado)}`}>
+                      {ticket.estado.replace('_', ' ')}
+                    </span>
+                    <span className={`px-3 py-1 rounded text-sm font-medium ${getPrioridadColor(ticket.prioridad)}`}>
+                      {ticket.prioridad}
+                    </span>
+                  </div>
+
+                  {/* Compact SLA bar inside detail header (follows same rules) */}
+                  <div className="flex-1 flex items-center">
+                    {(ticket.estado === 'ESPERA' || ticket.estado === 'ABIERTO') && (
+                      <div className="ml-2 w-full max-w-md">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-gray-500">Tiempo de Respuesta</div>
+                          <div className="text-xs text-gray-600">{typeof ticket.porcentaje_tiempo_respuesta === 'number' ? `${ticket.porcentaje_tiempo_respuesta.toFixed(1)}%` : 'N/A'}</div>
+                        </div>
+                        <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-1">
+                          <div className={`${getSLAColorClass(ticket.porcentaje_tiempo_respuesta, ticket.pausado)} absolute top-0 left-0 h-full`} style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_respuesta ?? 0))}%` }} />
+                        </div>
+                      </div>
+                    )}
+
+                    {ticket.estado === 'EN_PROCESO' && (
+                      <div className="ml-2 w-full max-w-md">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-gray-500">Tiempo de Resolución</div>
+                          <div className="text-xs text-gray-600">{typeof ticket.porcentaje_tiempo_resolucion === 'number' ? `${ticket.porcentaje_tiempo_resolucion.toFixed(1)}%` : 'N/A'}</div>
+                        </div>
+                        <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-1">
+                          <div className={`${getSLAColorClass(ticket.porcentaje_tiempo_resolucion, ticket.pausado)} absolute top-0 left-0 h-full`} style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_resolucion ?? 0))}%` }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {/* Botones de acción */}
-              <div className="flex gap-2 ml-6 flex-wrap">
+              <div className="mt-4 sm:mt-0 sm:ml-6 flex flex-wrap gap-2">
                 {/* Asignación de técnico ahora se hace desde la tabla de tickets */}
 
-                {/* Botón "Coger ticket / Pasar a proceso" - Solo si tiene técnico asignado y está ABIERTO */}
-                {ticket.estado === 'ABIERTO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id && (
+                {/* Botón "Coger ticket / Pasar a proceso" - Visible si es ticket público en ESPERA con técnico asignado, o si está ABIERTO */}
+                {((ticket.origen === 'PORTAL_PUBLICO' && ticket.estado === 'ESPERA') || ticket.estado === 'ABIERTO') && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id && (
                   <button 
                     onClick={handleCogerTicket}
                     disabled={actionLoading}
@@ -497,7 +553,8 @@ export default function TicketDetailPage() {
                 {ticket.estado === 'EN_PROCESO' && 
                  ticket.tecnico_asignado && 
                  user && 
-                 ticket.tecnico_asignado.id === user.id && (
+                 ticket.tecnico_asignado.id === user.id &&
+                 (ticket.origen !== 'PORTAL_PUBLICO' || ticket.configurado_por || ticket.configurado_at) && (
                   <button 
                     onClick={handleMarcarResuelto}
                     disabled={actionLoading}
@@ -550,8 +607,8 @@ export default function TicketDetailPage() {
                   Historial
                 </button>
                 {/* Botón Ver Chat/Seguimiento público (eliminado) */}
-                {/* Botón Configurar - mostrar solo si vino del portal y NO está configurado */}
-                {ticket.origen === 'PORTAL_PUBLICO' && !(ticket.configurado_por || ticket.configurado_at) && (
+                {/* Botón Configurar - disponible para tickets del portal público cuando NO está RESUELTO */}
+                {ticket.origen === 'PORTAL_PUBLICO' && ticket.estado !== 'RESUELTO' && (
                   <button
                     onClick={() => setShowConfigurarModal(true)}
                     className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-sm font-medium"
@@ -589,17 +646,37 @@ export default function TicketDetailPage() {
             {/* SLA Timer */}
             {ticket.estado_sla && ticket.estado_sla !== 'NO_APLICA' && (
               <div className="mt-6">
-                <SLATimer
-                  estadoSLA={ticket.estado_sla}
-                  porcentajeConsumido={ticket.porcentaje_consumido ?? ticket.porcentaje_sla ?? (ticket.porcentaje as any)}
-                  tiempoTranscurridoMinutos={ticket.tiempo_transcurrido_minutos}
-                  tiempoRestanteMinutos={ticket.tiempo_restante_minutos}
-                  fechaLimite={ticket.fecha_limite_sla ?? ticket.fecha_limite}
-                  slaPausado={ticket.estado_sla === 'PAUSADO' || ticket.estado_sla === 'pausado' || !!ticket.sla_pausado}
-                  motivoPausa={ticket.motivo_pausa ?? ticket.sla_motivo_pausa}
-                  alertas={ticket.sla_alertas}
-                  historialPausas={ticket.sla_historial_pausas}
-                />
+                {/* Mostrar solo la barra correspondiente según reglas:
+                    - ESPERA o ABIERTO: Tiempo de Respuesta (porcentaje_tiempo_respuesta)
+                    - EN_PROCESO: Tiempo de Resolución (porcentaje_tiempo_resolucion)
+                    - RESUELTO: no mostrar barra */}
+                {(ticket.estado === 'ESPERA' || ticket.estado === 'ABIERTO') && (
+                  <SLATimer
+                    estadoSLA={ticket.estado_sla}
+                    label="Tiempo de Respuesta"
+                    porcentajeConsumido={ticket.porcentaje_tiempo_respuesta ?? ticket.porcentaje_consumido ?? ticket.porcentaje_sla}
+                    tiempoTranscurridoMinutos={ticket.tiempo_respuesta_minutos ?? ticket.tiempo_transcurrido_minutos}
+                    tiempoRestanteMinutos={ticket.tiempo_respuesta_restante_minutos ?? ticket.tiempo_restante_minutos}
+                    fechaLimite={ticket.fecha_limite_respuesta ?? ticket.fecha_limite_sla ?? ticket.fecha_limite}
+                    slaPausado={ticket.pausado || ticket.estado_sla === 'PAUSADO' || !!ticket.sla_pausado}
+                    motivoPausa={ticket.motivo_pausa ?? ticket.sla_motivo_pausa}
+                    alertas={ticket.sla_alertas}
+                  />
+                )}
+
+                {ticket.estado === 'EN_PROCESO' && (
+                  <SLATimer
+                    estadoSLA={ticket.estado_sla}
+                    label="Tiempo de Resolución"
+                    porcentajeConsumido={ticket.porcentaje_tiempo_resolucion ?? ticket.porcentaje_consumido ?? ticket.porcentaje_sla}
+                    tiempoTranscurridoMinutos={ticket.tiempo_transcurrido_minutos}
+                    tiempoRestanteMinutos={ticket.tiempo_restante_minutos}
+                    fechaLimite={ticket.fecha_limite_resolucion ?? ticket.fecha_limite_sla ?? ticket.fecha_limite}
+                    slaPausado={ticket.pausado || ticket.estado_sla === 'PAUSADO' || !!ticket.sla_pausado}
+                    motivoPausa={ticket.motivo_pausa ?? ticket.sla_motivo_pausa}
+                    alertas={ticket.sla_alertas}
+                  />
+                )}
               </div>
             )}
           </div>
@@ -750,7 +827,7 @@ export default function TicketDetailPage() {
 
                       return (
                         <div key={index} className="flex items-start gap-3 p-3 bg-white rounded border border-gray-200 shadow-sm">
-                          <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+                          <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
                             <span className="text-blue-600 font-semibold">{avatarInitial}</span>
                           </div>
 
@@ -777,16 +854,16 @@ export default function TicketDetailPage() {
                                 </div>
                               </div>
 
-                              <div className="ml-2 sm:ml-4 flex-shrink-0 text-right">
+                              <div className="ml-2 sm:ml-4 shrink-0 text-right">
                                 {code ? (
                                   <div className="w-full sm:w-auto flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                                    <div className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded bg-sky-50">
+                                    <div className="shrink-0 flex items-center justify-center w-9 h-9 rounded bg-sky-50">
                                       <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0-1.657 1.343-3 3-3s3 1.343 3 3M6 11c0-3.866 3.582-7 8-7s8 3.134 8 7v3a2 2 0 01-2 2h-1"/></svg>
                                     </div>
 
                                     <div className="flex-1 text-left sm:text-right min-w-0">
                                       <div className="text-xs text-gray-500">Código Acceso Remoto</div>
-                                      <div className="mt-1 text-sm font-mono text-gray-900 truncate break-words">{code}</div>
+                                      <div className="mt-1 text-sm font-mono text-gray-900 truncate wrap-break-word">{code}</div>
                                     </div>
 
                                     <div className="flex items-center">
@@ -824,7 +901,7 @@ export default function TicketDetailPage() {
                   <div className="space-y-3">
                     {ticket.usuarios_reporta.map((usuario: any, index: number) => (
                       <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-200">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
                           <span className="text-blue-600 font-semibold text-sm">
                             {(usuario.usuario_nombre || usuario.nombre)?.charAt(0).toUpperCase()}
                           </span>
@@ -931,7 +1008,7 @@ export default function TicketDetailPage() {
                         ) : (
                           /* Archivos no-imagen */
                           <div className="p-4 flex items-center gap-3">
-                            <div className="w-12 h-12 rounded bg-blue-100 flex items-center justify-center flex-shrink-0">
+                            <div className="w-12 h-12 rounded bg-blue-100 flex items-center justify-center shrink-0">
                               <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
@@ -980,7 +1057,7 @@ export default function TicketDetailPage() {
                   <label className="text-sm font-medium text-gray-500 mb-3 block">Técnico Asignado</label>
                   {ticket.tecnico_asignado ? (
                     <div className="flex items-center gap-3 p-3 bg-blue-50 rounded border border-blue-200">
-                      <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
                         <span className="text-white font-semibold text-sm">
                           {ticket.tecnico_asignado.nombre?.charAt(0).toUpperCase()}
                         </span>
@@ -1003,7 +1080,7 @@ export default function TicketDetailPage() {
                   <div className="border-t border-gray-200 pt-4">
                     <label className="text-sm font-medium text-gray-500 mb-3 block">Creado Por</label>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-200">
-                      <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center shrink-0">
                         <span className="text-gray-700 font-semibold text-xs">
                           {ticket.creado_por.nombre?.charAt(0).toUpperCase()}
                         </span>
@@ -1018,7 +1095,7 @@ export default function TicketDetailPage() {
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-200">
                       {ticket.configurado_por && (
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center shrink-0">
                             <span className="text-gray-700 font-semibold text-xs">
                               {ticket.configurado_por.nombre?.charAt(0).toUpperCase()}
                             </span>
@@ -1066,12 +1143,12 @@ export default function TicketDetailPage() {
                         return (
                           <div key={idx} className={`flex ${isRight ? 'justify-end' : 'justify-start'}`}>
                             <div className={`flex items-end gap-3 max-w-[80%] ${isRight ? 'flex-row-reverse' : 'flex-row'}`}>
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${isRight ? 'bg-sky-100 text-sky-800' : 'bg-blue-600 text-white'}`}>
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${isRight ? 'bg-sky-100 text-sky-800' : 'bg-blue-600 text-white'}`}>
                                 {initial}
                               </div>
                               <div className="flex flex-col">
                                 <div className="text-xs font-semibold text-gray-700">{displayName}</div>
-                                <div className={`mt-1 px-3 py-2 rounded-lg ${isTecnico ? 'bg-gradient-to-r from-blue-600 to-sky-500 text-white' : 'bg-sky-50 border border-sky-100 text-sky-800'}`}>{m.mensaje}</div>
+                                <div className={`mt-1 px-3 py-2 rounded-lg ${isTecnico ? 'bg-linear-to-r from-blue-600 to-sky-500 text-white' : 'bg-sky-50 border border-sky-100 text-sky-800'}`}>{m.mensaje}</div>
                                 <div className="text-xs text-gray-500 mt-1">{new Date(m.created_at).toLocaleString()}</div>
                               </div>
                             </div>

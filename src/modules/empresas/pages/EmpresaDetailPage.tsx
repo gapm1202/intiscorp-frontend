@@ -10,31 +10,23 @@ import CreateEmpresaModal from "@/modules/empresas/components/CreateEmpresaModal
 import DeleteSedeModal from "./../components/DeleteSedeModal";
 import { AlcanceSLAForm } from "@/modules/sla/components/AlcanceSLAForm";
 import { GestionTiemposForm } from "@/modules/sla/components/GestionTiemposForm";
-import { GestionRequisitosForm } from "@/modules/sla/components/GestionRequisitosForm";
 import { GestionHorariosForm } from "@/modules/sla/components/GestionHorariosForm";
-import { GestionExclusionesForm } from "@/modules/sla/components/GestionExclusionesForm";
-import { GestionAlertasForm } from "@/modules/sla/components/GestionAlertasForm";
+// Requisitos, Exclusiones y Alertas forms removed from SLA tab per request
 import { slaService } from "@/modules/sla/services/slaService";
 import { useNavGuard } from "@/context/NavGuardContext";
 import MantenimientoSubTabs from "@/modules/mantenimiento/components/MantenimientoSubTabs";
 
-const SLA_SECCIONES: Array<keyof typeof INITIAL_SLA_MODES> = ['alcance', 'tiempos', 'horarios', 'requisitos', 'exclusiones', 'alertas'];
+const SLA_SECCIONES: Array<keyof typeof INITIAL_SLA_MODES> = ['alcance', 'tiempos', 'horarios'];
 const SLA_CONFIG_KEY: Record<string, string> = {
   alcance: 'alcance',
   tiempos: 'tiempos',
   horarios: 'horarios',
-  requisitos: 'requisitos',
-  exclusiones: 'exclusiones',
-  alertas: 'alertas',
 };
 
 const INITIAL_SLA_MODES = {
   alcance: true,
   tiempos: true,
   horarios: true,
-  requisitos: true,
-  exclusiones: true,
-  alertas: true,
 };
 
 // Para detectar cuando se hizo clic en "Editar" sobre una sección ya guardada
@@ -42,9 +34,6 @@ const INITIAL_SLA_IS_EDITING = {
   alcance: false,
   tiempos: false,
   horarios: false,
-  requisitos: false,
-  exclusiones: false,
-  alertas: false,
 };
 
 interface Sede {
@@ -125,7 +114,6 @@ interface HistorialSLAItem {
   fecha: string;
   motivo: string;
 }
-
 const EmpresaDetailPage = () => {
   const { empresaId } = useParams<{ empresaId: string }>();
   const navigate = useNavigate();
@@ -736,11 +724,7 @@ const EmpresaDetailPage = () => {
           
           const editModes = {
             alcance: isEmptyObject(config.alcance),        // true si vacío → muestra formulario
-            tiempos: isEmptyObject(config.tiempos),
             horarios: isEmptyObject(config.horarios),
-            requisitos: isEmptyObject(config.requisitos),
-            exclusiones: isEmptyObject(config.exclusiones),
-            alertas: isEmptyObject(config.alertas),
           };
           console.error('🔵 [EDIT MODES]:', editModes);
           setSlaEditModes(editModes);
@@ -927,8 +911,8 @@ const EmpresaDetailPage = () => {
       (s) => !isEmptyObject(cfg[SLA_CONFIG_KEY[s]])
     ).length : 0;
 
-    // Solo bloquear si hay 1-5 secciones guardadas (incompleto)
-    const bloquear = seccionesGuardadas >= 1 && seccionesGuardadas < 6;
+    // Solo bloquear si hay al menos 1 sección guardada y no están todas guardadas (incompleto)
+    const bloquear = seccionesGuardadas >= 1 && seccionesGuardadas < SLA_SECCIONES.length;
 
     return bloquear;
   };
@@ -959,7 +943,7 @@ const EmpresaDetailPage = () => {
         if (!config) {
           // Si es null, setear todos en modo edición (primera vez)
           setSlaEditModes({ ...INITIAL_SLA_MODES });
-          setSlaIsEditing({ alcance: false, tiempos: false, horarios: false, requisitos: false, exclusiones: false, alertas: false });
+          setSlaIsEditing({ alcance: false, horarios: false });
         }
       }
     } catch (error) {
@@ -1101,9 +1085,95 @@ const EmpresaDetailPage = () => {
     if (!isEditando) {
       // Primera vez o rellenando inicial: Guardar directamente sin pedir motivo
       try {
+        // Transformar datos del formulario al formato del backend
+        let backendData = data;
+        
+        if (section === 'alcance') {
+          const formData = data as any;
+          backendData = {
+            tiposTicket: formData.tiposTicket || [],
+            servicios: formData.serviciosCatalogoSLA?.tipo === 'seleccionados' 
+              ? (formData.serviciosCatalogoSLA.servicios?.map((s: string) => parseInt(s)) || [])
+              : undefined,
+            categorias: formData.activosCubiertos?.tipo === 'porCategoria'
+              ? (formData.activosCubiertos.categorias?.map((c: string) => parseInt(c)) || [])
+              : undefined,
+            sedes: formData.sedesCubiertas?.tipo === 'seleccionadas'
+              ? (formData.sedesCubiertas.sedes?.map((s: string) => parseInt(s)) || [])
+              : undefined,
+            aplica_todos_servicios: formData.serviciosCatalogoSLA?.tipo === 'todos',
+            aplica_todas_categorias: formData.activosCubiertos?.tipo === 'todos',
+            aplica_todas_sedes: formData.sedesCubiertas?.tipo === 'todas',
+            observaciones: formData.observaciones || undefined,
+          };
+        }
+        
+        if (section === 'horarios') {
+          const formData = data as any;
+          // Mapeo de nombre de día a day_of_week (0=Domingo ... 6=Sábado)
+          const diaMap: Record<string, number> = {
+            'Domingo': 0,
+            'Lunes': 1,
+            'Martes': 2,
+            'Miercoles': 3,
+            'Jueves': 4,
+            'Viernes': 5,
+            'Sabado': 6,
+          };
+          
+          const horarios: any[] = [];
+          const dias = formData.dias || {};
+          
+          Object.entries(dias).forEach(([nombreDia, config]: [string, any]) => {
+            const dayOfWeek = diaMap[nombreDia];
+            if (dayOfWeek !== undefined && config) {
+              horarios.push({
+                day_of_week: dayOfWeek,
+                atiende: config.atiende || false,
+                hora_inicio: config.atiende && config.horaInicio ? `${config.horaInicio}:00` : undefined,
+                hora_fin: config.atiende && config.horaFin ? `${config.horaFin}:00` : undefined,
+                es_feriado: false,
+              });
+            }
+          });
+          
+          backendData = { horarios };
+        }
+        
+        if (section === 'tiempos') {
+          const formData = data as any;
+          // Convertir strings como "1 hora", "30 minutos" a minutos numéricos
+          const convertirAMinutos = (str: string): number => {
+            const match = str.match(/(\d+)\s*(hora|horas|minuto|minutos)/i);
+            if (match) {
+              const valor = parseInt(match[1], 10);
+              const esHoras = match[2].toLowerCase().includes('hora');
+              return esHoras ? valor * 60 : valor;
+            }
+            return 60; // default 1 hora
+          };
+          
+          const prioridadMap: Record<string, string> = {
+            'critica': 'CRITICA',
+            'alta': 'ALTA',
+            'media': 'MEDIA',
+            'baja': 'BAJA',
+          };
+          
+          const tiempos = (formData.tiemposPorPrioridad || []).map((t: any) => ({
+            prioridad: prioridadMap[t.prioridad] || 'MEDIA',
+            tiempo_respuesta_minutos: convertirAMinutos(t.tiempoRespuesta),
+            tiempo_resolucion_minutos: convertirAMinutos(t.tiempoResolucion),
+            tiempo_escalamiento_minutos: t.escalamiento && t.tiempoEscalamiento 
+              ? convertirAMinutos(t.tiempoEscalamiento) 
+              : null,
+          }));
+          
+          backendData = { tiempos };
+        }
         
         // Guardar la sección
-        await slaService.guardarSeccion(empresaId, section, data);
+        await slaService.guardarSeccion(empresaId, section, backendData);
         
         // Salir del modo edición
         setSlaEditModes((prev) => ({ ...prev, [section]: false }));
@@ -3859,19 +3929,19 @@ const EmpresaDetailPage = () => {
                   )}
                   </div>
 
-                  {/* Tiempos */}
-                  <div className="space-y-3">
+                {/* Tiempos del SLA */}
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-cyan-50 border border-cyan-200 rounded-lg text-xl">⏱️</div>
+                      <div className="p-2 bg-green-50 border border-green-200 rounded-lg text-xl">⏱️</div>
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">Tiempos de Respuesta y Resolución</p>
+                        <p className="text-sm font-semibold text-slate-900">Tiempos del SLA</p>
                         <p className="text-xs text-slate-500">{slaEditModes.tiempos ? 'Modo edición' : 'Guardado · ver únicamente'}</p>
                       </div>
                     </div>
                     {!slaEditModes.tiempos && (
                       <button
-                        onClick={() => handleSlaEdit('tiempos', 'Tiempos de Respuesta/Resolución')}
+                        onClick={() => handleSlaEdit('tiempos', 'Tiempos del SLA')}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow-sm"
                       >
                         Editar
@@ -3880,9 +3950,9 @@ const EmpresaDetailPage = () => {
                   </div>
                   {slaEditModes.tiempos && (
                     <div className="relative">
-                      <GestionTiemposForm
+                        <GestionTiemposForm
                         initialData={slaConfiguracion?.tiempos}
-                        onSave={(data) => handleSlaSave('tiempos', 'Tiempos de Respuesta/Resolución', data)}
+                        onSave={(data) => handleSlaSave('tiempos', 'Tiempos del SLA', data)}
                         onCancel={() => handleSlaCancel('tiempos')}
                       />
                     </div>
@@ -3910,7 +3980,7 @@ const EmpresaDetailPage = () => {
                   </div>
                   {slaEditModes.horarios && (
                     <div className="relative">
-                      <GestionHorariosForm
+                        <GestionHorariosForm
                         initialData={slaConfiguracion?.horarios}
                         showFueraHorarioOptions={slaConfiguracion?.tiempos?.medicionSLA === 'horasCalendario'}
                         onSave={(data) => handleSlaSave('horarios', 'Horarios de Atención', data)}
@@ -3920,95 +3990,7 @@ const EmpresaDetailPage = () => {
                   )}
                 </div>
 
-                {/* Requisitos */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-purple-50 border border-purple-200 rounded-lg text-xl">✅</div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">Requisitos del SLA</p>
-                        <p className="text-xs text-slate-500">{slaEditModes.requisitos ? 'Modo edición' : 'Guardado · ver únicamente'}</p>
-                      </div>
-                    </div>
-                    {!slaEditModes.requisitos && (
-                      <button
-                        onClick={() => handleSlaEdit('requisitos', 'Requisitos del SLA')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow-sm"
-                      >
-                        Editar
-                      </button>
-                    )}
-                  </div>
-                  {slaEditModes.requisitos && (
-                    <div className="relative">
-                      <GestionRequisitosForm
-                        initialData={slaConfiguracion?.requisitos}
-                        onSave={(data) => handleSlaSave('requisitos', 'Requisitos del SLA', data)}
-                        onCancel={() => handleSlaCancel('requisitos')}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Exclusiones */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-xl">⏸️</div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">Exclusiones</p>
-                        <p className="text-xs text-slate-500">{slaEditModes.exclusiones ? 'Modo edición' : 'Guardado · ver únicamente'}</p>
-                      </div>
-                    </div>
-                    {!slaEditModes.exclusiones && (
-                      <button
-                        onClick={() => handleSlaEdit('exclusiones', 'Exclusiones')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow-sm"
-                      >
-                        Editar
-                      </button>
-                    )}
-                  </div>
-                  {slaEditModes.exclusiones && (
-                    <div className="relative">
-                      <GestionExclusionesForm
-                        initialData={slaConfiguracion?.exclusiones}
-                        onSave={(data) => handleSlaSave('exclusiones', 'Exclusiones', data)}
-                        onCancel={() => handleSlaCancel('exclusiones')}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Alertas y Control */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-xl">🚨</div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">Alertas y Control</p>
-                        <p className="text-xs text-slate-500">{slaEditModes.alertas ? 'Modo edición' : 'Guardado · ver únicamente'}</p>
-                      </div>
-                    </div>
-                    {!slaEditModes.alertas && (
-                      <button
-                        onClick={() => handleSlaEdit('alertas', 'Alertas y Control')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow-sm"
-                      >
-                        Editar
-                      </button>
-                    )}
-                  </div>
-                  {slaEditModes.alertas && (
-                    <div className="relative">
-                      <GestionAlertasForm
-                        initialData={slaConfiguracion?.alertas}
-                        onSave={(data) => handleSlaSave('alertas', 'Alertas y Control', data)}
-                        onCancel={() => handleSlaCancel('alertas')}
-                      />
-                    </div>
-                  )}
-                </div>
+                {/* Requisitos, Exclusiones y Alertas removed per request */}
 
                 {/* Historial del SLA */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">

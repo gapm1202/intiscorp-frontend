@@ -94,7 +94,7 @@ export default function HistorialModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="border-b border-gray-200 px-6 py-4 flex-shrink-0">
+        <div className="border-b border-gray-200 px-6 py-4 shrink-0">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-900">Historial del Ticket</h2>
@@ -160,7 +160,7 @@ export default function HistorialModal({
                   return (
                     <div key={evento.id} className="relative flex gap-4 pb-6">
                       {/* Icono */}
-                      <div className={`relative z-10 flex-shrink-0 w-12 h-12 rounded-full ${icono.color} flex items-center justify-center text-lg`}>
+                      <div className={`relative z-10 shrink-0 w-12 h-12 rounded-full ${icono.color} flex items-center justify-center text-lg`}>
                         {icono.icon}
                       </div>
 
@@ -228,7 +228,7 @@ export default function HistorialModal({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-between items-center rounded-b-lg flex-shrink-0">
+        <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-between items-center rounded-b-lg shrink-0">
           <p className="text-sm text-gray-600">
             {historial.length} evento{historial.length !== 1 ? 's' : ''}
           </p>

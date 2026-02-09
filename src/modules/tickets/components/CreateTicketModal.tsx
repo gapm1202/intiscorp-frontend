@@ -752,9 +752,9 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
     console.log('🔍 Evaluando SLA Status - SLA:', sla);
     console.log('🔍 Evaluando SLA Status - Contrato:', contrato);
     
-    // 1️⃣ Sin SLA configurado (debe tener las 6 secciones guardadas)
-    // Verificar que existan las 6 secciones: alcance, tiempos, horarios, requisitos, exclusiones, alertas
-    const seccionesRequeridas = ['alcance', 'tiempos', 'horarios', 'requisitos', 'exclusiones', 'alertas'];
+    // 1️⃣ Sin SLA configurado (debe tener las 3 secciones guardadas)
+    // Verificar que existan las 3 secciones requeridas: alcance, tiempos y horarios
+    const seccionesRequeridas = ['alcance', 'tiempos', 'horarios'];
     const isEmptyObject = (obj: any) => !obj || typeof obj !== 'object' || Object.keys(obj).length === 0;
     
     const seccionesConfiguraDas = seccionesRequeridas.filter(seccion => !isEmptyObject(sla?.[seccion]));
@@ -1202,7 +1202,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center">
+        <div className="bg-linear-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center">
           <h2 className="text-2xl font-bold text-white">{isConfigMode ? 'Configurar Ticket' : 'Crear Nuevo Ticket'}</h2>
           <button
             onClick={onClose}
@@ -1261,7 +1261,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                       {slaStatus === 'sin-configurar' && (
                         <div className="p-3 bg-yellow-50 border border-yellow-300 rounded-lg">
                           <div className="flex items-start gap-2">
-                            <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                            <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 shrink-0" />
                             <div className="flex-1">
                               <p className="text-sm font-semibold text-yellow-800">
                                 ⚠️ SLA no ha sido configurado
@@ -1287,7 +1287,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                       {slaStatus === 'contrato-inactivo' && (
                         <div className="p-3 bg-red-50 border border-red-300 rounded-lg">
                           <div className="flex items-start gap-2">
-                            <XCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                            <XCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
                             <div className="flex-1">
                               <p className="text-sm font-semibold text-red-800">
                                 🔴 SLA no aplica — contrato suspendido o vencido
@@ -1312,7 +1312,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                       
                       {slaStatus === 'activo' && (
                         <div className="flex items-start gap-2 p-3 bg-green-50 border border-green-300 rounded-lg">
-                          <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                          <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-green-800">
                               🟢 SLA Activo
@@ -1454,7 +1454,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                       <div className="mb-3 space-y-2">
                         {prefilledActivosDetails.map((a: any, i: number) => (
                           <div key={`prefill-${i}`} className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-200">
-                            <div className="w-10 h-10 rounded bg-blue-100 flex items-center justify-center flex-shrink-0">
+                            <div className="w-10 h-10 rounded bg-blue-100 flex items-center justify-center shrink-0">
                               <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h18M3 17h18" />
                               </svg>
@@ -1475,7 +1475,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                           return (
                             <div
                               key={codigo}
-                              className="inline-flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-blue-100 to-blue-50 text-blue-800 rounded-lg text-xs border-2 border-blue-200 shadow-sm"
+                              className="inline-flex items-center gap-3 px-4 py-2.5 bg-linear-to-r from-blue-100 to-blue-50 text-blue-800 rounded-lg text-xs border-2 border-blue-200 shadow-sm"
                             >
                               <div className="flex items-center gap-3">
                                 {/* Información del activo */}
@@ -1943,7 +1943,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
 
                     {/* Usuario encontrado */}
                     {usuarioEncontrado && (
-                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg p-4">
+                      <div className="bg-linear-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg p-4">
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="font-bold text-green-900 flex items-center gap-2">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2363,10 +2363,10 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
 
       {/* Modal de Error - Usuario No Encontrado */}
       {errorBusqueda.show && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-60 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform animate-scale-in">
             {/* Header con gradiente rojo */}
-            <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4">
+            <div className="bg-linear-to-r from-red-500 to-red-600 px-6 py-4">
               <div className="flex items-center gap-3">
                 <div className="bg-white bg-opacity-20 rounded-full p-2">
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2380,7 +2380,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
             {/* Contenido */}
             <div className="p-6">
               <div className="flex items-start gap-4 mb-6">
-                <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <div className="shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
                   <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -2414,7 +2414,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
                     setErrorBusqueda({ show: false, message: '' });
                     setDniBuscado('');
                   }}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 font-semibold shadow-md transition-all"
+                  className="flex-1 px-4 py-2.5 bg-linear-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 font-semibold shadow-md transition-all"
                 >
                   Intentar de Nuevo
                 </button>

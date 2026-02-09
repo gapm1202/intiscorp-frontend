@@ -158,7 +158,7 @@ export default function SeguimientoTicketPage() {
   return (
     <div className="max-w-4xl mx-auto p-6 font-sans">
       <div className="bg-white shadow-lg rounded-lg overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-sky-500 p-6">
+        <div className="bg-linear-to-r from-blue-600 to-sky-500 p-6">
           <h1 className="text-2xl md:text-3xl font-semibold text-white">Seguimiento de ticket</h1>
           <p className="text-sm text-blue-100 mt-1">Código: <span className="font-medium">{ticket.codigo_ticket || codigo}</span></p>
         </div>
@@ -187,7 +187,7 @@ export default function SeguimientoTicketPage() {
             <div className="relative h-2 mt-4">
               <div className="absolute inset-0 flex items-center" aria-hidden>
                 <div className="w-full h-1 bg-gray-200 rounded" />
-                <div className="absolute left-0 top-0 h-1 bg-gradient-to-r from-sky-500 to-blue-600 rounded transition-all duration-700" style={{ width: `${(activeIndex) / (STEPS.length - 1) * 100}%` }} />
+                <div className="absolute left-0 top-0 h-1 bg-linear-to-r from-sky-500 to-blue-600 rounded transition-all duration-700" style={{ width: `${(activeIndex) / (STEPS.length - 1) * 100}%` }} />
               </div>
             </div>
           </div>
@@ -212,7 +212,7 @@ export default function SeguimientoTicketPage() {
                   const isTecnico = tipo === 'TECNICO';
                   // Render rules: SISTEMA centered, TECNICO left, CLIENTE right
                   const align = isSistema ? 'self-center' : isTecnico ? 'self-start' : 'self-end';
-                  const bubble = isSistema ? 'bg-gray-100 text-gray-700' : isTecnico ? 'bg-gradient-to-r from-blue-600 to-sky-500 text-white' : 'bg-sky-50 border border-sky-100 text-sky-800';
+                  const bubble = isSistema ? 'bg-gray-100 text-gray-700' : isTecnico ? 'bg-linear-to-r from-blue-600 to-sky-500 text-white' : 'bg-sky-50 border border-sky-100 text-sky-800';
                   return (
                     <div key={i} className={`max-w-xl p-3 rounded-lg ${align} ${bubble}`}>
                       {m.emisor_nombre && <strong className="block text-sm">{m.emisor_nombre}</strong>}

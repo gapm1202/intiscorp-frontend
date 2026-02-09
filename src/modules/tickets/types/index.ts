@@ -1,6 +1,6 @@
 // Types para el módulo de Tickets
 
-export type EstadoTicket = 'ABIERTO' | 'EN_PROCESO' | 'PAUSADO' | 'PENDIENTE_CLIENTE' | 'RESUELTO' | 'CERRADO' | 'CANCELADO';
+export type EstadoTicket = 'ESPERA' | 'ABIERTO' | 'EN_PROCESO' | 'PAUSADO' | 'PENDIENTE_CLIENTE' | 'RESUELTO' | 'CERRADO' | 'CANCELADO';
 export type PrioridadTicket = 'BAJA' | 'MEDIA' | 'ALTA' | 'CRITICA';
 export type EstadoSLA = 'EN_TIEMPO' | 'PROXIMO_VENCER' | 'VENCIDO' | 'NO_APLICA';
 
@@ -72,6 +72,14 @@ export interface Ticket {
   tiempo_total_sla_minutos?: number;
   estado_sla: EstadoSLA;
   origen: 'INTERNO' | 'PORTAL_CLIENTE' | 'PORTAL_PUBLICO';
+  // SLA additional fields from backend
+  porcentaje_tiempo_respuesta?: number;
+  porcentaje_tiempo_resolucion?: number;
+  pausado?: boolean;
+  fecha_limite_respuesta?: string;
+  fecha_limite_resolucion?: string;
+  tecnico_asignado_id?: number | null;
+  sla_alertas?: number[];
 }
 
 export interface TicketFilter {

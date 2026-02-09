@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 interface SLATimerProps {
   estadoSLA: string;
   porcentajeConsumido?: number; // preferido: backend debe enviar
+  label?: string; // e.g. 'Respuesta' or 'Resolución'
   tiempoTranscurridoMinutos?: number;
   tiempoRestanteMinutos?: number;
   fechaLimite?: string;
@@ -37,6 +38,7 @@ export default function SLATimer({
 
   const slaLabel = (() => {
     if (slaPausado) return 'SLA Pausado';
+    if (label) return label;
     if (!estadoSLA) return 'SLA';
     const key = String(estadoSLA).toUpperCase();
     if (key === 'VENCIDO') return 'SLA Vencido';
@@ -44,8 +46,20 @@ export default function SLATimer({
     return key.replace('_', ' ');
   })();
 
-  const progressWidth = (typeof porcentajeConsumido === 'number') ? `${Math.max(0, Math.min(100, porcentajeConsumido))}%` : '0%';
+  const rawPct = (typeof porcentajeConsumido === 'number') ? porcentajeConsumido : 0;
+  const cappedPct = Math.max(0, Math.min(100, rawPct));
+  const progressWidth = `${cappedPct}%`;
   const progressLabel = (typeof porcentajeConsumido === 'number') ? `${porcentajeConsumido.toFixed(1)}%` : 'N/A';
+
+  const colorClass = (() => {
+    if (slaPausado) return 'bg-gray-400';
+    const pct = rawPct;
+    if (pct < 70) return 'bg-emerald-500';
+    if (pct >= 70 && pct < 90) return 'bg-amber-500';
+    if (pct >= 90 && pct < 100) return 'bg-orange-500';
+    // pct >= 100
+    return 'bg-rose-600';
+  })();
 
   return (
     <div className={`border rounded-lg p-4 bg-white`}>
@@ -68,10 +82,10 @@ export default function SLATimer({
       )}
 
       <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-        <div className={`absolute top-0 left-0 h-full bg-emerald-500 transition-all duration-500`} style={{ width: progressWidth }} />
+        <div className={`absolute top-0 left-0 h-full transition-all duration-500 ${colorClass}`} style={{ width: progressWidth }} />
       </div>
 
-      <div className="flex justify-between mt-2 text-xs text-gray-600">
+      <div className="flex flex-col sm:flex-row justify-between mt-2 text-xs text-gray-600 gap-2">
         <span>Transcurrido: {formatMinutes(tiempoTranscurridoMinutos)}</span>
         <span>{progressLabel}</span>
         <span>Fecha límite: {fechaLimite ? new Date(fechaLimite).toLocaleString() : 'N/A'}</span>
