@@ -1,67 +1,209 @@
-import { useAuth } from "@/context/authHelpers";
+import { useEffect, useMemo, useState } from "react";
+import Charts from "../components/Charts";
+import { getDashboardStats, type DashboardStats } from "../services/dashboardService";
+import { Package, Building2, FileText, TrendingUp, Activity } from "lucide-react";
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Contenido dinámico por rol
-  const cardsByRole: Record<string, Array<{ title: string; value: string; icon: string; colorClass?: string }>> = {
-    administrador: [
-      { title: "Usuarios", value: "128", icon: "👥", colorClass: "bg-purple-100" },
-      { title: "Tickets Activos", value: "12", icon: "🎫", colorClass: "bg-blue-100" },
-      { title: "Activos", value: "48", icon: "📦", colorClass: "bg-green-100" },
-      { title: "Empresas", value: "8", icon: "🏢", colorClass: "bg-indigo-100" },
-    ],
-    tecnico: [
-      { title: "Mis Tickets", value: "6", icon: "🛠️", colorClass: "bg-yellow-100" },
-      { title: "Tareas", value: "3", icon: "📋", colorClass: "bg-blue-100" },
-      { title: "Próx. Mantenimientos", value: "2", icon: "🔧", colorClass: "bg-orange-100" },
-      { title: "Inventario", value: "21", icon: "📦", colorClass: "bg-green-100" },
-    ],
-    cliente: [
-      { title: "Mis Tickets", value: "4", icon: "📨", colorClass: "bg-blue-100" },
-      { title: "Solicitudes Abiertas", value: "2", icon: "⏳", colorClass: "bg-yellow-100" },
-      { title: "SLA Promedio", value: "24h", icon: "⏱️", colorClass: "bg-purple-100" },
-      { title: "Empresas", value: "1", icon: "🏢", colorClass: "bg-indigo-100" },
-    ],
-  };
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        const data = await getDashboardStats();
+        setStats(data);
+      } catch (error) {
+        console.error("Error loading dashboard stats:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const cards = user ? cardsByRole[user.rol] ?? cardsByRole["cliente"] : cardsByRole["cliente"];
+    fetchStats();
+  }, []);
+
+  const months = useMemo(() => ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"], []);
+
+  const categoryLabels = stats?.categoryStats.map(c => c.label) || [];
+  const categoryValues = stats?.categoryStats.map(c => c.value) || [];
+  
+  const locationLabels = stats?.locationStats.map(l => l.label) || [];
+  const locationValues = stats?.locationStats.map(l => l.value) || [];
+  
+  const ticketStatusLabels = stats?.ticketsByStatus.map(t => t.label) || [];
+  const ticketStatusValues = stats?.ticketsByStatus.map(t => t.value) || [];
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-muted">Cargando estadísticas...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-7xl mx-auto">
-      {/* Top metrics - compact cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {cards.map((c) => (
-          <div key={c.title} className="card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-muted text-xs font-medium">{c.title}</p>
-                <p className="text-xl font-semibold text-slate-800 mt-1">{c.value}</p>
-              </div>
-              <div className={`w-10 h-10 ${c.colorClass ?? "bg-gray-100"} rounded-md flex items-center justify-center text-lg`}>
-                {c.icon}
-              </div>
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Indicadores principales con iconos y gradientes */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="card p-5 bg-linear-to-br from-blue-50 to-white border-l-4 border-blue-500">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">Equipos Totales</p>
+              <p className="text-3xl font-bold text-slate-800 mt-2">{stats?.totalEquipment.toLocaleString() ?? "—"}</p>
+              <p className="text-xs text-muted mt-1 flex items-center gap-1">
+                <TrendingUp className="w-3 h-3" />
+                En inventario
+              </p>
             </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 card p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-base font-semibold text-slate-800">Delivery Statistics</h3>
-            <div className="text-sm text-muted">Monthly</div>
-          </div>
-          <div className="h-72 bg-subtle rounded flex items-center justify-center">
-            <p className="text-muted">Gráfico principal</p>
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <Package className="w-6 h-6 text-blue-600" />
+            </div>
           </div>
         </div>
 
-        <div className="card p-4">
-          <h3 className="text-base font-semibold text-slate-800 mb-3">Tracking Delivery</h3>
-          <div className="h-72 bg-subtle rounded flex items-start flex-col p-3 gap-2 overflow-auto">
-            <p className="text-sm text-muted">Últimas entregas</p>
-            <div className="mt-auto text-xs text-muted"># tracking info</div>
+        <div className="card p-5 bg-linear-to-br from-emerald-50 to-white border-l-4 border-emerald-500">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-emerald-600 uppercase tracking-wide">Empresas</p>
+              <p className="text-3xl font-bold text-slate-800 mt-2">{stats?.totalCompanies.toLocaleString() ?? "—"}</p>
+              <p className="text-xs text-muted mt-1 flex items-center gap-1">
+                <Activity className="w-3 h-3" />
+                Clientes activos
+              </p>
+            </div>
+            <div className="p-3 bg-emerald-100 rounded-lg">
+              <Building2 className="w-6 h-6 text-emerald-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="card p-5 bg-linear-to-br from-purple-50 to-white border-l-4 border-purple-500">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-purple-600 uppercase tracking-wide">Tickets</p>
+              <p className="text-3xl font-bold text-slate-800 mt-2">{stats?.totalTickets.toLocaleString() ?? "—"}</p>
+              <p className="text-xs text-muted mt-1 flex items-center gap-1">
+                <Activity className="w-3 h-3" />
+                Soporte técnico
+              </p>
+            </div>
+            <div className="p-3 bg-purple-100 rounded-lg">
+              <FileText className="w-6 h-6 text-purple-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="card p-5 bg-linear-to-br from-amber-50 to-white border-l-4 border-amber-500">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-amber-600 uppercase tracking-wide">Activos Recientes</p>
+              <p className="text-3xl font-bold text-slate-800 mt-2">{stats?.recentAssets.length ?? 0}</p>
+              <p className="text-xs text-muted mt-1 flex items-center gap-1">
+                <TrendingUp className="w-3 h-3" />
+                Últimos registros
+              </p>
+            </div>
+            <div className="p-3 bg-amber-100 rounded-lg">
+              <Package className="w-6 h-6 text-amber-600" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Gráficos principales */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 card p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-800">Equipos agregados</h3>
+              <p className="text-xs text-muted mt-0.5">Tendencia de los últimos 12 meses</p>
+            </div>
+            <div className="text-xs text-muted bg-slate-50 px-3 py-1.5 rounded-full">12 meses</div>
+          </div>
+          <div className="h-72">
+            {stats && stats.equipmentByMonth.length > 0 ? (
+              <Charts.AreaLineChart labels={months} data={stats.equipmentByMonth} label="Nuevos equipos" />
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted">Sin datos disponibles</div>
+            )}
+          </div>
+        </div>
+
+        <div className="card p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-slate-800">Distribución por categoría</h3>
+            <p className="text-xs text-muted mt-0.5">Tipos de equipos en inventario</p>
+          </div>
+          <div className="h-72 flex items-center justify-center">
+            {categoryLabels.length > 0 ? (
+              <Charts.CategoryDoughnut labels={categoryLabels} values={categoryValues} />
+            ) : (
+              <div className="text-muted text-sm">Sin datos de categorías</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Segunda fila de gráficos */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="card p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-slate-800">Estados de Tickets</h3>
+            <p className="text-xs text-muted mt-0.5">Distribución actual</p>
+          </div>
+          <div className="h-64 flex items-center justify-center">
+            {ticketStatusLabels.length > 0 ? (
+              <Charts.CategoryDoughnut labels={ticketStatusLabels} values={ticketStatusValues} />
+            ) : (
+              <div className="text-muted text-sm">Sin datos de tickets</div>
+            )}
+          </div>
+        </div>
+
+        <div className="card p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-slate-800">Inventario por ubicación</h3>
+            <p className="text-xs text-muted mt-0.5">Top sedes con más equipos</p>
+          </div>
+          <div className="h-64">
+            {locationLabels.length > 0 ? (
+              <Charts.VerticalBar labels={locationLabels} values={locationValues} label="Equipos" />
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted text-sm">Sin datos de ubicación</div>
+            )}
+          </div>
+        </div>
+
+        <div className="card p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-slate-800">Activos recientes</h3>
+            <p className="text-xs text-muted mt-0.5">Últimos registros en el sistema</p>
+          </div>
+          <div className="h-64 overflow-auto">
+            {stats?.recentAssets && stats.recentAssets.length > 0 ? (
+              <div className="space-y-3">
+                {stats.recentAssets.map((a) => (
+                  <div key={a.id} className="pb-3 border-b border-slate-100 last:border-0">
+                    <div className="font-medium text-sm text-slate-800 truncate">{a.nombre}</div>
+                    <div className="text-xs text-muted mt-1 flex items-center justify-between">
+                      <span className="truncate">
+                        {a.tag && `${a.tag} • `}
+                        {a.categoria}
+                      </span>
+                      <span className="text-xs text-slate-500 ml-2">
+                        {new Date(a.createdAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted text-sm">No hay activos recientes</div>
+            )}
           </div>
         </div>
       </div>

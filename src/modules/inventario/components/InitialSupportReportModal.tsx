@@ -3,6 +3,7 @@ import { getWarrantyInfo } from '@/modules/inventario/utils/warranty';
 import useAuth from '../../../hooks/useAuth';
 import { formatAssetCode } from '@/utils/helpers';
 import { signatureDefault } from '../../../config';
+import axiosClient from '@/api/axiosClient';
 
 type Props = {
   isOpen: boolean;
@@ -258,7 +259,12 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
     } else if (typeof v === 'object') {
       if (!componentes[k]) componentes[k] = [v];
     } else {
-      // primitive - keep as simple campo (handled later)
+      // Valor primitivo: si la clave parece corresponder a un componente (heurística), la convertimos
+      const keyLower = String(k).toLowerCase();
+      if (/tarjeta\s*de\s*video|tarjeta.*video|gpu|tarjeta\s*video|vga/i.test(keyLower)) {
+        if (!componentes[k]) componentes[k] = [{ Valor: v }];
+      }
+      // De lo contrario, se mantiene como campo simple (handled later)
     }
   });
 
@@ -300,35 +306,16 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
     return foundKey ? (componentes as Record<string, unknown>)[foundKey] : undefined;
   };
 
-  // Disco Duro and Tarjeta de video values formatted
+  // Disco Duro and Tarjeta de video values formatted (used for PDF generation)
   const rawDisco = asset?.discoOAlmacenamiento ?? asset?.disco ?? (findComponent('Disco Duro') ?? findComponent('disco') ?? findComponent('disco duro'));
   const rawTarjeta = simpleCustomFields['Tarjeta de video'] ?? simpleCustomFields['tarjeta_de_video'] ?? (findComponent('Tarjeta de video') ?? findComponent('tarjeta_de_video') ?? findComponent('Tarjeta'));
   const rawMemoria = asset?.memoria ?? asset?.ram ?? (simpleCustomFields['Memoria RAM'] ?? simpleCustomFields['memoria_ram'] ?? (findComponent('Memoria RAM') ?? findComponent('memoria') ?? findComponent('ram')));
-  const discoValue = rawDisco && typeof rawDisco === 'string' ? rawDisco : formatComponentValue(rawDisco);
-  const tarjetaValue = rawTarjeta && typeof rawTarjeta === 'string' ? rawTarjeta : formatComponentValue(rawTarjeta);
-  const memoriaValue = rawMemoria && typeof rawMemoria === 'string' ? rawMemoria : formatComponentValue(rawMemoria);
 
-  // Build a renderable list of component entries. Ensure top-level disco/tarjeta/memoria are included
+  // Build a renderable list of ALL component entries (mostrar todos como en la vista Ver activo)
   const componentesRenderEntries: Array<[string, unknown]> = (() => {
     const entries: Array<[string, unknown]> = Object.entries(componentes || {});
-    const lowerKeys = entries.map(([k]) => String(k).toLowerCase());
-
-    const pushIfMissing = (label: string, val: unknown) => {
-      if (!val) return;
-      const lower = label.toLowerCase();
-      if (lowerKeys.some(k => k.includes(lower.split(' ')[0]))) return; // roughly match by word
-      entries.push([label, Array.isArray(val) ? val : [val]]);
-    };
-
-    pushIfMissing('Disco Duro', discoValue);
-    pushIfMissing('Tarjeta de video', tarjetaValue);
-    pushIfMissing('Memoria RAM', memoriaValue);
-
     return entries;
   })();
-
-  // Flags to detect whether top-level fields were promoted into the render entries
-  const hasMemoriaInComponents = componentesRenderEntries.some(([k]) => String(k).toLowerCase().includes('memoria'));
 
   // Warranty info (try backend-provided fields first, then infer)
   const _wInfo = getWarrantyInfo({
@@ -375,7 +362,96 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
   // Nota: subida de firma removida por decisión del cliente; si en el futuro quieres
   // permitir subida, puedes reintroducir esta función.
 
-  const generatePrintable = async () => {
+  /**
+   * Nueva función: Llama al endpoint del backend para generar el PDF
+   * POST /api/informes/soporte-inicial/:assetId
+   */
+  const generatePDFFromBackend = async () => {
+    setIsGenerating(true);
+    
+    try {
+      const assetId = asset?.assetId || asset?.codigo || asset?._id || asset?.id;
+      
+      if (!assetId) {
+        alert('No se pudo identificar el ID del activo');
+        setIsGenerating(false);
+        return;
+      }
+
+      // Preparar firma (preferir escaneada si está activa)
+      const firmaUrl = (useScannedSignature && scannedSignature) 
+        ? scannedSignature 
+        : (canvasRef.current?.toDataURL() || '');
+
+      // Payload según especificación del backend
+      const payload = {
+        diagnostico: diagnosis || '',
+        solucionesAplicadas: `
+**Pruebas realizadas:**
+${tests || '-'}
+
+**Recomendaciones:**
+${recommendations || '-'}
+
+**Configuraciones iniciales:**
+${configurations || '-'}
+
+**Software instalado:**
+${softwareInstalled || '-'}
+        `.trim(),
+        observaciones: actionsObservations || '',
+        firmaUrl: firmaUrl || undefined
+      };
+
+      console.log('[PDF Backend] Enviando solicitud:', { assetId, payload });
+
+      // Llamada al endpoint del backend
+      const response = await axiosClient.post(
+        `/api/informes/soporte-inicial/${assetId}`,
+        payload
+      );
+
+      console.log('[PDF Backend] Respuesta:', response.data);
+
+      if (response.data?.ok && response.data?.data?.pdfUrl) {
+        const pdfUrl = response.data.data.pdfUrl;
+        
+        // Abrir el PDF en nueva pestaña
+        const newWindow = window.open(pdfUrl, '_blank');
+        
+        if (!newWindow) {
+          // Si el popup está bloqueado, iniciar descarga automática
+          const link = document.createElement('a');
+          link.href = pdfUrl;
+          link.download = response.data.data.filename || `informe-${formatAssetCode(String(assetId))}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+
+        // Mostrar mensaje de éxito
+        alert('✅ Informe generado correctamente');
+        
+        // Cerrar el modal
+        onClose();
+      } else {
+        throw new Error(response.data?.message || 'Error al generar el PDF');
+      }
+    } catch (error: any) {
+      console.error('[PDF Backend] Error:', error);
+      
+      const errorMessage = error?.response?.data?.message 
+        || error?.message 
+        || 'Error al generar el informe. Por favor intente nuevamente.';
+      
+      alert(`❌ ${errorMessage}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Función antigua (mantener como fallback por si el backend falla)
+  const generatePrintableFallback = async () => {
     setIsGenerating(true);
     // Open a popup synchronously to preserve the user gesture so browsers
     // allow `print()` later. We write a minimal placeholder while we build
@@ -657,9 +733,9 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
     try {
       if (componentes && Object.keys(componentes).length > 0) {
         // Exclude keys that are already shown in the main meta-grid (to avoid duplication)
-        const skipIfContains = ['disco', 'tarjeta', 'antig', 'modelo', 'marca', 'memoria', 'garantia', 'garantía', 'serie', 'codigo', 'código', 'area', 'categoria', 'fabricante', 'estado', 'observaciones'];
+        const skipIfContains = ['disco', 'tarjeta', 'antig', 'modelo', 'marca', 'memoria', 'ram', 'garantia', 'garantía', 'serie', 'codigo', 'código', 'area', 'categoria', 'fabricante', 'estado', 'observaciones', 'video'];
         Object.entries(componentes).forEach(([k, items]) => {
-          const keyLower = String(k).toLowerCase();
+          const keyLower = String(k).toLowerCase().trim();
           if (skipIfContains.some(ex => keyLower.includes(ex))) return; // skip duplicate-like keys
           if (displayedKeys.has(keyLower)) return; // skip exact matches of displayed metadata
 
@@ -668,80 +744,19 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
           const count = arr.length;
           // Special handling for some component types to produce concise summaries
 
-          // Disco Duro: show "Disco Duro" then "Tiene X discos"
-          if (keyLower.includes('disco')) {
-            let block = `<div style="margin-top:12px;page-break-inside:avoid">`;
-            block += `<div style="display:flex;justify-content:flex-start;align-items:center;background:var(--blue-700);color:#fff;padding:8px 10px;border-radius:6px"><div style="font-size:12px;font-weight:700">${k}</div></div>`;
-            block += `<div style="margin-top:8px;color:#475569">`;
-            const discoLabel = count === 1 ? 'disco' : 'discos';
-            block += `<div style="margin-top:6px;font-size:13px;color:#374151">Tiene ${count} ${discoLabel}</div>`;
-            block += `</div></div>`;
-            componentesHtml += block;
-            return; // skip default rendering
+          // RAM/Memoria: skip entirely (already shown in main grid)
+          if (keyLower.includes('memoria') || keyLower.includes('ram')) {
+            return; // skip - already shown
           }
 
-          // Tarjeta de video: show header and a single line with the detected model (e.g., NVIDIA 3070)
+          // Disco Duro: skip entirely (already shown in main grid)
+          if (keyLower.includes('disco')) {
+            return; // skip - already shown
+          }
+
+          // Tarjeta de video: skip entirely (already shown in main grid)
           if (keyLower.includes('tarjeta') || keyLower.includes('video')) {
-            // try to extract a concise model string from entries
-            const extractModel = (val: unknown): string | null => {
-              try {
-                if (val === null || val === undefined) return null;
-                if (Array.isArray(val)) {
-                  for (const v of val) {
-                    const r = extractModel(v);
-                    if (r) return r;
-                  }
-                  return null;
-                }
-                if (typeof val === 'object') {
-                  const rec = val as Record<string, unknown>;
-                  // prefer keys that likely contain model name
-                  const prefer = ['valor','value','modelo','model','name','marca','marca_modelo'];
-                  for (const pk of prefer) {
-                    const foundKey = Object.keys(rec).find(x => x.toLowerCase() === pk.toLowerCase());
-                    if (foundKey) {
-                      const v = rec[foundKey];
-                      if (v) return String(v).trim();
-                    }
-                  }
-                  // fallback: look for any string value that is not like 'Tipo: DDR4'
-                  for (const vv of Object.values(rec)) {
-                    if (!vv) continue;
-                    const s = String(vv).trim();
-                    if (/^tipo[:\s]/i.test(s)) continue;
-                    if (/^\d+$/.test(s)) continue;
-                    return s;
-                  }
-                  return null;
-                }
-                // string: remove prefixes like 'Valor:' and return remainder
-                let s = String(val).replace(/\u00A0/g, ' ').trim();
-                s = s.replace(/^Valor:\s*/i, '').replace(/^Value:\s*/i, '');
-                // if contains bullet, take the first token that looks like a model
-                const tokens = s.split(/\s*[•·\u2022\u00B7]\s*/).map(t => t.trim()).filter(Boolean);
-                for (const t of tokens) {
-                  if (!/^tipo[:\s]/i.test(t)) return t;
-                }
-                return tokens[0] || null;
-              } catch {
-                return null;
-              }
-            };
-
-            let model: string | null = null;
-            for (const it of arr) {
-              const m = extractModel(it);
-              if (m) { model = m; break; }
-            }
-
-            let block = `<div style="margin-top:12px;page-break-inside:avoid">`;
-            block += `<div style="display:flex;justify-content:flex-start;align-items:center;background:var(--blue-700);color:#fff;padding:8px 10px;border-radius:6px"><div style="font-size:12px;font-weight:700">${k}</div></div>`;
-            block += `<div style="margin-top:8px;color:#475569">`;
-            if (model) block += `<div style="margin-top:6px;font-size:13px;color:#374151">${model}</div>`;
-            else block += `<div style="margin-top:6px;font-size:13px;color:#374151">${valueToHtml(arr)}</div>`;
-            block += `</div></div>`;
-            componentesHtml += block;
-            return; // skip default rendering
+            return; // skip - already shown
           }
 
           let block = `<div style="margin-top:12px;page-break-inside:avoid">`;
@@ -1335,138 +1350,211 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
         </header>
 
         <div className="space-y-4">
-          <section className="bg-white p-3 rounded-md border border-gray-200">
-            <h4 className="font-semibold mb-2 text-slate-800 text-base">1. Datos del activo</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-slate-700">Empresa</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded-md text-sm font-medium text-slate-800">{empresaNombre ?? asset?.empresaNombre ?? asset?.empresa ?? '-'}</div>
+          <section className="bg-gradient-to-br from-slate-50 to-gray-100 p-5 rounded-xl border-2 border-slate-200 shadow-lg">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-lg flex items-center justify-center shadow-md">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                </svg>
               </div>
-              <div>
-                <label className="text-xs font-medium text-slate-700">Sede</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded-md text-sm font-medium text-slate-800">{sedeNombre ?? asset?.sedeNombre ?? asset?.sede ?? '-'}</div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-700">Área</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded-md text-sm">{asset?.area ?? '-'}</div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-700">Categoría</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded-md text-sm">{asset?.categoria ?? '-'}</div>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-700">Marca</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded-md text-sm text-slate-800">{asset?.fabricante ?? '-'}</div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-700">Modelo</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded-md text-sm text-slate-800">{asset?.modelo ?? '-'}</div>
-              </div>
-
-              {!hasMemoriaInComponents && (
+              <h4 className="font-bold text-xl text-slate-900">1. Datos del activo</h4>
+            </div>
+            
+            {/* Información General */}
+            <div className="bg-white rounded-lg p-4 mb-4 shadow-sm border border-slate-200">
+              <h5 className="font-bold text-sm text-blue-900 mb-3 uppercase tracking-wide flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Información General
+              </h5>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-slate-700">Memoria RAM</label>
-                  <div className="mt-1 p-2 bg-white border border-gray-200 rounded-md text-sm text-slate-800">{memoriaValue || '-'}</div>
+                  <label className="text-xs font-bold text-blue-700 uppercase tracking-wide">Empresa</label>
+                  <div className="mt-1 p-3 bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-lg text-sm font-bold text-slate-900">{empresaNombre ?? asset?.empresaNombre ?? asset?.empresa ?? '-'}</div>
                 </div>
-              )}
-
-              <div>
-                <label className="text-xs font-medium text-slate-700">Número de serie</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded-md text-sm text-slate-800">{asset?.serie ?? '-'}</div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-700">Código interno</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded-md text-sm font-mono text-slate-800">{formatAssetCode(String(asset?.assetId ?? asset?.codigo ?? asset?._id ?? asset?.id ?? ''))}</div>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-700">Fecha de compra</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded-md text-sm">{asset?.fechaCompra ? new Date(String(asset.fechaCompra)).toLocaleDateString('es-ES') : (asset?.fechaCompraAprox ?? asset?.fecha_compra_aprox ?? asset?.fechaCompraAproxYear ?? '-')}</div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-700">Tipo / N° documento</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded-md text-sm">{String(asset?.tipoDocumentoCompra ?? asset?.tipo_documento_compra ?? '-')}{asset?.numeroDocumentoCompra || asset?.numero_documento_compra || asset?.numero_documento ? ` • ${asset?.numeroDocumentoCompra ?? asset?.numero_documento_compra ?? asset?.numero_documento}` : ''}</div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-700">Garantía</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded-md text-sm">
-                  <div className="font-semibold text-slate-800">{String(asset?.garantia ?? asset?.garantiaDuracion ?? asset?.garantia_duracion ?? '-')}</div>
-                  {/* Mostrar estado de garantía y fecha junto al campo Garantía (si existe estado explícito) */}
-                  {(_wInfo && (_wInfo.estado === 'Vigente' || _wInfo.estado === 'No vigente')) && (
-                    <div className="mt-2 inline-flex items-center gap-3">
-                      <span className={`text-sm font-semibold px-2 py-1 rounded ${(_wInfo.estado === 'Vigente') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{_wInfo.estado}</span>
-                      {_wInfo.expiresAt && <span className="text-sm text-slate-600">{_wInfo.estado === 'No vigente' ? 'Venció:' : 'Vence:'} {new Date(_wInfo.expiresAt).toLocaleDateString('es-ES')}</span>}
-                    </div>
-                  )}
+                <div>
+                  <label className="text-xs font-bold text-blue-700 uppercase tracking-wide">Sede</label>
+                  <div className="mt-1 p-3 bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-lg text-sm font-bold text-slate-900">{sedeNombre ?? asset?.sedeNombre ?? asset?.sede ?? '-'}</div>
                 </div>
-              </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Área</label>
+                  <div className="mt-1 p-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-slate-900">{asset?.area ?? '-'}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Categoría</label>
+                  <div className="mt-1 p-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-slate-900">{asset?.categoria ?? '-'}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Marca / Fabricante</label>
+                  <div className="mt-1 p-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-slate-900">{asset?.fabricante ?? '-'}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Modelo</label>
+                  <div className="mt-1 p-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-slate-900">{asset?.modelo ?? '-'}</div>
+                </div>
 
-              {/* Render componentes como pares meta (label + value) similares a Modelo/Antigüedad */}
-              {componentesRenderEntries && componentesRenderEntries.length > 0 && (
-                componentesRenderEntries.map(([key, items]) => {
-                  const arr = Array.isArray(items) ? items : [items];
-                  return (
-                    <div key={key} className="">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-slate-600">{key}</label>
-                        <div className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{arr.length}</div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Número de serie</label>
+                  <div className="mt-1 p-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-slate-900">{asset?.serie ?? '-'}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Código interno</label>
+                  <div className="mt-1 p-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-mono font-bold text-blue-900">{formatAssetCode(String(asset?.assetId ?? asset?.codigo ?? asset?._id ?? asset?.id ?? ''))}</div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Fecha de compra</label>
+                  <div className="mt-1 p-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-slate-900">{asset?.fechaCompra ? new Date(String(asset.fechaCompra)).toLocaleDateString('es-ES') : (asset?.fechaCompraAprox ?? asset?.fecha_compra_aprox ?? asset?.fechaCompraAproxYear ?? '-')}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Antigüedad</label>
+                  <div className="mt-1 p-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-slate-900">{antiguedadComputed || '-'}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Tipo / N° documento</label>
+                  <div className="mt-1 p-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-slate-900">{String(asset?.tipoDocumentoCompra ?? asset?.tipo_documento_compra ?? '-')}{asset?.numeroDocumentoCompra || asset?.numero_documento_compra || asset?.numero_documento ? ` • ${asset?.numeroDocumentoCompra ?? asset?.numero_documento_compra ?? asset?.numero_documento}` : ''}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Garantía</label>
+                  <div className="mt-1 p-2 bg-gray-50 border border-gray-300 rounded-md text-sm">
+                    <div className="font-bold text-slate-900">{String(asset?.garantia ?? asset?.garantiaDuracion ?? asset?.garantia_duracion ?? '-')}</div>
+                    {(_wInfo && (_wInfo.estado === 'Vigente' || _wInfo.estado === 'No vigente')) && (
+                      <div className="mt-2 inline-flex items-center gap-3">
+                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${(_wInfo.estado === 'Vigente') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{_wInfo.estado}</span>
+                        {_wInfo.expiresAt && <span className="text-xs text-slate-600">{_wInfo.estado === 'No vigente' ? 'Venció:' : 'Vence:'} {new Date(_wInfo.expiresAt).toLocaleDateString('es-ES')}</span>}
                       </div>
-                      <div className="mt-1 p-2 bg-white border border-gray-200 rounded text-sm text-slate-800">
-                        {arr.length === 0 && <div className="text-slate-500">-</div>}
-                        {arr.map((it, idx) => (
-                          <div key={idx} className={arr.length > 1 ? 'mb-2' : ''}>
-                            {it && typeof it === 'object' ? (
-                              Object.entries(it as Record<string, unknown>).map(([sk, sv]) => (
-                                <div key={sk} className="text-sm text-slate-700">{`${sk}: ${sv ?? ''}`}</div>
-                              ))
-                            ) : (
-                              <div className="text-sm text-slate-700">{String(it ?? '')}</div>
-                            )}
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Estado físico</label>
+                  <div className="mt-1 p-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-slate-900">{(capitalize(condicion || asset?.estadoActivo) || 'Regular')}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Estado operativo</label>
+                  <div className="mt-1 p-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-slate-900">{capitalize(asset?.estadoOperativo) || '-'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Componentes Múltiples */}
+            {componentesRenderEntries && componentesRenderEntries.length > 0 && (
+              <div className="bg-white rounded-lg p-4 mb-4 shadow-sm border border-slate-200">
+                <h5 className="font-bold text-sm text-blue-900 mb-3 uppercase tracking-wide flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                  </svg>
+                  Componentes Múltiples
+                </h5>
+                <div className="space-y-4">
+                  {componentesRenderEntries.map(([key, items]) => {
+                    const arr = Array.isArray(items) ? items : [items];
+                    return (
+                      <div key={key} className="border-l-4 border-blue-500 pl-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center shadow-sm">
+                            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                            </svg>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-base font-bold text-blue-900">{key}</p>
+                            <span className="text-xs font-bold text-white bg-blue-600 px-2.5 py-1 rounded-full shadow-sm">{arr.length}</span>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {arr.map((it, idx) => (
+                            <div key={idx} className="bg-gradient-to-br from-blue-50 to-cyan-50 p-3 rounded-lg border-2 border-blue-200 hover:shadow-md transition-shadow">
+                              {it && typeof it === 'object' ? (
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                  {Object.entries(it as Record<string, unknown>).map(([sk, sv]) => (
+                                    <div key={sk}>
+                                      <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">{sk}</p>
+                                      <p className="font-bold text-gray-900">{String(sv ?? '-')}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="font-bold text-gray-900">{String(it ?? '-')}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {/* Usuarios y Observaciones */}
+            <div className="bg-white rounded-lg p-4 shadow-sm border border-slate-200">
+              <h5 className="font-bold text-sm text-blue-900 mb-3 uppercase tracking-wide flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                Adicional
+              </h5>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-blue-700 uppercase tracking-wide block mb-2">Usuarios asignados</label>
+                  <div className="p-3 bg-gray-50 border border-gray-300 rounded-lg">
+                    {usuariosDetailed.length === 0 ? (
+                      <div className="text-slate-500 text-sm">-</div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                        {usuariosDetailed.map((u: { nombre?: string; correo?: string; cargo?: string }, i: number) => (
+                          <div key={i} className="p-3 border-2 border-blue-200 rounded-lg bg-gradient-to-br from-blue-50 to-cyan-50 hover:shadow-md transition-shadow">
+                            <div className="font-bold text-slate-900 mb-1">{u.nombre || '-'}</div>
+                            <div className="text-xs text-blue-600 mb-0.5">{u.correo || '-'}</div>
+                            <div className="text-xs text-slate-600">{u.cargo || '-'}</div>
                           </div>
                         ))}
                       </div>
-                    </div>
-                  );
-                })
-              )}
-              <div className="md:col-span-2">
-                <label className="text-xs font-semibold text-slate-600">Usuarios asignados</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded text-sm text-slate-800">
-                  {usuariosDetailed.length === 0 ? '-' : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                      {usuariosDetailed.map((u: { nombre?: string; correo?: string; cargo?: string }, i: number) => (
-                        <div key={i} className="p-2 border rounded bg-white text-xs">
-                          <div className="font-semibold text-slate-800">{u.nombre || '-'}</div>
-                          <div className="text-xs text-slate-500">{u.correo || '-'}</div>
-                          <div className="text-xs text-slate-500">{u.cargo || '-'}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-blue-700 uppercase tracking-wide block mb-2">Observaciones</label>
+                  <div className="p-3 bg-gray-50 border border-gray-300 rounded-lg text-sm text-slate-900 whitespace-pre-wrap min-h-[60px]">{asset?.observaciones ?? '-'}</div>
                 </div>
               </div>
+            </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-600">Estado físico</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded text-sm text-slate-800">{(capitalize(condicion || asset?.estadoActivo) || 'Regular')}</div>
+            {/* Campos Personalizados Simples */}
+            {Object.keys(simpleCustomFields).length > 0 && (
+              <div className="bg-white rounded-lg p-4 shadow-sm border border-slate-200">
+                <h5 className="font-bold text-sm text-amber-900 mb-3 uppercase tracking-wide flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                  </svg>
+                  Campos Personalizados
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {Object.entries(simpleCustomFields).map(([key, value]) => (
+                    <div key={key} className="bg-gradient-to-br from-amber-50 to-yellow-50 p-3 rounded-lg border-2 border-amber-200 hover:shadow-md transition-shadow">
+                      <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">{key}</p>
+                      <p className="font-bold text-gray-900">{String(value)}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-600">Estado operativo</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded text-sm text-slate-800">{capitalize(asset?.estadoOperativo) || '-'}</div>
-              </div>
+            )}
 
-              <div className="md:col-span-2">
-                <label className="text-xs font-semibold text-slate-600">Observaciones</label>
-                <div className="mt-1 p-2 bg-white border border-gray-200 rounded text-sm text-slate-800 whitespace-pre-wrap">{asset?.observaciones ?? '-'}</div>
-              </div>
-
-              {/* Información adicional eliminada por petición del usuario: se removió el estado de garantía (Vigente/No vigente y fecha) */}
-
-              {fotosNormalizedForUI.length > 0 && (
-                <div className="col-span-1 md:col-span-2">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Fotos del activo</p>
-                  <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            {/* Fotos y Documentos */}
+            {(fotosNormalizedForUI.length > 0 || purchaseDoc || warrantyDoc) && (
+              <div className="bg-white rounded-lg p-4 shadow-sm border border-slate-200">
+                <h5 className="font-bold text-sm text-purple-900 mb-3 uppercase tracking-wide flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Archivos Adjuntos
+                </h5>
+                
+                {fotosNormalizedForUI.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-bold text-purple-700 uppercase tracking-wide mb-2">Fotos del activo</p>
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                     {fotosNormalizedForUI.map((p, i) => (
                       <div key={i} className="flex flex-col items-start">
                         <a href={p.url} target="_blank" rel="noopener noreferrer" className="block h-20 w-full overflow-hidden rounded border border-gray-200">
@@ -1479,74 +1567,57 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
                 </div>
               )}
 
-              {(purchaseDoc || warrantyDoc) && (
-                <div className="col-span-1 md:col-span-2">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Documentos</p>
-                  <div className="space-y-3">
-                    {purchaseDoc && (
-                      <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-md">
-                        <div className="flex items-start gap-3">
-                          <div className="w-12 h-12 flex items-center justify-center rounded bg-gray-50 border border-gray-200">
-                            {purchaseDoc.url?.toLowerCase().endsWith('.pdf') ? (
-                              <svg className="w-6 h-6 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 2v6h6"/></svg>
-                            ) : (
-                              <img src={purchaseDoc.url} alt={purchaseDoc.name} className="w-full h-full object-cover" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-slate-800">Documento de compra</div>
-                            <div className="text-sm text-slate-500">{purchaseDoc.name}</div>
-                            {purchaseDoc && purchaseDoc.desc ? <div className="text-sm text-slate-400 mt-1">{String(purchaseDoc.desc as string)}</div> : null}
-                            <div className="mt-2">
-                              <a href={purchaseDoc.url} target="_blank" rel="noreferrer" className="text-sm text-indigo-600 underline">Abrir</a>
+                {(purchaseDoc || warrantyDoc) && (
+                  <div>
+                    <p className="text-xs font-bold text-purple-700 uppercase tracking-wide mb-2">Documentos</p>
+                    <div className="space-y-3">
+                      {purchaseDoc && (
+                        <div className="flex items-center justify-between p-3 bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg hover:shadow-md transition-shadow">
+                          <div className="flex items-start gap-3">
+                            <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-white border-2 border-purple-300">
+                              {purchaseDoc.url?.toLowerCase().endsWith('.pdf') ? (
+                                <svg className="w-6 h-6 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 2v6h6"/></svg>
+                              ) : (
+                                <img src={purchaseDoc.url} alt={purchaseDoc.name} className="w-full h-full object-cover rounded" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900">Documento de compra</div>
+                              <div className="text-xs text-purple-700">{purchaseDoc.name}</div>
+                              {purchaseDoc && purchaseDoc.desc ? <div className="text-xs text-slate-600 mt-1">{String(purchaseDoc.desc as string)}</div> : null}
+                              <div className="mt-2">
+                                <a href={purchaseDoc.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-purple-600 hover:text-purple-800 underline">Abrir documento</a>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                    {warrantyDoc && (
-                      <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-md">
-                        <div className="flex items-start gap-3">
-                          <div className="w-12 h-12 flex items-center justify-center rounded bg-gray-50 border border-gray-200">
-                            {warrantyDoc.url?.toLowerCase().endsWith('.pdf') ? (
-                              <svg className="w-6 h-6 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 2v6h6"/></svg>
-                            ) : (
-                              <img src={warrantyDoc.url} alt={warrantyDoc.name} className="w-full h-full object-cover" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-slate-800">Documento de garantía</div>
-                            <div className="text-sm text-slate-500">{warrantyDoc.name}</div>
-                            {warrantyDoc && warrantyDoc.desc ? <div className="text-sm text-slate-400 mt-1">{String(warrantyDoc.desc as string)}</div> : null}
-                            <div className="mt-2">
-                              <a href={warrantyDoc.url} target="_blank" rel="noreferrer" className="text-sm text-indigo-600 underline">Abrir</a>
+                      )}
+                      {warrantyDoc && (
+                        <div className="flex items-center justify-between p-3 bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg hover:shadow-md transition-shadow">
+                          <div className="flex items-start gap-3">
+                            <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-white border-2 border-purple-300">
+                              {warrantyDoc.url?.toLowerCase().endsWith('.pdf') ? (
+                                <svg className="w-6 h-6 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 2v6h6"/></svg>
+                              ) : (
+                                <img src={warrantyDoc.url} alt={warrantyDoc.name} className="w-full h-full object-cover rounded" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900">Documento de garantía</div>
+                              <div className="text-xs text-purple-700">{warrantyDoc.name}</div>
+                              {warrantyDoc && warrantyDoc.desc ? <div className="text-xs text-slate-600 mt-1">{String(warrantyDoc.desc as string)}</div> : null}
+                              <div className="mt-2">
+                                <a href={warrantyDoc.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-purple-600 hover:text-purple-800 underline">Abrir documento</a>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-
-              
-
-              {/* Campos personalizdos simples (primitivos) */}
-              {Object.keys(simpleCustomFields || {}).length > 0 && (
-                <div className="md:col-span-2 bg-white rounded-lg p-3 border border-gray-200">
-                  <h5 className="text-sm font-semibold mb-2">Campos Personalizados</h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {Object.entries(simpleCustomFields).map(([k, v]) => (
-                      <div key={k} className="p-2 bg-gray-50 rounded border">
-                        <div className="text-xs text-slate-500 uppercase">{k}</div>
-                        <div className="font-semibold text-slate-800">{String(v)}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-            </div>
+                )}
+              </div>
+            )}
           </section>
 
           <section className="bg-white p-4 rounded-lg border border-gray-200">
@@ -1644,7 +1715,28 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
 
           <div className="flex items-center justify-end gap-3">
             <button onClick={onClose} className="px-4 py-2 rounded-md bg-white border border-gray-200 text-slate-700 hover:bg-slate-50">Cancelar</button>
-            <button onClick={generatePrintable} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-linear-to-r from-indigo-600 to-indigo-700 text-white shadow-sm hover:from-indigo-700 hover:to-indigo-800">Generar informe (Imprimir)</button>
+            <button 
+              onClick={generatePDFFromBackend} 
+              disabled={isGenerating}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-sm hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGenerating ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Generando...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  Generar informe (PDF)
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>

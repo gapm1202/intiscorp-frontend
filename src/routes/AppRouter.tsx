@@ -34,6 +34,16 @@ const AppRouter = () => {
       <Route path="/portal-soporte/reportar-incidencia" element={<ReporteIncidenciaPage />} />
 
       <Route element={<PrivateRoute />}>
+        {/* Ruta principal del dashboard */}
+        <Route
+          path="/dashboard"
+          element={
+            <AdminLayout>
+              <Dashboard />
+            </AdminLayout>
+          }
+        />
+        
         <Route
           path="/admin/*"
           element={
