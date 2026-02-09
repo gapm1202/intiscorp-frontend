@@ -158,7 +158,7 @@ const EtiquetasPage = () => {
       }
 
       // Build public URL that the QR will point to - Direct PDF download
-      const BACKEND_BASE = (import.meta.env.VITE_API_URL as string) || 'http://localhost:4000';
+      const BACKEND_BASE = (import.meta.env.VITE_API_URL as string) || '';
       
       // Obtener el código del activo (priorizar 'codigo', luego 'assetId', luego id)
       const assetCode = it.codigo || it.assetId || String(it.id || it._id || '');

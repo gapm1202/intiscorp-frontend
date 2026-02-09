@@ -1,8 +1,9 @@
 import axios from 'axios';
 
 // Crear instancia de axios con URL base
+// En desarrollo usa el proxy de Vite (relativo), en producción usa la URL completa
 const axiosClient = axios.create({
-  baseURL: 'http://localhost:4000', // URL del backend
+  baseURL: import.meta.env.VITE_API_URL || '', // URL del backend
   headers: {
     'Content-Type': 'application/json',
   },

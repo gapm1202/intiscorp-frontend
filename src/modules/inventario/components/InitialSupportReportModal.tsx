@@ -179,18 +179,19 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
   const fotosRaw = asset?.fotos || [];
   const fotosArrayRender = Array.isArray(fotosRaw) ? fotosRaw : (typeof fotosRaw === 'string' ? JSON.parse(fotosRaw || '[]') : []);
   // Normalizar fotos conservando la descripción/caption/descripcion/desc para mostrarlas en el formulario
+  const apiBase = (import.meta.env.VITE_API_URL as string) || '';
   const fotosNormalizedForUI = fotosArrayRender.map((f: FotoItem) => {
     let url = getStringField(f, ['url']) || (typeof f === 'string' ? String(f) : '');
     const caption = getStringField(f, ['description', 'descripcion', 'caption', 'desc', 'name']);
     try {
       if (url && !url.startsWith('http')) {
         const decoded = decodeURIComponent(url);
-        url = `http://localhost:4000/uploads/${encodeURIComponent(decoded)}`;
+        url = `${apiBase}/uploads/${encodeURIComponent(decoded)}`;
       } else if (url) {
         const match = url.match(/\/uploads\/(.+)$/);
         if (match) {
           const filename = match[1];
-          url = `http://localhost:4000/uploads/${encodeURIComponent(decodeURIComponent(filename))}`;
+          url = `${apiBase}/uploads/${encodeURIComponent(decodeURIComponent(filename))}`;
         }
       }
     } catch {
@@ -208,12 +209,12 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
     try {
       if (url && !url.startsWith('http')) {
         const decoded = decodeURIComponent(url);
-        url = `http://localhost:4000/uploads/${encodeURIComponent(decoded)}`;
+        url = `${apiBase}/uploads/${encodeURIComponent(decoded)}`;
       } else if (url) {
         const match = url.match(/\/uploads\/(.+)$/);
         if (match) {
           const filename = match[1];
-          url = `http://localhost:4000/uploads/${encodeURIComponent(decodeURIComponent(filename))}`;
+          url = `${apiBase}/uploads/${encodeURIComponent(decodeURIComponent(filename))}`;
         }
       }
     } catch {
@@ -535,12 +536,12 @@ ${softwareInstalled || '-'}
       try {
         if (!url.startsWith('http')) {
           const decoded = decodeURIComponent(url);
-          url = `http://localhost:4000/uploads/${encodeURIComponent(decoded)}`;
+          url = `${apiBase}/uploads/${encodeURIComponent(decoded)}`;
         } else {
           const match = url.match(/\/uploads\/(.+)$/);
           if (match) {
             const filename = match[1];
-            url = `http://localhost:4000/uploads/${encodeURIComponent(decodeURIComponent(filename))}`;
+            url = `${apiBase}/uploads/${encodeURIComponent(decodeURIComponent(filename))}`;
           }
         }
       } catch {
@@ -1587,7 +1588,7 @@ ${softwareInstalled || '-'}
                     {fotosNormalizedForUI.map((p, i) => (
                       <div key={i} className="flex flex-col items-start">
                         <a href={p.url} target="_blank" rel="noopener noreferrer" className="block h-20 w-full overflow-hidden rounded border border-gray-200">
-                          <img src={p.url} alt={p.caption || `foto-${i}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><rect fill="%23ddd" width="200" height="120"/></svg>'; }} />
+                          <img src={p.url} alt={p.caption || `foto-${i}`} className="w-full h-full object-cover" crossOrigin="anonymous" onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><rect fill="%23ddd" width="200" height="120"/></svg>'; }} />
                         </a>
                         {p.caption && <div className="mt-1 text-xs text-slate-500 whitespace-pre-wrap w-full">{p.caption}</div>}
                       </div>
@@ -1607,7 +1608,7 @@ ${softwareInstalled || '-'}
                               {purchaseDoc.url?.toLowerCase().endsWith('.pdf') ? (
                                 <svg className="w-6 h-6 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 2v6h6"/></svg>
                               ) : (
-                                <img src={purchaseDoc.url} alt={purchaseDoc.name} className="w-full h-full object-cover rounded" />
+                                <img src={purchaseDoc.url} alt={purchaseDoc.name} className="w-full h-full object-cover rounded" crossOrigin="anonymous" />
                               )}
                             </div>
                             <div>
@@ -1628,7 +1629,7 @@ ${softwareInstalled || '-'}
                               {warrantyDoc.url?.toLowerCase().endsWith('.pdf') ? (
                                 <svg className="w-6 h-6 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 2v6h6"/></svg>
                               ) : (
-                                <img src={warrantyDoc.url} alt={warrantyDoc.name} className="w-full h-full object-cover rounded" />
+                                <img src={warrantyDoc.url} alt={warrantyDoc.name} className="w-full h-full object-cover rounded" crossOrigin="anonymous" />
                               )}
                             </div>
                             <div>

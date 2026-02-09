@@ -10,8 +10,25 @@ export default defineConfig({
   ],
   server: {
     // Open the browser to /login when the dev server starts
-    port: 5173,
-    open: '/login'
+    port: 8088,
+    open: '/login',
+    proxy: {
+      '/api': {
+        target: 'http://localhost:35421',
+        changeOrigin: true,
+        secure: false
+      },
+      '/uploads': {
+        target: 'http://localhost:35421',
+        changeOrigin: true,
+        secure: false
+      },
+      '/public': {
+        target: 'http://localhost:35421',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   },
   // 👇 2. Añade esta sección completa
   resolve: {

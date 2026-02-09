@@ -1063,7 +1063,8 @@ const InventarioPage = () => {
                       const activoId = viewItem.id || viewItem._id;
                       
                       const token = localStorage.getItem('token');
-                      const response = await fetch(`http://localhost:4000/api/activos/${activoId}/historial`, {
+                      const apiBase = (import.meta.env.VITE_API_URL as string) || '';
+                      const response = await fetch(`${apiBase}/api/activos/${activoId}/historial`, {
                         headers: {
                           'Authorization': `Bearer ${token}`,
                           'Content-Type': 'application/json'
@@ -1702,12 +1703,14 @@ const InventarioPage = () => {
                       const filename = match[1];
                       const decodedFilename = decodeURIComponent(filename);
                       const encodedFilename = encodeURIComponent(decodedFilename);
-                      url = `http://localhost:4000/uploads/${encodedFilename}`;
+                      const apiBase = (import.meta.env.VITE_API_URL as string) || '';
+                      url = `${apiBase}/uploads/${encodedFilename}`;
                     }
                   } else {
                     const decodedFilename = decodeURIComponent(url);
                     const encodedFilename = encodeURIComponent(decodedFilename);
-                    url = `http://localhost:4000/uploads/${encodedFilename}`;
+                    const apiBase = (import.meta.env.VITE_API_URL as string) || '';
+                    url = `${apiBase}/uploads/${encodedFilename}`;
                   }
 
                   return {
@@ -1741,6 +1744,7 @@ const InventarioPage = () => {
                                 src={foto.url} 
                                 alt={foto.description || foto.name}
                                 className="w-full h-full object-cover"
+                                crossOrigin="anonymous"
                                 onError={(e) => {
                                   console.error('❌ Error cargando imagen:', foto.url);
                                   (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="%23ddd" width="200" height="200"/><text x="50%" y="50%" font-size="14" text-anchor="middle" dy=".3em" fill="%23999">Sin imagen</text></svg>';

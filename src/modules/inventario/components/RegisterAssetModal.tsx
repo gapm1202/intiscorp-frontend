@@ -561,12 +561,14 @@ const RegisterAssetModal = ({
                       const filename = match[1];
                       const decodedFilename = decodeURIComponent(filename);
                       const encodedFilename = encodeURIComponent(decodedFilename);
-                      url = `http://localhost:4000/uploads/${encodedFilename}`;
+                      const apiBase = (import.meta.env.VITE_API_URL as string) || '';
+                      url = `${apiBase}/uploads/${encodedFilename}`;
                     }
                   } else {
                     const decodedFilename = decodeURIComponent(String(url));
                     const encodedFilename = encodeURIComponent(decodedFilename);
-                    url = `http://localhost:4000/uploads/${encodedFilename}`;
+                    const apiBase = (import.meta.env.VITE_API_URL as string) || '';
+                    url = `${apiBase}/uploads/${encodedFilename}`;
                   }
                 }
                 return {

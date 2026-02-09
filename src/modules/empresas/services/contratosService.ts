@@ -1,5 +1,5 @@
 const _metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-export const API_BASE = _metaEnv?.VITE_API_URL || "http://localhost:4000";
+export const API_BASE = _metaEnv?.VITE_API_URL || "";
 
 function getToken(): string | null {
   return localStorage.getItem("token");

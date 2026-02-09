@@ -1,6 +1,6 @@
 // Vite exposes env via import.meta.env in the browser
 const _metaEnvEmp = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-export const API_BASE = _metaEnvEmp?.VITE_API_URL || "http://localhost:4000";
+export const API_BASE = _metaEnvEmp?.VITE_API_URL || "";
 
 // Obtener token del localStorage
 function getToken(): string | null {

@@ -1,5 +1,5 @@
 const importMeta = import.meta as { env: { VITE_API_URL?: string } };
-export const API_BASE = importMeta.env?.VITE_API_URL || "http://localhost:4000";
+export const API_BASE = importMeta.env?.VITE_API_URL || "";
 
 function getToken(): string | null {
   return localStorage.getItem("token");

@@ -89,8 +89,9 @@ const TrasladarAssetModal = ({
 
       try {
         const token = localStorage.getItem("token");
+        const apiBase = (import.meta.env.VITE_API_URL as string) || '';
         const response = await fetch(
-          `http://localhost:4000/api/empresas/${empresaId}/sedes/${sedeDestino}/inventario?soloSedeActual=true`,
+          `${apiBase}/api/empresas/${empresaId}/sedes/${sedeDestino}/inventario?soloSedeActual=true`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -162,7 +163,8 @@ const TrasladarAssetModal = ({
       setLoadingAreas(true);
       try {
         const token = localStorage.getItem("token");
-        const url = `http://localhost:4000/api/empresas/${empresaId}/areas`;
+        const apiBase = (import.meta.env.VITE_API_URL as string) || '';
+        const url = `${apiBase}/api/empresas/${empresaId}/areas`;
         
         const response = await fetch(url, {
           headers: {
@@ -256,8 +258,9 @@ const TrasladarAssetModal = ({
         formData.append(`fotoDescriptions[${index}]`, foto.description || "");
       });
 
+      const apiBase = (import.meta.env.VITE_API_URL as string) || '';
       const response = await fetch(
-        `http://localhost:4000/api/activos/${activoId}/trasladar`,
+        `${apiBase}/api/activos/${activoId}/trasladar`,
         {
           method: "POST",
           headers: {
