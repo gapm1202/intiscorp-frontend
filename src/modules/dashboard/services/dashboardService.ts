@@ -35,8 +35,13 @@ export interface DashboardStats {
 export async function getDashboardStats(): Promise<DashboardStats> {
   const token = getToken();
   
+  console.log("🔍 [DASHBOARD] Iniciando carga de estadísticas...");
+  console.log("🔑 [DASHBOARD] Token:", token ? "✅ Presente" : "❌ No encontrado");
+  console.log("🌐 [DASHBOARD] API_BASE:", API_BASE);
+  
   try {
     // Obtener empresas
+    console.log("📊 [DASHBOARD] Obteniendo empresas...");
     const empresasRes = await fetch(`${API_BASE}/api/empresas/`, {
       headers: {
         "Content-Type": "application/json",
@@ -49,6 +54,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     if (empresasRes.ok) {
       empresas = await empresasRes.json();
       totalCompanies = empresas.length;
+      console.log(`✅ [DASHBOARD] Empresas obtenidas: ${totalCompanies}`, empresas);
+    } else {
+      console.error("❌ [DASHBOARD] Error al obtener empresas:", empresasRes.status, await empresasRes.text());
     }
 
     // Obtener tickets
@@ -83,13 +91,19 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       console.warn("Error fetching tickets:", err);
     }
 
-    // Obtener inventario de todas las empresas
+    // Obtener inventario de TODAS las empresas (sin límite)
     const allAssets: Array<Record<string, unknown>> = [];
     let recentAssets: Array<Record<string, unknown>> = [];
     
-    for (const empresa of empresas.slice(0, 10)) { // Limitamos a 10 empresas para no saturar
+    console.log("📦 [DASHBOARD] Obteniendo inventario de todas las empresas...");
+    
+    // Procesar todas las empresas en paralelo para mejor rendimiento
+    const inventarioPromises = empresas.map(async (empresa) => {
       try {
-        const inventarioRes = await fetch(`${API_BASE}/api/empresas/${empresa.id}/inventario`, {
+        const url = `${API_BASE}/api/empresas/${empresa.id}/inventario`;
+        console.log(`  📍 [DASHBOARD] Consultando: ${url}`);
+        
+        const inventarioRes = await fetch(url, {
           headers: {
             "Content-Type": "application/json",
             ...(token && { "Authorization": `Bearer ${token}` })
@@ -98,14 +112,34 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         
         if (inventarioRes.ok) {
           const inventario = await inventarioRes.json();
+          console.log(`  ✅ [DASHBOARD] Inventario empresa ${empresa.id}:`, inventario);
+          
+          // Manejar tanto array directo como objeto con { ok, data }
           if (Array.isArray(inventario)) {
-            allAssets.push(...inventario);
+            return inventario;
+          } else if (inventario && inventario.data && Array.isArray(inventario.data)) {
+            console.log(`  ✅ [DASHBOARD] Extrayendo ${inventario.data.length} activos de empresa ${empresa.id}`);
+            return inventario.data;
+          } else {
+            console.warn(`  ⚠️ [DASHBOARD] Formato inesperado para empresa ${empresa.id}:`, inventario);
           }
+        } else {
+          const errorText = await inventarioRes.text();
+          console.error(`  ❌ [DASHBOARD] Error empresa ${empresa.id} (${inventarioRes.status}):`, errorText);
         }
+        return [];
       } catch (err) {
-        console.warn(`Error fetching inventario for empresa ${empresa.id}:`, err);
+        console.error(`  💥 [DASHBOARD] Excepción empresa ${empresa.id}:`, err);
+        return [];
       }
-    }
+    });
+
+    const inventarioResults = await Promise.all(inventarioPromises);
+    inventarioResults.forEach(inv => {
+      allAssets.push(...inv);
+    });
+    
+    console.log(`📊 [DASHBOARD] Total activos recolectados: ${allAssets.length}`, allAssets);
 
     // Ordenar por fecha de creación (más recientes primero)
     const sortedAssets = [...allAssets].sort((a, b) => {
@@ -134,6 +168,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .map(([label, value]) => ({ label, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 4); // Top 4 categorías
+    
+    console.log("📈 [DASHBOARD] Estadísticas por categoría:", categoryStats);
 
     // Estadísticas por ubicación (sedes)
     const locationMap: Record<string, number> = {};
@@ -146,6 +182,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .map(([label, value]) => ({ label, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5); // Top 5 ubicaciones
+    
+    console.log("📍 [DASHBOARD] Estadísticas por ubicación:", locationStats);
 
     // Equipos por mes (últimos 12 meses)
     const now = new Date();
@@ -160,7 +198,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       }
     });
 
-    return {
+    const result = {
       totalEquipment: allAssets.length,
       totalCompanies,
       totalAssets: allAssets.length,
@@ -171,8 +209,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       categoryStats,
       locationStats,
     };
+    
+    console.log("✅ [DASHBOARD] Resultado final:", result);
+    
+    return result;
   } catch (error) {
-    console.error("Error fetching dashboard stats:", error);
+    console.error("💥 [DASHBOARD] Error general:", error);
     
     // Retornar datos de respaldo en caso de error
     return {

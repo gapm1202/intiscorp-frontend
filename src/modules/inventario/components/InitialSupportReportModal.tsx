@@ -4,6 +4,7 @@ import useAuth from '../../../hooks/useAuth';
 import { formatAssetCode } from '@/utils/helpers';
 import { signatureDefault } from '../../../config';
 import axiosClient from '@/api/axiosClient';
+import Toast from '@/components/ui/Toast';
 
 type Props = {
   isOpen: boolean;
@@ -123,6 +124,9 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
   const [techEmail, setTechEmail] = useState(user?.email ?? '');
   const [techName, setTechName] = useState(user?.nombre ?? user?.name ?? '');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
 
@@ -147,6 +151,9 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
       setConfigurations('');
       setSoftwareInstalled('');
       setActionsObservations('');
+      // Resetear estado de generación
+      setIsGenerating(false);
+      setShowToast(false);
       clearCanvas();
       // Debug: log warranty-related raw fields to help diagnose missing display
       try {
@@ -367,14 +374,19 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
    * POST /api/informes/soporte-inicial/:assetId
    */
   const generatePDFFromBackend = async () => {
+    // Prevenir múltiples clicks
+    if (isGenerating) return;
+    
     setIsGenerating(true);
+    setShowToast(false);
     
     try {
       const assetId = asset?.assetId || asset?.codigo || asset?._id || asset?.id;
       
       if (!assetId) {
-        alert('No se pudo identificar el ID del activo');
-        setIsGenerating(false);
+        setToastMessage('No se pudo identificar el ID del activo');
+        setToastType('error');
+        setShowToast(true);
         return;
       }
 
@@ -408,7 +420,10 @@ ${softwareInstalled || '-'}
       // Llamada al endpoint del backend
       const response = await axiosClient.post(
         `/api/informes/soporte-inicial/${assetId}`,
-        payload
+        payload,
+        {
+          timeout: 30000 // 30 segundos de timeout
+        }
       );
 
       console.log('[PDF Backend] Respuesta:', response.data);
@@ -417,23 +432,24 @@ ${softwareInstalled || '-'}
         const pdfUrl = response.data.data.pdfUrl;
         
         // Abrir el PDF en nueva pestaña
-        const newWindow = window.open(pdfUrl, '_blank');
+        const newWindow = window.open(pdfUrl, '_blank', 'noopener,noreferrer');
         
         if (!newWindow) {
-          // Si el popup está bloqueado, iniciar descarga automática
-          const link = document.createElement('a');
-          link.href = pdfUrl;
-          link.download = response.data.data.filename || `informe-${formatAssetCode(String(assetId))}.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+          setToastMessage('Por favor permite las ventanas emergentes para ver el informe');
+          setToastType('info');
+          setShowToast(true);
+          return;
         }
-
-        // Mostrar mensaje de éxito
-        alert('✅ Informe generado correctamente');
         
-        // Cerrar el modal
-        onClose();
+        // Mostrar mensaje de éxito con toast bonito
+        setToastMessage('Informe generado correctamente');
+        setToastType('success');
+        setShowToast(true);
+        
+        // Cerrar el modal después de un breve delay
+        setTimeout(() => {
+          onClose();
+        }, 1000);
       } else {
         throw new Error(response.data?.message || 'Error al generar el PDF');
       }
@@ -444,8 +460,11 @@ ${softwareInstalled || '-'}
         || error?.message 
         || 'Error al generar el informe. Por favor intente nuevamente.';
       
-      alert(`❌ ${errorMessage}`);
+      setToastMessage(errorMessage);
+      setToastType('error');
+      setShowToast(true);
     } finally {
+      // Asegurar que siempre se resetea el estado de cargando
       setIsGenerating(false);
     }
   };
@@ -1321,8 +1340,18 @@ ${softwareInstalled || '-'}
   };
 
   if (!isOpen) return null;
+  
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
+    <>
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          type={toastType}
+          onClose={() => setShowToast(false)}
+          duration={4000}
+        />
+      )}
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
       {isGenerating && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-lg p-4 flex items-center gap-3 shadow-lg">
@@ -1350,9 +1379,9 @@ ${softwareInstalled || '-'}
         </header>
 
         <div className="space-y-4">
-          <section className="bg-gradient-to-br from-slate-50 to-gray-100 p-5 rounded-xl border-2 border-slate-200 shadow-lg">
+          <section className="bg-linear-to-br from-slate-50 to-gray-100 p-5 rounded-xl border-2 border-slate-200 shadow-lg">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-lg flex items-center justify-center shadow-md">
+              <div className="w-10 h-10 bg-linear-to-br from-blue-600 to-cyan-500 rounded-lg flex items-center justify-center shadow-md">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                 </svg>
@@ -1371,11 +1400,11 @@ ${softwareInstalled || '-'}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-blue-700 uppercase tracking-wide">Empresa</label>
-                  <div className="mt-1 p-3 bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-lg text-sm font-bold text-slate-900">{empresaNombre ?? asset?.empresaNombre ?? asset?.empresa ?? '-'}</div>
+                  <div className="mt-1 p-3 bg-linear-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-lg text-sm font-bold text-slate-900">{empresaNombre ?? asset?.empresaNombre ?? asset?.empresa ?? '-'}</div>
                 </div>
                 <div>
                   <label className="text-xs font-bold text-blue-700 uppercase tracking-wide">Sede</label>
-                  <div className="mt-1 p-3 bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-lg text-sm font-bold text-slate-900">{sedeNombre ?? asset?.sedeNombre ?? asset?.sede ?? '-'}</div>
+                  <div className="mt-1 p-3 bg-linear-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-lg text-sm font-bold text-slate-900">{sedeNombre ?? asset?.sedeNombre ?? asset?.sede ?? '-'}</div>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-600">Área</label>
@@ -1453,7 +1482,7 @@ ${softwareInstalled || '-'}
                     return (
                       <div key={key} className="border-l-4 border-blue-500 pl-4">
                         <div className="flex items-center gap-2 mb-3">
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center shadow-sm">
+                          <div className="w-8 h-8 bg-linear-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center shadow-sm">
                             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                             </svg>
@@ -1465,7 +1494,7 @@ ${softwareInstalled || '-'}
                         </div>
                         <div className="space-y-2">
                           {arr.map((it, idx) => (
-                            <div key={idx} className="bg-gradient-to-br from-blue-50 to-cyan-50 p-3 rounded-lg border-2 border-blue-200 hover:shadow-md transition-shadow">
+                            <div key={idx} className="bg-linear-to-br from-blue-50 to-cyan-50 p-3 rounded-lg border-2 border-blue-200 hover:shadow-md transition-shadow">
                               {it && typeof it === 'object' ? (
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                   {Object.entries(it as Record<string, unknown>).map(([sk, sv]) => (
@@ -1504,7 +1533,7 @@ ${softwareInstalled || '-'}
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                         {usuariosDetailed.map((u: { nombre?: string; correo?: string; cargo?: string }, i: number) => (
-                          <div key={i} className="p-3 border-2 border-blue-200 rounded-lg bg-gradient-to-br from-blue-50 to-cyan-50 hover:shadow-md transition-shadow">
+                          <div key={i} className="p-3 border-2 border-blue-200 rounded-lg bg-linear-to-br from-blue-50 to-cyan-50 hover:shadow-md transition-shadow">
                             <div className="font-bold text-slate-900 mb-1">{u.nombre || '-'}</div>
                             <div className="text-xs text-blue-600 mb-0.5">{u.correo || '-'}</div>
                             <div className="text-xs text-slate-600">{u.cargo || '-'}</div>
@@ -1532,7 +1561,7 @@ ${softwareInstalled || '-'}
                 </h5>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {Object.entries(simpleCustomFields).map(([key, value]) => (
-                    <div key={key} className="bg-gradient-to-br from-amber-50 to-yellow-50 p-3 rounded-lg border-2 border-amber-200 hover:shadow-md transition-shadow">
+                    <div key={key} className="bg-linear-to-br from-amber-50 to-yellow-50 p-3 rounded-lg border-2 border-amber-200 hover:shadow-md transition-shadow">
                       <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">{key}</p>
                       <p className="font-bold text-gray-900">{String(value)}</p>
                     </div>
@@ -1572,7 +1601,7 @@ ${softwareInstalled || '-'}
                     <p className="text-xs font-bold text-purple-700 uppercase tracking-wide mb-2">Documentos</p>
                     <div className="space-y-3">
                       {purchaseDoc && (
-                        <div className="flex items-center justify-between p-3 bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg hover:shadow-md transition-shadow">
+                        <div className="flex items-center justify-between p-3 bg-linear-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg hover:shadow-md transition-shadow">
                           <div className="flex items-start gap-3">
                             <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-white border-2 border-purple-300">
                               {purchaseDoc.url?.toLowerCase().endsWith('.pdf') ? (
@@ -1593,7 +1622,7 @@ ${softwareInstalled || '-'}
                         </div>
                       )}
                       {warrantyDoc && (
-                        <div className="flex items-center justify-between p-3 bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg hover:shadow-md transition-shadow">
+                        <div className="flex items-center justify-between p-3 bg-linear-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg hover:shadow-md transition-shadow">
                           <div className="flex items-start gap-3">
                             <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-white border-2 border-purple-300">
                               {warrantyDoc.url?.toLowerCase().endsWith('.pdf') ? (
@@ -1718,7 +1747,7 @@ ${softwareInstalled || '-'}
             <button 
               onClick={generatePDFFromBackend} 
               disabled={isGenerating}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-sm hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-linear-to-r from-indigo-600 to-indigo-700 text-white shadow-sm hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGenerating ? (
                 <>
@@ -1741,6 +1770,7 @@ ${softwareInstalled || '-'}
         </div>
       </div>
     </div>
+    </>
   );
 };
 
