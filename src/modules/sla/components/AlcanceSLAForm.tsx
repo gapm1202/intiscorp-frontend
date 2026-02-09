@@ -62,12 +62,12 @@ export function AlcanceSLAForm({
   contratoCompleto = true,
 }: AlcanceSLAFormProps) {
   // Determinar estado automático del SLA según estado del contrato
-  const estadoContratoLower = (estadoContrato || '').toLowerCase();
-  const estadoContratoActivo = estadoContratoLower === 'activo';
-  const estadoContratoInactivo = estadoContratoLower === 'vencido' || estadoContratoLower === 'suspendido';
+  const estadoContratoLower = (estadoContrato || '').toLowerCase().trim();
+  const estadoContratoActivo = estadoContratoLower === 'activo' || estadoContratoLower === 'vigente' || estadoContratoLower === 'active';
+  const estadoContratoInactivo = estadoContratoLower === 'vencido' || estadoContratoLower === 'suspendido' || estadoContratoLower === 'expired' || estadoContratoLower === 'suspended';
   
-  // Si el contrato no está completo, el SLA debe estar inactivo
-  const slaDebeEstarInactivo = !contratoCompleto || estadoContratoInactivo;
+  // Estado del SLA depende del estado del contrato
+  const slaDebeEstarInactivo = estadoContratoInactivo;
   const getInitialData = (): AlcanceSLAData => {
     if (!initialData || Object.keys(initialData).length === 0) return getDefaultAlcanceData();
     let data = {
@@ -92,10 +92,7 @@ export function AlcanceSLAForm({
         sedes: normalizeIds(data.sedesCubiertas?.sedes),
       },
     };
-    // Si el contrato no está completo, SLA siempre inactivo
-    if (!contratoCompleto) {
-      data.slaActivo = false;
-    } else if (estadoContratoActivo) {
+    if (estadoContratoActivo) {
       data.slaActivo = true;
     } else if (estadoContratoInactivo) {
       data.slaActivo = false;
@@ -110,15 +107,16 @@ export function AlcanceSLAForm({
 
   // Actualizar automáticamente el estado del SLA cuando cambie el estado del contrato o se complete
   useEffect(() => {
-    if (!contratoCompleto) {
-      // Si el contrato no está completo, SLA debe estar inactivo
-      setFormData(prev => ({ ...prev, slaActivo: false }));
-    } else if (estadoContratoActivo) {
+    if (estadoContratoActivo) {
       setFormData(prev => ({ ...prev, slaActivo: true }));
     } else if (estadoContratoInactivo) {
       setFormData(prev => ({ ...prev, slaActivo: false }));
     }
-  }, [estadoContrato, estadoContratoActivo, estadoContratoInactivo, contratoCompleto]);
+  }, [estadoContrato, estadoContratoActivo, estadoContratoInactivo]);
+
+  useEffect(() => {
+    setFormData(getInitialData());
+  }, [initialData, estadoContrato, contratoCompleto]);
 
   useEffect(() => {
     // Si nos pasan categorías como prop las usamos; si no, intentamos cargar del módulo Catálogo
@@ -342,12 +340,7 @@ export function AlcanceSLAForm({
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-blue-900">Estado controlado automáticamente</p>
                   <p className="text-xs text-blue-700 mt-1">
-                    {!contratoCompleto ? (
-                      <>
-                        El SLA está <strong>Inactivo</strong> porque <strong className="text-red-700">el contrato aún no está completo</strong>.
-                        Complete los 4 formularios de la pestaña Contrato para activar el SLA.
-                      </>
-                    ) : formData.slaActivo ? (
+                    {formData.slaActivo ? (
                       <>
                         El SLA está <strong>Activo</strong> porque el estado del contrato es <strong className="text-green-700">Activo</strong>.
                       </>
@@ -358,11 +351,7 @@ export function AlcanceSLAForm({
                     )}
                   </p>
                   <p className="text-xs text-blue-600 mt-2">
-                    {!contratoCompleto ? (
-                      <>📌 Vaya a la pestaña Contrato y complete todos los formularios.</>  
-                    ) : (
-                      <>📌 Para cambiar el estado del SLA, actualiza el estado del contrato en la pestaña Contrato.</>
-                    )}
+                    <>📌 Para cambiar el estado del SLA, actualiza el estado del contrato en la pestaña Contrato.</>
                   </p>
                 </div>
               </div>

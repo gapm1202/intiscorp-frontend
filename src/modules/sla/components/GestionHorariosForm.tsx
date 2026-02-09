@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type DiaSemana = 'Lunes' | 'Martes' | 'Miercoles' | 'Jueves' | 'Viernes' | 'Sabado' | 'Domingo';
 
@@ -129,6 +129,10 @@ export function GestionHorariosForm({ initialData, onSave, onCancel, showFueraHo
   
   const [formData, setFormData] = useState<HorariosData>(normalized);
   const [nuevoFeriado, setNuevoFeriado] = useState('');
+
+  useEffect(() => {
+    setFormData(normalized);
+  }, [normalized]);
 
   const handleSave = () => {
     if (onSave) onSave(formData);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export type Prioridad = 'critica' | 'alta' | 'media' | 'baja';
 
@@ -91,6 +91,14 @@ export function GestionTiemposForm({ initialData, onSave, onCancel }: GestionTie
     }
     return defaultRows;
   });
+
+  useEffect(() => {
+    if (initialData?.tiemposPorPrioridad && initialData.tiemposPorPrioridad.length > 0) {
+      setRows(initialData.tiemposPorPrioridad.map(toRowInterno));
+    } else {
+      setRows(defaultRows);
+    }
+  }, [initialData]);
 
   const updateRow = (index: number, updates: Partial<RowInterno>) => {
     setRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...updates } : row)));

@@ -752,12 +752,13 @@ const EmpresaDetailPage = () => {
       setContratoLoading(true);
       try {
         const contratoActivo = await getContratoActivo(empresaId);
-        if (contratoActivo) {
+        const contratoPayload = (contratoActivo as any)?.data ?? contratoActivo;
+        if (contratoPayload) {
           // Detectar guardado de cada sección usando null como no guardado
-          const datosGuardados = Boolean(contratoActivo.tipoContrato && contratoActivo.estadoContrato && contratoActivo.fechaInicio && contratoActivo.fechaFin);
-          const serviciosGuardados = contratoActivo.services !== null;
-          const preventivoGuardado = contratoActivo.preventivePolicy !== null;
-          const economicosGuardados = contratoActivo.economics !== null;
+          const datosGuardados = Boolean(contratoPayload.tipoContrato && contratoPayload.estadoContrato && contratoPayload.fechaInicio && contratoPayload.fechaFin);
+          const serviciosGuardados = contratoPayload.services !== null;
+          const preventivoGuardado = contratoPayload.preventivePolicy !== null;
+          const economicosGuardados = contratoPayload.economics !== null;
 
           setEditModoDatos(!datosGuardados);
           setEditModoServicios(!serviciosGuardados);
@@ -768,59 +769,69 @@ const EmpresaDetailPage = () => {
           setPreventivoGuardado(preventivoGuardado);
           setEconomicosGuardados(economicosGuardados);
 
-          if (contratoActivo._id || contratoActivo.id) {
-            setContractId(contratoActivo._id || contratoActivo.id);
+          if (contratoPayload._id || contratoPayload.id) {
+            setContractId(contratoPayload._id || contratoPayload.id);
           }
 
-          if (contratoActivo.tipoContrato) {
-            setContratoData({
-              tipoContrato: contratoActivo.tipoContrato || '',
-              estadoContrato: contratoActivo.estadoContrato || '',
-              fechaInicio: contratoActivo.fechaInicio ? contratoActivo.fechaInicio.split('T')[0] : '',
-              fechaFin: contratoActivo.fechaFin ? contratoActivo.fechaFin.split('T')[0] : '',
-              renovacionAutomatica: contratoActivo.renovacionAutomatica ?? true,
-              responsableComercial: contratoActivo.responsableComercial || '',
-              observacionesContractuales: contratoActivo.observaciones || '',
-            });
-          }
+          const estadoContratoRaw =
+            contratoPayload.estadoContrato ||
+            contratoPayload.estado_contrato ||
+            contratoPayload.estado ||
+            contratoPayload.contrato?.estadoContrato ||
+            contratoPayload.contrato?.estado_contrato ||
+            contratoPayload.data?.estadoContrato ||
+            contratoPayload.data?.estado_contrato ||
+            empresa?.estadoContrato ||
+            (empresa as any)?.estado_contrato ||
+            '';
 
-          if (contratoActivo.services) {
+          setContratoData((prev) => ({
+            tipoContrato: contratoPayload.tipoContrato || contratoPayload.contrato?.tipoContrato || prev.tipoContrato || '',
+            estadoContrato: estadoContratoRaw || prev.estadoContrato || '',
+            fechaInicio: contratoPayload.fechaInicio ? contratoPayload.fechaInicio.split('T')[0] : (prev.fechaInicio || ''),
+            fechaFin: contratoPayload.fechaFin ? contratoPayload.fechaFin.split('T')[0] : (prev.fechaFin || ''),
+            renovacionAutomatica: contratoPayload.renovacionAutomatica ?? prev.renovacionAutomatica ?? true,
+            responsableComercial: contratoPayload.responsableComercial || prev.responsableComercial || '',
+            observacionesContractuales: contratoPayload.observaciones || prev.observacionesContractuales || '',
+          }));
+
+          if (contratoPayload.services) {
             setServiciosIncluidos(prev => ({
               ...prev,
-              soporteRemoto: contratoActivo.services.soporteRemoto || false,
-              soportePresencial: contratoActivo.services.soportePresencial || false,
-              mantenimientoPreventivo: contratoActivo.services.mantenimientoPreventivo || false,
-              gestionInventario: contratoActivo.services.gestionInventario || false,
-              gestionCredenciales: contratoActivo.services.gestionCredenciales || false,
-              monitoreo: contratoActivo.services.monitoreo || false,
-              informesMensuales: contratoActivo.services.informesMensuales || false,
-              gestionAccesos: contratoActivo.services.gestionAccesos || false,
-              horasMensualesIncluidas: contratoActivo.services.horasMensualesIncluidas ? String(contratoActivo.services.horasMensualesIncluidas) : '',
-              excesoHorasFacturable: contratoActivo.services.excesoHorasFacturable || false,
-              serviciosPersonalizados: contratoActivo.services.serviciosPersonalizados || [],
+              soporteRemoto: contratoPayload.services.soporteRemoto || false,
+              soportePresencial: contratoPayload.services.soportePresencial || false,
+              mantenimientoPreventivo: contratoPayload.services.mantenimientoPreventivo || false,
+              gestionInventario: contratoPayload.services.gestionInventario || false,
+              gestionCredenciales: contratoPayload.services.gestionCredenciales || false,
+              monitoreo: contratoPayload.services.monitoreo || false,
+              informesMensuales: contratoPayload.services.informesMensuales || false,
+              gestionAccesos: contratoPayload.services.gestionAccesos || false,
+              horasMensualesIncluidas: contratoPayload.services.horasMensualesIncluidas ? String(contratoPayload.services.horasMensualesIncluidas) : '',
+              excesoHorasFacturable: contratoPayload.services.excesoHorasFacturable || false,
+              serviciosPersonalizados: contratoPayload.services.serviciosPersonalizados || [],
             }));
           }
 
-          if (contratoActivo.preventivePolicy) {
+          if (contratoPayload.preventivePolicy) {
             setPreventivoData({
-              incluyePreventivo: contratoActivo.preventivePolicy.incluyePreventivo || false,
-              frecuencia: contratoActivo.preventivePolicy.frecuencia || '',
-              modalidad: contratoActivo.preventivePolicy.modalidad || '',
-              aplica: contratoActivo.preventivePolicy.aplica || '',
-              observaciones: contratoActivo.preventivePolicy.observaciones || '',
+              incluyePreventivo: contratoPayload.preventivePolicy.incluyePreventivo || false,
+              frecuencia: contratoPayload.preventivePolicy.frecuencia || '',
+              modalidad: contratoPayload.preventivePolicy.modalidad || '',
+              aplica: contratoPayload.preventivePolicy.aplica || '',
+              observaciones: contratoPayload.preventivePolicy.observaciones || '',
             });
           }
-          if (contratoActivo.economics) {
+          if (contratoPayload.economics) {
             setEconomicasData({
-              tipoFacturacion: contratoActivo.economics.tipoFacturacion || '',
-              montoReferencial: contratoActivo.economics.montoReferencial || '',
-              moneda: contratoActivo.economics.moneda || '',
-              diaFacturacion: contratoActivo.economics.diaFacturacion || '',
-              observaciones: contratoActivo.economics.observaciones || '',
+              tipoFacturacion: contratoPayload.economics.tipoFacturacion || '',
+              montoReferencial: contratoPayload.economics.montoReferencial || '',
+              moneda: contratoPayload.economics.moneda || '',
+              diaFacturacion: contratoPayload.economics.diaFacturacion || '',
+              observaciones: contratoPayload.economics.observaciones || '',
             });
           }
-          if (contratoActivo.documents) {
-            setDocumentosContrato(contratoActivo.documents.map((doc: any) => {
+          if (contratoPayload.documents) {
+            setDocumentosContrato(contratoPayload.documents.map((doc: any) => {
               const fechaDoc = doc.fechaSubida || doc.fecha_subida || doc.createdAt || doc.created_at;
               const fecha = fechaDoc ? new Date(fechaDoc) : null;
               return {
@@ -835,8 +846,8 @@ const EmpresaDetailPage = () => {
               };
             }));
           }
-          if (contratoActivo.history) {
-            mapHistorialContrato(contratoActivo.history);
+          if (contratoPayload.history) {
+            mapHistorialContrato(contratoPayload.history);
           }
         } else {
           // No hay contrato activo, dejar formularios abiertos para crear uno nuevo
@@ -857,7 +868,7 @@ const EmpresaDetailPage = () => {
       }
     };
 
-    if (activeTab === 'contrato') {
+    if (activeTab === 'contrato' || activeTab === 'sla') {
       fetchContratoActivo();
     } else {
       setContratoLoading(false);
@@ -878,6 +889,102 @@ const EmpresaDetailPage = () => {
         fecha,
       };
     });
+
+  const mapAlcanceToForm = (alcance: any, resumen: ResumenSLA | null) => {
+    if (!alcance) return null;
+    const payload = alcance?.data ?? alcance;
+    return {
+      slaActivo: Boolean(resumen?.activo ?? payload?.slaActivo ?? false),
+      aplicaA: 'incidentes',
+      tiposTicket: (payload?.tiposTicket || []).map((v: unknown) => String(v)),
+      serviciosCatalogoSLA: {
+        tipo: payload?.aplica_todos_servicios ? 'todos' : 'seleccionados',
+        servicios: (payload?.servicios || []).map((v: unknown) => String(v)),
+      },
+      activosCubiertos: {
+        tipo: payload?.aplica_todas_categorias ? 'todos' : 'porCategoria',
+        categorias: (payload?.categorias || []).map((v: unknown) => String(v)),
+        categoriasPersonalizadas: [],
+      },
+      sedesCubiertas: {
+        tipo: payload?.aplica_todas_sedes ? 'todas' : 'seleccionadas',
+        sedes: (payload?.sedes || []).map((v: unknown) => String(v)),
+      },
+      observaciones: payload?.observaciones || '',
+    };
+  };
+
+  const minutesToText = (minutes?: number | null) => {
+    const raw = typeof minutes === 'number' ? minutes : 0;
+    if (raw % 60 === 0) {
+      const horas = raw / 60;
+      return `${horas} ${horas === 1 ? 'hora' : 'horas'}`;
+    }
+    return `${raw} ${raw === 1 ? 'minuto' : 'minutos'}`;
+  };
+
+  const mapTiemposToForm = (tiemposData: any) => {
+    const payload = tiemposData?.data ?? tiemposData;
+    const tiempos = Array.isArray(payload)
+      ? payload
+      : (Array.isArray(payload?.tiempos) ? payload.tiempos : []);
+    const prioridadMap: Record<string, 'critica' | 'alta' | 'media' | 'baja'> = {
+      CRITICA: 'critica',
+      ALTA: 'alta',
+      MEDIA: 'media',
+      BAJA: 'baja',
+    };
+    return {
+      tiemposPorPrioridad: tiempos.map((t: any) => ({
+        prioridad: prioridadMap[String(t?.prioridad || '').toUpperCase()] || 'media',
+        tiempoRespuesta: minutesToText(t?.tiempo_respuesta_minutos),
+        tiempoResolucion: minutesToText(t?.tiempo_resolucion_minutos),
+        escalamiento: t?.tiempo_escalamiento_minutos != null,
+        tiempoEscalamiento: t?.tiempo_escalamiento_minutos != null ? minutesToText(t?.tiempo_escalamiento_minutos) : undefined,
+      })),
+    };
+  };
+
+  const mapHorariosToForm = (horariosData: any) => {
+    const diasBase: Record<string, { atiende: boolean; horaInicio: string; horaFin: string }> = {
+      Lunes: { atiende: false, horaInicio: '08:00', horaFin: '18:00' },
+      Martes: { atiende: false, horaInicio: '08:00', horaFin: '18:00' },
+      Miercoles: { atiende: false, horaInicio: '08:00', horaFin: '18:00' },
+      Jueves: { atiende: false, horaInicio: '08:00', horaFin: '18:00' },
+      Viernes: { atiende: false, horaInicio: '08:00', horaFin: '18:00' },
+      Sabado: { atiende: false, horaInicio: '08:00', horaFin: '18:00' },
+      Domingo: { atiende: false, horaInicio: '08:00', horaFin: '18:00' },
+    };
+    const numToDia: Record<number, string> = {
+      0: 'Domingo',
+      1: 'Lunes',
+      2: 'Martes',
+      3: 'Miercoles',
+      4: 'Jueves',
+      5: 'Viernes',
+      6: 'Sabado',
+    };
+    const payload = horariosData?.data ?? horariosData;
+    const horarios = Array.isArray(payload)
+      ? payload
+      : (Array.isArray(payload?.horarios) ? payload.horarios : []);
+    horarios.forEach((h: any) => {
+      const dia = numToDia[Number(h?.day_of_week)];
+      if (!dia) return;
+      diasBase[dia] = {
+        atiende: Boolean(h?.atiende),
+        horaInicio: h?.hora_inicio ? String(h.hora_inicio).slice(0, 5) : diasBase[dia].horaInicio,
+        horaFin: h?.hora_fin ? String(h.hora_fin).slice(0, 5) : diasBase[dia].horaFin,
+      };
+    });
+    return {
+      dias: diasBase as any,
+      excluirFeriados: true,
+      calendarioFeriados: [],
+      atencionFueraHorario: false,
+      aplicaSLAFueraHorario: false,
+    };
+  };
 
   const getSeccionesGuardadas = () => {
     if (!slaResumen) return [] as string[];
@@ -1054,10 +1161,29 @@ const EmpresaDetailPage = () => {
     ]);
   };
 
-  const handleSlaEdit = (section: keyof typeof slaEditModes, label: string) => {
+  const handleSlaEdit = async (section: keyof typeof slaEditModes, label: string) => {
     // Marcar que está editando algo ya guardado
     setSlaEditModes((prev) => ({ ...prev, [section]: true }));
     setSlaIsEditing((prev) => ({ ...prev, [section]: true }));
+
+    if (!empresaId) return;
+    try {
+      if (section === 'alcance') {
+        const alcance = await slaService.getAlcance(empresaId);
+        const mapped = mapAlcanceToForm(alcance, slaResumen);
+        setSlaConfiguracion((prev: any) => ({ ...(prev || {}), alcance: mapped }));
+      } else if (section === 'tiempos') {
+        const tiempos = await slaService.getTiempos(empresaId);
+        const mapped = mapTiemposToForm(tiempos);
+        setSlaConfiguracion((prev: any) => ({ ...(prev || {}), tiempos: mapped }));
+      } else if (section === 'horarios') {
+        const horarios = await slaService.getHorarios(empresaId);
+        const mapped = mapHorariosToForm(horarios);
+        setSlaConfiguracion((prev: any) => ({ ...(prev || {}), horarios: mapped }));
+      }
+    } catch (error) {
+      console.error('Error al cargar datos de SLA para edición:', error);
+    }
   };
 
   const handleSlaCancel = (section: keyof typeof slaEditModes) => {
@@ -1069,6 +1195,91 @@ const EmpresaDetailPage = () => {
 
   const handleSlaSave = async (section: keyof typeof slaEditModes, label: string, data: unknown) => {
     if (!empresaId) return;
+
+    const mapSlaFormToBackend = (sec: keyof typeof slaEditModes, raw: unknown) => {
+      if (sec === 'alcance') {
+        const formData = raw as any;
+        const normalizeId = (value: unknown) => {
+          if (typeof value === 'number') return value;
+          const text = String(value ?? '').trim();
+          return /^\d+$/.test(text) ? Number(text) : text;
+        };
+        return {
+          tiposTicket: formData.tiposTicket || [],
+          servicios: formData.serviciosCatalogoSLA?.tipo === 'seleccionados'
+            ? (formData.serviciosCatalogoSLA.servicios?.map(normalizeId) || [])
+            : undefined,
+          categorias: formData.activosCubiertos?.tipo === 'porCategoria'
+            ? (formData.activosCubiertos.categorias?.map(normalizeId) || [])
+            : undefined,
+          sedes: formData.sedesCubiertas?.tipo === 'seleccionadas'
+            ? (formData.sedesCubiertas.sedes?.map(normalizeId) || [])
+            : undefined,
+          aplica_todos_servicios: formData.serviciosCatalogoSLA?.tipo === 'todos',
+          aplica_todas_categorias: formData.activosCubiertos?.tipo === 'todos',
+          aplica_todas_sedes: formData.sedesCubiertas?.tipo === 'todas',
+          observaciones: formData.observaciones || undefined,
+        };
+      }
+
+      if (sec === 'horarios') {
+        const formData = raw as any;
+        const diaMap: Record<string, number> = {
+          'Domingo': 0,
+          'Lunes': 1,
+          'Martes': 2,
+          'Miercoles': 3,
+          'Jueves': 4,
+          'Viernes': 5,
+          'Sabado': 6,
+        };
+        const horarios: any[] = [];
+        const dias = formData.dias || {};
+        Object.entries(dias).forEach(([nombreDia, config]: [string, any]) => {
+          const dayOfWeek = diaMap[nombreDia];
+          if (dayOfWeek !== undefined && config) {
+            horarios.push({
+              day_of_week: dayOfWeek,
+              atiende: config.atiende || false,
+              hora_inicio: config.atiende && config.horaInicio ? `${config.horaInicio}:00` : undefined,
+              hora_fin: config.atiende && config.horaFin ? `${config.horaFin}:00` : undefined,
+              es_feriado: false,
+            });
+          }
+        });
+        return { horarios };
+      }
+
+      if (sec === 'tiempos') {
+        const formData = raw as any;
+        const convertirAMinutos = (str: string): number => {
+          const match = str.match(/(\d+)\s*(hora|horas|minuto|minutos)/i);
+          if (match) {
+            const valor = parseInt(match[1], 10);
+            const esHoras = match[2].toLowerCase().includes('hora');
+            return esHoras ? valor * 60 : valor;
+          }
+          return 60;
+        };
+        const prioridadMap: Record<string, string> = {
+          'critica': 'CRITICA',
+          'alta': 'ALTA',
+          'media': 'MEDIA',
+          'baja': 'BAJA',
+        };
+        const tiempos = (formData.tiemposPorPrioridad || []).map((t: any) => ({
+          prioridad: prioridadMap[t.prioridad] || 'MEDIA',
+          tiempo_respuesta_minutos: convertirAMinutos(t.tiempoRespuesta),
+          tiempo_resolucion_minutos: convertirAMinutos(t.tiempoResolucion),
+          tiempo_escalamiento_minutos: t.escalamiento && t.tiempoEscalamiento
+            ? convertirAMinutos(t.tiempoEscalamiento)
+            : null,
+        }));
+        return { tiempos };
+      }
+
+      return raw;
+    };
     
     // Verificar si está editando algo ya guardado (dio clic en botón "Editar")
     const isEditando = slaIsEditing[section];
@@ -1077,96 +1288,7 @@ const EmpresaDetailPage = () => {
       // Primera vez o rellenando inicial: Guardar directamente sin pedir motivo
       try {
         // Transformar datos del formulario al formato del backend
-        let backendData = data;
-        
-        if (section === 'alcance') {
-          const formData = data as any;
-          const normalizeId = (value: unknown) => {
-            if (typeof value === 'number') return value;
-            const text = String(value ?? '').trim();
-            return /^\d+$/.test(text) ? Number(text) : text;
-          };
-          backendData = {
-            tiposTicket: formData.tiposTicket || [],
-            servicios: formData.serviciosCatalogoSLA?.tipo === 'seleccionados' 
-              ? (formData.serviciosCatalogoSLA.servicios?.map(normalizeId) || [])
-              : undefined,
-            categorias: formData.activosCubiertos?.tipo === 'porCategoria'
-              ? (formData.activosCubiertos.categorias?.map(normalizeId) || [])
-              : undefined,
-            sedes: formData.sedesCubiertas?.tipo === 'seleccionadas'
-              ? (formData.sedesCubiertas.sedes?.map(normalizeId) || [])
-              : undefined,
-            aplica_todos_servicios: formData.serviciosCatalogoSLA?.tipo === 'todos',
-            aplica_todas_categorias: formData.activosCubiertos?.tipo === 'todos',
-            aplica_todas_sedes: formData.sedesCubiertas?.tipo === 'todas',
-            observaciones: formData.observaciones || undefined,
-          };
-        }
-        
-        if (section === 'horarios') {
-          const formData = data as any;
-          // Mapeo de nombre de día a day_of_week (0=Domingo ... 6=Sábado)
-          const diaMap: Record<string, number> = {
-            'Domingo': 0,
-            'Lunes': 1,
-            'Martes': 2,
-            'Miercoles': 3,
-            'Jueves': 4,
-            'Viernes': 5,
-            'Sabado': 6,
-          };
-          
-          const horarios: any[] = [];
-          const dias = formData.dias || {};
-          
-          Object.entries(dias).forEach(([nombreDia, config]: [string, any]) => {
-            const dayOfWeek = diaMap[nombreDia];
-            if (dayOfWeek !== undefined && config) {
-              horarios.push({
-                day_of_week: dayOfWeek,
-                atiende: config.atiende || false,
-                hora_inicio: config.atiende && config.horaInicio ? `${config.horaInicio}:00` : undefined,
-                hora_fin: config.atiende && config.horaFin ? `${config.horaFin}:00` : undefined,
-                es_feriado: false,
-              });
-            }
-          });
-          
-          backendData = { horarios };
-        }
-        
-        if (section === 'tiempos') {
-          const formData = data as any;
-          // Convertir strings como "1 hora", "30 minutos" a minutos numéricos
-          const convertirAMinutos = (str: string): number => {
-            const match = str.match(/(\d+)\s*(hora|horas|minuto|minutos)/i);
-            if (match) {
-              const valor = parseInt(match[1], 10);
-              const esHoras = match[2].toLowerCase().includes('hora');
-              return esHoras ? valor * 60 : valor;
-            }
-            return 60; // default 1 hora
-          };
-          
-          const prioridadMap: Record<string, string> = {
-            'critica': 'CRITICA',
-            'alta': 'ALTA',
-            'media': 'MEDIA',
-            'baja': 'BAJA',
-          };
-          
-          const tiempos = (formData.tiemposPorPrioridad || []).map((t: any) => ({
-            prioridad: prioridadMap[t.prioridad] || 'MEDIA',
-            tiempo_respuesta_minutos: convertirAMinutos(t.tiempoRespuesta),
-            tiempo_resolucion_minutos: convertirAMinutos(t.tiempoResolucion),
-            tiempo_escalamiento_minutos: t.escalamiento && t.tiempoEscalamiento 
-              ? convertirAMinutos(t.tiempoEscalamiento) 
-              : null,
-          }));
-          
-          backendData = { tiempos };
-        }
+        const backendData = mapSlaFormToBackend(section, data);
         
         // Guardar la sección
         await slaService.guardarSeccion(empresaId, section, backendData);
@@ -1216,7 +1338,8 @@ const EmpresaDetailPage = () => {
         try {
           
           // Guardar la sección enviando el motivo en la misma llamada
-          await slaService.guardarSeccion(empresaId!, section, data, motivo);
+          const backendData = mapSlaFormToBackend(section, data);
+          await slaService.guardarSeccion(empresaId!, section, backendData, motivo);
           
           // Salir del modo edición
           setSlaEditModes((prev) => ({ ...prev, [section]: false }));
@@ -3920,7 +4043,7 @@ const EmpresaDetailPage = () => {
                           nombre: s.nombre || '',
                         }))}
                         // Pasar el estado del contrato para control automático
-                        estadoContrato={contratoData.estadoContrato}
+                        estadoContrato={contratoData.estadoContrato || empresa?.estadoContrato || (empresa as any)?.estado_contrato || ''}
                         contratoCompleto={isContratoCompleto()}
                         onSave={(data) => handleSlaSave('alcance', 'Alcance del SLA', data)}
                         onCancel={() => handleSlaCancel('alcance')}
