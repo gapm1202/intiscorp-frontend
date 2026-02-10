@@ -183,10 +183,12 @@ export default function TicketDetailPage() {
   const handleSendChat = async () => {
     if (!ticket) return;
     if (!chatInput.trim()) return;
-    const estadoEnProceso = normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO';
+    const estadoNormalizado = normalizeEstadoLocal(ticket.estado as any);
+    const chatHabilitado = estadoNormalizado === 'EN TRIAGE' || estadoNormalizado === 'EN PROCESO';
     const isCreator = !!(user && ticket.creado_por && user.id === ticket.creado_por.id);
     const isAssignedTech = !!(user && ticket.tecnico_asignado_id != null && user.id === ticket.tecnico_asignado_id);
-    const canSend = estadoEnProceso && (isAssignedTech || isCreator) && !chatDisabled && normalizeEstadoLocal(ticket.estado as any) !== 'RESUELTO';
+    const isAdmin = user?.rol && user.rol.toLowerCase().includes('admin');
+    const canSend = chatHabilitado && (isAssignedTech || isCreator || isAdmin) && !chatDisabled;
     if (!canSend) return;
 
     try {
@@ -196,24 +198,29 @@ export default function TicketDetailPage() {
       setChatInput('');
     } catch (err: any) {
       console.error('Error enviando mensaje:', err);
+      // Mostrar el mensaje real del backend
+      const errorMessage = err?.response?.data?.message || 'Error al enviar mensaje';
       const status = err?.response?.status;
+      
       if (status === 403) {
         setChatDisabled(true);
-        setChatDisabledMessage('Este ticket fue reasignado a otro técnico y ya no puedes enviar mensajes.');
-        showErrorToast('No autorizado: ya no puedes enviar mensajes en este ticket');
-      } else {
-        showErrorToast(err?.response?.data?.message || 'Error al enviar mensaje');
+        setChatDisabledMessage(errorMessage);
       }
+      
+      showErrorToast(errorMessage);
     }
   };
   const getEstadoColor = (estado: string) => {
     const colors: Record<string, string> = {
-      'ESPERA': 'bg-purple-50 text-purple-700 border-purple-300',
-      'ABIERTO': 'bg-sky-50 text-sky-700 border-sky-300',
-      'EN_PROCESO': 'bg-amber-50 text-amber-700 border-amber-300',
+      'ESPERA': 'bg-yellow-50 text-yellow-700 border-yellow-300',
+      'EN_TRIAGE': 'bg-blue-50 text-blue-700 border-blue-300',
+      'ABIERTO': 'bg-green-50 text-green-700 border-green-300',
+      'EN_PROCESO': 'bg-purple-50 text-purple-700 border-purple-300',
+      'PENDIENTE': 'bg-orange-50 text-orange-700 border-orange-300',
       'PENDIENTE_CLIENTE': 'bg-orange-50 text-orange-700 border-orange-300',
-      'RESUELTO': 'bg-emerald-50 text-emerald-700 border-emerald-300',
-      'CERRADO': 'bg-slate-50 text-slate-700 border-slate-300'
+      'RESUELTO': 'bg-teal-50 text-teal-700 border-teal-300',
+      'CERRADO': 'bg-gray-50 text-gray-700 border-gray-300',
+      'CANCELADO': 'bg-red-50 text-red-700 border-red-300'
     };
     return colors[estado] || 'bg-slate-50 text-slate-700 border-slate-300';
   };
@@ -509,9 +516,9 @@ export default function TicketDetailPage() {
                     </span>
                   </div>
 
-                  {/* Compact SLA bar inside detail header (follows same rules) */}
+                  {/* Compact SLA bar inside detail header (solo si aplica_sla es true) */}
                   <div className="flex-1 flex items-center">
-                    {(ticket.estado === 'ESPERA' || ticket.estado === 'ABIERTO') && (
+                    {ticket.aplica_sla && ticket.estado === 'ABIERTO' && (
                       <div className="ml-2 w-full max-w-md">
                         <div className="flex items-center justify-between">
                           <div className="text-xs text-gray-500">Tiempo de Respuesta</div>
@@ -523,7 +530,7 @@ export default function TicketDetailPage() {
                       </div>
                     )}
 
-                    {ticket.estado === 'EN_PROCESO' && (
+                    {ticket.aplica_sla && ticket.estado === 'EN_PROCESO' && (
                       <div className="ml-2 w-full max-w-md">
                         <div className="flex items-center justify-between">
                           <div className="text-xs text-gray-500">Tiempo de Resolución</div>
@@ -534,6 +541,13 @@ export default function TicketDetailPage() {
                         </div>
                       </div>
                     )}
+
+                    {/* Mostrar mensaje informativo para tickets sin SLA */}
+                    {!ticket.aplica_sla && ['ESPERA', 'EN_TRIAGE'].includes(ticket.estado) && (
+                      <div className="ml-2">
+                        <span className="text-xs text-gray-500 italic">⏳ Sin SLA - Esperando configuración</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -542,8 +556,40 @@ export default function TicketDetailPage() {
               <div className="mt-4 sm:mt-0 sm:ml-6 flex flex-wrap gap-2">
                 {/* Asignación de técnico ahora se hace desde la tabla de tickets */}
 
-                {/* Botón "Coger ticket / Pasar a proceso" - Visible si es ticket público en ESPERA con técnico asignado, o si está ABIERTO */}
-                {((ticket.origen === 'PORTAL_PUBLICO' && ticket.estado === 'ESPERA') || ticket.estado === 'ABIERTO') && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id && (
+                {/* Botón "Iniciar Triaje" - Visible solo para tickets PORTAL_PUBLICO en ESPERA */}
+                {ticket.origen === 'PORTAL_PUBLICO' && ticket.estado === 'ESPERA' && (
+                  <button 
+                    onClick={handleCogerTicket}
+                    disabled={actionLoading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {actionLoading ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    )}
+                    Iniciar Triaje
+                  </button>
+                )}
+
+                {/* Botón "Configurar" - Visible para tickets PORTAL_PUBLICO en ESPERA o EN_TRIAGE */}
+                {ticket.origen === 'PORTAL_PUBLICO' && ['ESPERA', 'EN_TRIAGE'].includes(ticket.estado) && (
+                  <button
+                    onClick={() => setShowConfigurarModal(true)}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-sm font-medium flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {ticket.estado === 'EN_TRIAGE' ? 'Guardar Configuración' : 'Configurar'}
+                  </button>
+                )}
+
+                {/* Botón "Iniciar Atención" - Visible para tickets en estado ABIERTO (todos los orígenes) */}
+                {ticket.estado === 'ABIERTO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id && (
                   <button 
                     onClick={handleCogerTicket}
                     disabled={actionLoading}
@@ -556,7 +602,7 @@ export default function TicketDetailPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                     )}
-                    Coger ticket / Pasar a proceso
+                    Iniciar Atención
                   </button>
                 )}
 
@@ -597,8 +643,8 @@ export default function TicketDetailPage() {
                   </button>
                 )}
 
-                {/* Botón Pausar/Reanudar SLA */}
-                {ticket.estado_sla && ticket.estado_sla !== 'NO_APLICA' && user && (
+                {/* Botón Pausar/Reanudar SLA - Solo si aplica_sla es true */}
+                {ticket.aplica_sla && user && (
                   (user.rol && user.rol.toLowerCase().includes('admin')) ||
                   (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)
                 ) && (
@@ -606,7 +652,7 @@ export default function TicketDetailPage() {
                     onClick={() => setShowPausarSLAModal(true)}
                     className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors text-sm font-medium"
                   >
-                    {ticket.estado_sla === 'pausado' ? 'Reanudar SLA' : 'Pausar SLA'}
+                    {ticket.pausado ? 'Reanudar SLA' : 'Pausar SLA'}
                   </button>
                 )}
 
@@ -618,15 +664,7 @@ export default function TicketDetailPage() {
                   Historial
                 </button>
                 {/* Botón Ver Chat/Seguimiento público (eliminado) */}
-                {/* Botón Configurar - disponible para tickets del portal público cuando NO está RESUELTO */}
-                {ticket.origen === 'PORTAL_PUBLICO' && ticket.estado !== 'RESUELTO' && (
-                  <button
-                    onClick={() => setShowConfigurarModal(true)}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-sm font-medium"
-                  >
-                    Configurar
-                  </button>
-                )}
+                {/* El botón Configurar ya se movió arriba junto con los otros botones de acción */}
 
                 {/* Botón Cancelar Ticket - Solo si NO está cerrado o cancelado */}
                 {ticket.estado !== 'CERRADO' && ticket.estado !== 'CANCELADO' && user && (
@@ -654,10 +692,9 @@ export default function TicketDetailPage() {
               </div>
             </div>
 
-            {/* SLA Timer - Sistema de Fases */}
-            {ticket.fase_sla_actual && ticket.fase_sla_actual !== 'SIN_SLA' && (
-              <div className="mt-6">
-                {/* Fase de Respuesta: Desde ABIERTO hasta EN_PROCESO */}
+            {/* SLA Timer - Sistema de Fases (solo si aplica_sla es true) */}
+            {ticket.aplica_sla && ticket.fase_sla_actual && ticket.fase_sla_actual !== 'SIN_SLA' && (
+              <div className="mt-6">{/* Fase de Respuesta: Desde ABIERTO hasta EN_PROCESO */}
                 {ticket.fase_sla_actual === 'RESPUESTA' && (
                   <SLATimer
                     estadoSLA={ticket.estado_sla}
@@ -1168,7 +1205,32 @@ export default function TicketDetailPage() {
                 )}
                 {/* Chat interno - sección para que admins/técnicos escriban al usuario */}
                 <div className="border-t border-gray-200 pt-4">
-                  <label className="text-sm font-medium text-gray-500 mb-3 block">Chat con el usuario</label>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-sm font-medium text-gray-500">Chat con el usuario</label>
+                    {/* Badge de estado del chat */}
+                    {ticket.estado === 'EN_TRIAGE' && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                        <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                        💬 Chat Activo - En Triaje
+                      </span>
+                    )}
+                    {ticket.estado === 'EN_PROCESO' && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                        💬 Chat Activo - En Atención
+                      </span>
+                    )}
+                    {['ESPERA', 'ABIERTO'].includes(ticket.estado) && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 border border-yellow-200">
+                        🔒 Chat Deshabilitado - Configurando
+                      </span>
+                    )}
+                    {['RESUELTO', 'CERRADO', 'CANCELADO'].includes(ticket.estado) && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200">
+                        🔒 Chat Cerrado
+                      </span>
+                    )}
+                  </div>
                   <div className="bg-white rounded p-3 border border-gray-200">
                     <div ref={chatContainerRef} className="h-[56vh] overflow-y-auto flex flex-col gap-3 p-2">
                       {chatMessages.map((m, idx) => {
@@ -1212,10 +1274,43 @@ export default function TicketDetailPage() {
                     <div className="mt-3">
                       <div className="flex items-center gap-3">
                         {(() => {
-                          const estadoEnProceso = normalizeEstadoLocal(ticket.estado as any) === 'EN PROCESO';
+                          const estadoNormalizado = normalizeEstadoLocal(ticket.estado as any);
+                          const chatHabilitado = estadoNormalizado === 'EN TRIAGE' || estadoNormalizado === 'EN PROCESO';
                           const isCreator = !!(user && ticket.creado_por && user.id === ticket.creado_por.id);
                           const isAssignedTech = !!(user && ticket.tecnico_asignado_id != null && user.id === ticket.tecnico_asignado_id);
-                          const canSend = estadoEnProceso && (isAssignedTech || isCreator) && !chatDisabled && normalizeEstadoLocal(ticket.estado as any) !== 'RESUELTO';
+                          const isAdmin = user?.rol && user.rol.toLowerCase().includes('admin');
+                          const canSend = chatHabilitado && (isAssignedTech || isCreator || isAdmin) && !chatDisabled;
+                          
+                          // Placeholders dinámicos según el estado
+                          const getPlaceholder = () => {
+                            if (chatDisabledMessage) return chatDisabledMessage;
+                            
+                            switch (ticket.estado) {
+                              case 'ESPERA':
+                                return 'El chat estará disponible cuando el técnico inicie el triaje...';
+                              case 'EN_TRIAGE':
+                                if (canSend) {
+                                  return isAssignedTech ? 'Escribe para solicitar información del incidente...' : 'Escribe tu mensaje para proporcionar información del incidente...';
+                                }
+                                return 'El chat está activo pero no tienes permisos para enviar mensajes';
+                              case 'ABIERTO':
+                                return 'El chat no está disponible en este momento...';
+                              case 'EN_PROCESO':
+                                if (canSend) {
+                                  return isAssignedTech ? 'Escribe tu mensaje al usuario...' : 'Escribe tu mensaje al técnico...';
+                                }
+                                return 'El chat está activo pero no tienes permisos para enviar mensajes';
+                              case 'RESUELTO':
+                              case 'CERRADO':
+                              case 'CANCELADO':
+                                return 'El chat ha sido cerrado. Este ticket ya no acepta mensajes.';
+                              default:
+                                return 'Escribe tu mensaje...';
+                            }
+                          };
+                          
+                          const placeholder = getPlaceholder();
+                          
                           return (
                             <>
                               <input
@@ -1228,7 +1323,7 @@ export default function TicketDetailPage() {
                                   }
                                 }}
                                 disabled={!canSend}
-                                placeholder={chatDisabledMessage || (canSend ? 'Escribe un mensaje al usuario...' : (estadoEnProceso ? 'No estás autorizado para enviar mensajes en este ticket' : 'Chat solo lectura en este estado'))}
+                                placeholder={placeholder}
                                 className="flex-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-300"
                               />
                               <button

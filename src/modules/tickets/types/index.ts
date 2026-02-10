@@ -1,7 +1,10 @@
 // Types para el módulo de Tickets
 
-export type EstadoTicket = 'ESPERA' | 'ABIERTO' | 'EN_PROCESO' | 'PAUSADO' | 'PENDIENTE_CLIENTE' | 'RESUELTO' | 'CERRADO' | 'CANCELADO';
+export type EstadoTicket = 'ESPERA' | 'EN_TRIAGE' | 'ABIERTO' | 'EN_PROCESO' | 'PAUSADO' | 'PENDIENTE_CLIENTE' | 'RESUELTO' | 'CERRADO' | 'CANCELADO';
 export type PrioridadTicket = 'BAJA' | 'MEDIA' | 'ALTA' | 'CRITICA';
+export type ImpactoTicket = 'BAJO' | 'MEDIO' | 'ALTO' | 'CRITICO';
+export type UrgenciaTicket = 'BAJA' | 'MEDIA' | 'ALTA' | 'CRITICA';
+export type ModalidadTicket = 'PRESENCIAL' | 'REMOTO' | 'HIBRIDO';
 export type EstadoSLA = 'EN_TIEMPO' | 'PROXIMO_VENCER' | 'VENCIDO' | 'NO_APLICA';
 
 export interface Ticket {
@@ -23,11 +26,12 @@ export interface Ticket {
   servicio_id?: number;
   servicio_nombre?: string;
   tipo_servicio?: string;
+  modalidad?: ModalidadTicket;
   modalidad_servicio?: string;
   prioridad: PrioridadTicket;
   prioridad_calculada?: string;
-  impacto?: string;
-  urgencia?: string;
+  impacto?: ImpactoTicket;
+  urgencia?: UrgenciaTicket;
   estado: EstadoTicket;
   tecnico_asignado?: {
     id: number;
@@ -64,14 +68,17 @@ export interface Ticket {
   // Fechas
   fecha_creacion: string;
   fecha_actualizacion: string;
+  fecha_inicio_atencion?: string;  // Cuando pasa a EN_PROCESO
   fecha_resolucion?: string;
+  fecha_cierre?: string;
   fecha_limite_sla?: string;
   // SLA
+  aplica_sla: boolean;  // Indica si el ticket tiene SLA activo
   tiempo_transcurrido_minutos?: number;
   tiempo_restante_minutos?: number;
   tiempo_total_sla_minutos?: number;
   estado_sla: EstadoSLA;
-  origen: 'INTERNO' | 'PORTAL_CLIENTE' | 'PORTAL_PUBLICO';
+  origen: 'INTERNO' | 'PORTAL_CLIENTE' | 'PORTAL_PUBLICO' | 'QR' | 'EMAIL' | 'TELEFONO';
   // SLA additional fields from backend
   porcentaje_tiempo_respuesta?: number;
   porcentaje_tiempo_resolucion?: number;

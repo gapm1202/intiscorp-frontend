@@ -40,7 +40,7 @@ const TicketsPage = () => {
   const [showFilters, setShowFilters] = useState(false);
 
   // Estados disponibles (como arrays de strings)
-  const estados = ['ESPERA', 'ABIERTO', 'EN_PROCESO', 'PENDIENTE_CLIENTE', 'RESUELTO', 'CERRADO', 'CANCELADO'];
+  const estados = ['ESPERA', 'EN_TRIAGE', 'ABIERTO', 'EN_PROCESO', 'PENDIENTE_CLIENTE', 'RESUELTO', 'CERRADO', 'CANCELADO'];
   const prioridades = ['BAJA', 'MEDIA', 'ALTA', 'CRITICA'];
   const estadosSLA = ['EN_TIEMPO', 'PROXIMO_VENCER', 'VENCIDO', 'NO_APLICA'];
   const tiposTicket = ['SOPORTE', 'INCIDENTE', 'REQUERIMIENTO', 'CONSULTA'];
@@ -177,8 +177,9 @@ const TicketsPage = () => {
 
   const getEstadoBadgeClass = (estado: string): string => {
     const classes: Record<string, string> = {
-      ESPERA: 'bg-purple-100 text-purple-800',
-      ABIERTO: 'bg-blue-100 text-blue-800',
+      ESPERA: 'bg-yellow-100 text-yellow-800',
+      EN_TRIAGE: 'bg-blue-100 text-blue-800',
+      ABIERTO: 'bg-green-100 text-green-800',
       EN_PROCESO: 'bg-yellow-100 text-yellow-800',
       PENDIENTE_CLIENTE: 'bg-orange-100 text-orange-800',
       RESUELTO: 'bg-green-100 text-green-800',
@@ -537,9 +538,22 @@ const TicketsPage = () => {
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getSLABadgeClass(ticket.estado_sla)}`}>{getSLALabel(ticket.estado_sla)}</span>
                     </div>
                     <div className="flex items-center gap-2">
+                      {/* Botón Coger ticket - solo si NO está asignado */}
                       {(Object.prototype.hasOwnProperty.call(ticket, 'tecnico_asignado_id') && ticket.tecnico_asignado_id === null) && ticket.estado === 'ABIERTO' && (
                         <button onClick={() => handleCogerTicket(ticket.id)} disabled={cogiendoTicket === ticket.id} className="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                           {cogiendoTicket === ticket.id ? 'Tomando...' : 'Coger ticket'}
+                        </button>
+                      )}
+                      {/* Asignar Técnico - mostrar cuando NO está asignado */}
+                      {!ticket.tecnico_asignado && !ticket.tecnico_asignado_id && (
+                        <button
+                          onClick={() => openAsignarModal(ticket)}
+                          className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded hover:bg-indigo-700 transition-colors flex items-center gap-1"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                          Asignar
                         </button>
                       )}
                       <button onClick={() => navigate(`/admin/tickets/${ticket.id}`)} className="px-3 py-1.5 border border-transparent bg-white text-sm text-blue-600 rounded hover:bg-gray-50 transition-colors">Ver detalle</button>
@@ -668,14 +682,14 @@ const TicketsPage = () => {
                               )}
                             </button>
                           )}
-                          {/* Asignar Técnico - mostrar para administradores cuando NO está asignado */}
-                          {user && user.rol && user.rol.toLowerCase().includes('admin') && (Object.prototype.hasOwnProperty.call(ticket, 'tecnico_asignado_id') && ticket.tecnico_asignado_id === null) && (
+                          {/* Asignar Técnico - mostrar cuando NO está asignado */}
+                          {!ticket.tecnico_asignado && !ticket.tecnico_asignado_id && (
                             <button
                               onClick={() => openAsignarModal(ticket)}
                               className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded hover:bg-indigo-700 transition-colors flex items-center gap-2"
                             >
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7l-4 4-4-4m0 6l4-4 4 4" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                               </svg>
                               <span>Asignar</span>
                             </button>

@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { getTicketByCodigo, getMensajes, postMensajePortal } from '../services/ticketsService';
 import type { Ticket } from '../types';
 
-const STEPS = ['EN ESPERA', 'ABIERTO', 'EN PROCESO', 'RESUELTO'];
+const STEPS = ['EN ESPERA', 'EN TRIAGE', 'ABIERTO', 'EN PROCESO', 'RESUELTO'];
 
 function normalizeEstado(raw: string | undefined | null) {
   if (!raw) return '';
@@ -78,9 +78,10 @@ export default function SeguimientoTicketPage() {
     if (!ticket) return 0;
     const raw = normalizeEstado(ticket.estado as any);
     if (raw === 'EN ESPERA' || raw === 'ESPERA' || raw === 'CREADO') return 0;
-    if (raw === 'ABIERTO') return 1;
-    if (raw === 'EN PROCESO' || raw === 'EN_PROCESO' || raw === 'ENPROCESO') return 2;
-    if (raw === 'RESUELTO' || raw === 'FINALIZADO') return 3;
+    if (raw === 'EN TRIAGE' || raw === 'EN_TRIAGE' || raw === 'ENTRIAGE') return 1;
+    if (raw === 'ABIERTO') return 2;
+    if (raw === 'EN PROCESO' || raw === 'EN_PROCESO' || raw === 'ENPROCESO') return 3;
+    if (raw === 'RESUELTO' || raw === 'FINALIZADO') return 4;
     // fallback: try to find in STEPS
     const idx = STEPS.findIndex(s => s === raw);
     return idx >= 0 ? idx : 0;
@@ -93,6 +94,9 @@ export default function SeguimientoTicketPage() {
     if (raw === 'EN ESPERA' || raw === 'ESPERA' || raw === 'CREADO') {
       return 'Tu ticket está en espera de atención.';
     }
+    if (raw === 'EN TRIAGE' || raw === 'EN_TRIAGE' || raw === 'ENTRIAGE') {
+      return 'Necesitamos información del incidente, tu ticket pasó a triage. Detalla tu incidente.';
+    }
     if (raw === 'ABIERTO') {
       if (ticket.tecnico_asignado && (ticket.tecnico_asignado as any).nombre) {
         return `Tu ticket ha sido configurado y fue asignado a ${(ticket.tecnico_asignado as any).nombre}. Ten listo tu código de acceso(ej. anydesk,rundesk,etc.)`;
@@ -100,7 +104,7 @@ export default function SeguimientoTicketPage() {
       return 'Tu ticket está siendo visualizado, en breve se te asignará un técnico. Ten listo tu código de acceso(ej. anydesk,rundesk,etc.)';
     }
     if (raw === 'EN PROCESO' || raw === 'EN_PROCESO') {
-      return 'Tu ticket esta en Proceso. Escríbenos si olvidaste comentar algo adicional.';
+      return 'Tu ticket ha pasado a estado En Proceso. Escríbenos si olvidaste comentar algo adicional.';
     }
     if (raw === 'RESUELTO') {
       return 'Tu ticket ha sido resuelto. Gracias por contactarnos.';
@@ -108,19 +112,21 @@ export default function SeguimientoTicketPage() {
     return '';
   }, [ticket]);
 
-  // Chat rules
+  // Chat rules - HABILITADO en EN_TRIAGE y EN_PROCESO
   const chatEnabled = useMemo(() => {
     if (!ticket) return false;
     const raw = normalizeEstado(ticket.estado as any);
-    if (raw === 'EN PROCESO') return true;
+    if (raw === 'EN TRIAGE' || raw === 'EN_TRIAGE' || raw === 'ENTRIAGE') return true;
+    if (raw === 'EN PROCESO' || raw === 'EN_PROCESO') return true;
     return false;
   }, [ticket]);
 
   const chatReadOnly = useMemo(() => {
     if (!ticket) return true;
     const raw = normalizeEstado(ticket.estado as any);
-    if (raw === 'RESUELTO') return true;
-    if (raw === 'EN PROCESO') return false;
+    if (raw === 'RESUELTO' || raw === 'CERRADO' || raw === 'CANCELADO') return true;
+    if (raw === 'EN TRIAGE' || raw === 'EN_TRIAGE' || raw === 'ENTRIAGE') return false;
+    if (raw === 'EN PROCESO' || raw === 'EN_PROCESO') return false;
     return true; // EN ESPERA, ABIERTO -> disabled
   }, [ticket]);
 
@@ -235,12 +241,19 @@ export default function SeguimientoTicketPage() {
                   }}
                   disabled={!chatEnabled}
                   className="flex-1 px-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-300"
-                  placeholder={!chatEnabled ? 'Chat deshabilitado en este estado' : 'Escribe tu mensaje...'}
+                  placeholder={
+                    !chatEnabled 
+                      ? (normalizeEstado(ticket.estado as any) === 'RESUELTO' || normalizeEstado(ticket.estado as any) === 'CERRADO' 
+                          ? 'El chat ha sido cerrado. Este ticket ya no acepta mensajes.' 
+                          : 'El chat estará disponible cuando el técnico pase a proceso el ticket...'
+                        )
+                      : 'Escribe tu mensaje...'
+                  }
                 />
                 <button type="button" onClick={handleSendPortal} disabled={!chatEnabled || !input.trim()} className={`px-4 py-2 rounded-md text-sm font-medium transition ${chatEnabled ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}>Enviar</button>
               </div>
 
-              <p className="text-xs text-gray-500 mt-3">Reglas: El chat está habilitado solo cuando el ticket está en estado <strong>EN PROCESO</strong>. En otros estados está deshabilitado o solo lectura.</p>
+              <p className="text-xs text-gray-500 mt-3">El chat está habilitado cuando el ticket está en estado <strong>EN TRIAJE</strong> o <strong>EN PROCESO</strong>. En otros estados está deshabilitado.</p>
             </div>
           </div>
         </div>
