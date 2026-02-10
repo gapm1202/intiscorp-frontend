@@ -754,11 +754,26 @@ const EmpresaDetailPage = () => {
         const contratoActivo = await getContratoActivo(empresaId);
         const contratoPayload = (contratoActivo as any)?.data ?? contratoActivo;
         if (contratoPayload) {
+          const getContratoField = (key: string, altKey?: string) =>
+            contratoPayload?.[key] ??
+            (altKey ? contratoPayload?.[altKey] : undefined) ??
+            contratoPayload?.contrato?.[key] ??
+            (altKey ? contratoPayload?.contrato?.[altKey] : undefined) ??
+            contratoPayload?.data?.[key] ??
+            (altKey ? contratoPayload?.data?.[altKey] : undefined) ??
+            contratoPayload?.data?.contrato?.[key] ??
+            (altKey ? contratoPayload?.data?.contrato?.[altKey] : undefined);
+
           // Detectar guardado de cada sección usando null como no guardado
-          const datosGuardados = Boolean(contratoPayload.tipoContrato && contratoPayload.estadoContrato && contratoPayload.fechaInicio && contratoPayload.fechaFin);
-          const serviciosGuardados = contratoPayload.services !== null;
-          const preventivoGuardado = contratoPayload.preventivePolicy !== null;
-          const economicosGuardados = contratoPayload.economics !== null;
+          const datosGuardados = Boolean(
+            getContratoField('tipoContrato', 'tipo_contrato') &&
+            getContratoField('estadoContrato', 'estado_contrato') &&
+            getContratoField('fechaInicio', 'fecha_inicio') &&
+            getContratoField('fechaFin', 'fecha_fin')
+          );
+          const serviciosGuardados = getContratoField('services') !== null;
+          const preventivoGuardado = getContratoField('preventivePolicy', 'preventive_policy') !== null;
+          const economicosGuardados = getContratoField('economics') !== null;
 
           setEditModoDatos(!datosGuardados);
           setEditModoServicios(!serviciosGuardados);
@@ -774,25 +789,27 @@ const EmpresaDetailPage = () => {
           }
 
           const estadoContratoRaw =
-            contratoPayload.estadoContrato ||
-            contratoPayload.estado_contrato ||
-            contratoPayload.estado ||
-            contratoPayload.contrato?.estadoContrato ||
-            contratoPayload.contrato?.estado_contrato ||
-            contratoPayload.data?.estadoContrato ||
-            contratoPayload.data?.estado_contrato ||
+            getContratoField('estadoContrato', 'estado_contrato') ||
+            getContratoField('estado') ||
             empresa?.estadoContrato ||
             (empresa as any)?.estado_contrato ||
             '';
 
+          const fechaInicioRaw = getContratoField('fechaInicio', 'fecha_inicio');
+          const fechaFinRaw = getContratoField('fechaFin', 'fecha_fin');
+          const tipoContratoRaw = getContratoField('tipoContrato', 'tipo_contrato');
+          const renovacionRaw = getContratoField('renovacionAutomatica', 'renovacion_automatica');
+          const responsableRaw = getContratoField('responsableComercial', 'responsable_comercial');
+          const observacionesRaw = getContratoField('observaciones', 'observaciones_contractuales');
+
           setContratoData((prev) => ({
-            tipoContrato: contratoPayload.tipoContrato || contratoPayload.contrato?.tipoContrato || prev.tipoContrato || '',
+            tipoContrato: tipoContratoRaw || prev.tipoContrato || '',
             estadoContrato: estadoContratoRaw || prev.estadoContrato || '',
-            fechaInicio: contratoPayload.fechaInicio ? contratoPayload.fechaInicio.split('T')[0] : (prev.fechaInicio || ''),
-            fechaFin: contratoPayload.fechaFin ? contratoPayload.fechaFin.split('T')[0] : (prev.fechaFin || ''),
-            renovacionAutomatica: contratoPayload.renovacionAutomatica ?? prev.renovacionAutomatica ?? true,
-            responsableComercial: contratoPayload.responsableComercial || prev.responsableComercial || '',
-            observacionesContractuales: contratoPayload.observaciones || prev.observacionesContractuales || '',
+            fechaInicio: fechaInicioRaw ? String(fechaInicioRaw).split('T')[0] : (prev.fechaInicio || ''),
+            fechaFin: fechaFinRaw ? String(fechaFinRaw).split('T')[0] : (prev.fechaFin || ''),
+            renovacionAutomatica: renovacionRaw ?? prev.renovacionAutomatica ?? true,
+            responsableComercial: responsableRaw || prev.responsableComercial || '',
+            observacionesContractuales: observacionesRaw || prev.observacionesContractuales || '',
           }));
 
           if (contratoPayload.services) {
@@ -4043,7 +4060,15 @@ const EmpresaDetailPage = () => {
                           nombre: s.nombre || '',
                         }))}
                         // Pasar el estado del contrato para control automático
-                        estadoContrato={contratoData.estadoContrato || empresa?.estadoContrato || (empresa as any)?.estado_contrato || ''}
+                          estadoContrato={contratoData.estadoContrato || empresa?.estadoContrato || (empresa as any)?.estado_contrato || ''}
+                          slaActivoOverride={(() => {
+                            const raw = contratoData.estadoContrato || empresa?.estadoContrato || (empresa as any)?.estado_contrato || '';
+                            const lower = String(raw).toLowerCase().trim();
+                            const fromContrato = lower === 'activo'
+                              ? true
+                              : (['vencido', 'suspendido'].includes(lower) ? false : undefined);
+                            return slaResumen?.activo ?? fromContrato;
+                          })()}
                         contratoCompleto={isContratoCompleto()}
                         onSave={(data) => handleSlaSave('alcance', 'Alcance del SLA', data)}
                         onCancel={() => handleSlaCancel('alcance')}

@@ -30,6 +30,7 @@ interface AlcanceSLAFormProps {
   sedes?: { id: string; nombre: string }[];
   estadoContrato?: string;
   contratoCompleto?: boolean;
+  slaActivoOverride?: boolean;
 }
 
 const getDefaultAlcanceData = (): AlcanceSLAData => ({
@@ -60,6 +61,7 @@ export function AlcanceSLAForm({
   sedes = [],
   estadoContrato = '',
   contratoCompleto = true,
+  slaActivoOverride,
 }: AlcanceSLAFormProps) {
   // Determinar estado automático del SLA según estado del contrato
   const estadoContratoLower = (estadoContrato || '').toLowerCase().trim();
@@ -101,6 +103,7 @@ export function AlcanceSLAForm({
   };
 
   const [formData, setFormData] = useState<AlcanceSLAData>(getInitialData());
+  const slaActivoDisplay = typeof slaActivoOverride === 'boolean' ? slaActivoOverride : formData.slaActivo;
   const [availableCategories, setAvailableCategories] = useState<Array<{ id: string; nombre: string }>>([]);
   const [availableTypes, setAvailableTypes] = useState<any[]>([]);
   const [availableServicios, setAvailableServicios] = useState<any[]>([]);
@@ -325,11 +328,11 @@ export function AlcanceSLAForm({
               </div>
               {/* Indicador visual de solo lectura */}
               <div className={`px-4 py-2 rounded-lg font-semibold text-sm ${
-                formData.slaActivo
+                slaActivoDisplay
                   ? 'bg-green-100 text-green-800 border-2 border-green-300'
                   : 'bg-red-100 text-red-800 border-2 border-red-300'
               }`}>
-                {formData.slaActivo ? '✓ Activo' : '✗ Inactivo'}
+                {slaActivoDisplay ? '✓ Activo' : '✗ Inactivo'}
               </div>
             </div>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -340,7 +343,7 @@ export function AlcanceSLAForm({
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-blue-900">Estado controlado automáticamente</p>
                   <p className="text-xs text-blue-700 mt-1">
-                    {formData.slaActivo ? (
+                    {slaActivoDisplay ? (
                       <>
                         El SLA está <strong>Activo</strong> porque el estado del contrato es <strong className="text-green-700">Activo</strong>.
                       </>
