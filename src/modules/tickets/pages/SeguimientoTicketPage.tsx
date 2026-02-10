@@ -72,6 +72,16 @@ export default function SeguimientoTicketPage() {
 
   const estado = useMemo(() => normalizeEstado(ticket?.estado || ticket?.estado), [ticket]);
 
+  // Función para obtener el color del SLA en base al porcentaje
+  const getSLAColorClass = (pct?: number, paused?: boolean) => {
+    if (paused) return 'bg-yellow-400';
+    if (pct === undefined || pct === null) return 'bg-gray-300';
+    if (pct >= 100) return 'bg-red-500';
+    if (pct >= 75) return 'bg-orange-500';
+    if (pct >= 50) return 'bg-yellow-400';
+    return 'bg-emerald-500';
+  };
+
   // Determine active step index
   const activeIndex = useMemo(() => {
     // Map certain backend names to our display steps
@@ -197,6 +207,94 @@ export default function SeguimientoTicketPage() {
               </div>
             </div>
           </div>
+
+          {/* SLA Timer Bar */}
+          {ticket.aplica_sla && (
+            <div className="bg-white border border-gray-200 p-4 rounded-lg">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">SLA - Temporizador de Respuesta y Resolución</h3>
+              
+              {/* RESPUESTA */}
+              {ticket.fase_sla_actual === 'RESPUESTA' && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Fase: Respuesta</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {typeof ticket.porcentaje_tiempo_respuesta === 'number' 
+                        ? `${Math.min(100, ticket.porcentaje_tiempo_respuesta).toFixed(1)}%` 
+                        : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden ring-1 ring-gray-300">
+                    <div
+                      className={`absolute top-0 left-0 h-full transition-all duration-300 ${getSLAColorClass(ticket.porcentaje_tiempo_respuesta, ticket.pausado)}`}
+                      style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_respuesta ?? 0))}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between mt-2 text-xs text-gray-600">
+                    <span>Tiempo transcurrido: {ticket.tiempo_respuesta_transcurrido_minutos ?? 0} min</span>
+                    <span>Límite: {ticket.tiempo_respuesta_minutos ?? 0} min</span>
+                  </div>
+                  {ticket.pausado && <p className="text-xs text-yellow-700 mt-1">⏸ SLA en pausa</p>}
+                </div>
+              )}
+
+              {/* RESOLUCION */}
+              {ticket.fase_sla_actual === 'RESOLUCION' && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Fase: Resolución</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {typeof ticket.porcentaje_tiempo_resolucion === 'number' 
+                        ? `${Math.min(100, ticket.porcentaje_tiempo_resolucion).toFixed(1)}%` 
+                        : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden ring-1 ring-gray-300">
+                    <div
+                      className={`absolute top-0 left-0 h-full transition-all duration-300 ${getSLAColorClass(ticket.porcentaje_tiempo_resolucion, ticket.pausado)}`}
+                      style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_resolucion ?? 0))}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between mt-2 text-xs text-gray-600">
+                    <span>Tiempo transcurrido: {ticket.tiempo_resolucion_transcurrido_minutos ?? 0} min</span>
+                    <span>Límite: {ticket.tiempo_resolucion_minutos ?? 0} min</span>
+                  </div>
+                  {ticket.pausado && <p className="text-xs text-yellow-700 mt-1">⏸ SLA en pausa</p>}
+                </div>
+              )}
+
+              {/* COMPLETADO */}
+              {ticket.fase_sla_actual === 'COMPLETADO' && (
+                <div className="flex items-center gap-2 p-2 bg-emerald-50 rounded border border-emerald-200">
+                  <span className="text-emerald-700 font-medium">✓</span>
+                  <span className="text-sm text-emerald-700 font-medium">SLA Completado</span>
+                </div>
+              )}
+
+              {/* SIN SLA */}
+              {ticket.fase_sla_actual === 'SIN_SLA' && (
+                <div className="flex items-center gap-2 p-2 bg-gray-100 rounded border border-gray-300">
+                  <span className="text-gray-600 text-sm">—</span>
+                  <span className="text-sm text-gray-600">No aplica SLA</span>
+                </div>
+              )}
+
+              {/* Estado SLA General */}
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-600">Estado SLA:</span>
+                  <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                    ticket.estado_sla === 'EN_TIEMPO' ? 'bg-emerald-100 text-emerald-700' :
+                    ticket.estado_sla === 'PROXIMO_VENCER' ? 'bg-yellow-100 text-yellow-700' :
+                    ticket.estado_sla === 'VENCIDO' ? 'bg-red-100 text-red-700' :
+                    'bg-gray-100 text-gray-700'
+                  }`}>
+                    {ticket.estado_sla ? ticket.estado_sla.replace('_', ' ') : 'N/A'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* System timeline message */}
           <div>
