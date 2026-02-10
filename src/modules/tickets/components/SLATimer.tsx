@@ -50,15 +50,16 @@ export default function SLATimer({
   const progressWidth = `${cappedPct}%`;
   const progressLabel = (typeof porcentajeConsumido === 'number') ? `${porcentajeConsumido.toFixed(1)}%` : 'N/A';
 
-  const colorClass = (() => {
-    if (slaPausado) return 'bg-gray-400';
+  const gradientClass = (() => {
+    if (slaPausado) return 'from-gray-300 to-gray-400';
     const pct = rawPct;
-    if (pct < 70) return 'bg-emerald-500';
-    if (pct >= 70 && pct < 90) return 'bg-amber-500';
-    if (pct >= 90 && pct < 100) return 'bg-orange-500';
-    // pct >= 100
-    return 'bg-rose-600';
+    if (pct < 70) return 'from-emerald-400 to-emerald-600';
+    if (pct >= 70 && pct < 90) return 'from-amber-400 to-amber-600';
+    if (pct >= 90 && pct < 100) return 'from-orange-400 to-orange-600';
+    return 'from-rose-500 to-rose-700';
   })();
+
+  const alertMarkers = (alertas && alertas.length > 0) ? alertas : [50, 75, 90];
 
   return (
     <div className={`border rounded-lg p-4 bg-white`}>
@@ -80,14 +81,30 @@ export default function SLATimer({
         </div>
       )}
 
-      <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-        <div className={`absolute top-0 left-0 h-full transition-all duration-500 ${colorClass}`} style={{ width: progressWidth }} />
+      <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
+        <span>Transcurrido: {formatMinutes(tiempoTranscurridoMinutos)}</span>
+        <span className="text-xs font-semibold text-gray-700">Consumido: {progressLabel}</span>
+      </div>
+
+      <div className="relative w-full h-3 bg-sky-100 rounded-full overflow-hidden ring-1 ring-slate-200">
+        <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.05) 100%)' }} />
+        <div className={`absolute top-0 left-0 h-full transition-all duration-700 bg-linear-to-r ${gradientClass}`} style={{ width: progressWidth }} />
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white ring-2"
+          style={{ left: `calc(${Math.max(0, Math.min(100, cappedPct))}% - 6px)`, borderColor: 'rgba(15, 23, 42, 0.25)' }}
+        />
+        {alertMarkers.map((m) => (
+          <span
+            key={m}
+            className="absolute top-0 h-full w-px bg-white/70"
+            style={{ left: `${Math.max(0, Math.min(100, m))}%` }}
+          />
+        ))}
       </div>
 
       <div className="flex flex-col sm:flex-row justify-between mt-2 text-xs text-gray-600 gap-2">
-        <span>Transcurrido: {formatMinutes(tiempoTranscurridoMinutos)}</span>
-        <span>{progressLabel}</span>
         <span>Fecha límite: {fechaLimite ? new Date(fechaLimite).toLocaleString() : 'N/A'}</span>
+        <span className={`text-xs font-semibold ${slaPausado ? 'text-gray-500' : 'text-gray-700'}`}>Estado: {slaLabel}</span>
       </div>
 
       {alertas && alertas.length > 0 && (

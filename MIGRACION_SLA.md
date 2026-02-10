@@ -1,5 +1,116 @@
 # 🔄 Migración SLA - Nuevos Endpoints Backend
 
+## 🎯 **ACTUALIZACIÓN: Sistema de Fases SLA (Febrero 2026)**
+
+### Resumen de Cambios
+
+El sistema de SLA ahora calcula el progreso en **dos fases independientes**:
+
+1. **Fase de Respuesta**: Desde que se abre el ticket (`ABIERTO`) hasta que un técnico lo toma (`EN_PROCESO`)
+2. **Fase de Resolución**: Desde que está `EN_PROCESO` hasta que se marca como `RESUELTO`
+
+### 📊 Nuevos Campos en la API
+
+Cuando se consulta un ticket (`GET /api/tickets` o `/api/tickets/:id`), ahora se reciben estos campos adicionales:
+
+```typescript
+interface Ticket {
+  // ... campos existentes ...
+  
+  // Identificador de fase actual
+  fase_sla_actual?: 'RESPUESTA' | 'RESOLUCION' | 'COMPLETADO' | 'SIN_SLA';
+  
+  // Porcentajes de consumo (0-100+)
+  porcentaje_tiempo_respuesta?: number;     // % consumido de tiempo de respuesta
+  porcentaje_tiempo_resolucion?: number;    // % consumido de tiempo de resolución
+  
+  // Tiempos transcurridos en minutos
+  tiempo_respuesta_transcurrido_minutos?: number;   // Minutos desde ABIERTO hasta EN_PROCESO
+  tiempo_resolucion_transcurrido_minutos?: number;  // Minutos desde EN_PROCESO hasta ahora/RESUELTO
+  
+  // Fechas límite para cada fase
+  fecha_limite_respuesta?: string;
+  fecha_limite_resolucion?: string;
+  
+  // Tiempos esperados (desde SLA configurado)
+  tiempo_respuesta_minutos?: number;        // Límite configurado para respuesta
+  tiempo_resolucion_minutos?: number;       // Límite configurado para resolución
+}
+```
+
+### 🎨 Implementación en el Frontend
+
+#### Componentes Actualizados
+
+1. **`TicketDetailPage.tsx`**: Muestra la barra de progreso correspondiente según `fase_sla_actual`
+   - `RESPUESTA`: Muestra barra de "Tiempo de Respuesta"
+   - `RESOLUCION`: Muestra barra de "Tiempo de Resolución"
+   - `COMPLETADO`: Muestra resumen de ambas fases con indicador de cumplimiento
+
+2. **`TicketsPage.tsx`**: Muestra mini barras de progreso en la tabla de tickets
+   - Usa `fase_sla_actual` para determinar qué barra mostrar
+
+3. **`SLATimer.tsx`**: Componente reutilizable que muestra el progreso de una fase
+   - Acepta el porcentaje, tiempos y fechas límite
+   - Colores automáticos: verde (<70%), amarillo (70-90%), naranja (90-100%), rojo (>100%)
+
+#### Lógica de Visualización
+
+```typescript
+switch (ticket.fase_sla_actual) {
+  case 'RESPUESTA':
+    // Mostrar progreso de fase de respuesta
+    mostrarBarra({
+      titulo: 'Tiempo de Respuesta',
+      porcentaje: ticket.porcentaje_tiempo_respuesta,
+      transcurrido: ticket.tiempo_respuesta_transcurrido_minutos,
+      limite: ticket.tiempo_respuesta_minutos,
+      fechaLimite: ticket.fecha_limite_respuesta
+    });
+    break;
+    
+  case 'RESOLUCION':
+    // Mostrar progreso de fase de resolución
+    mostrarBarra({
+      titulo: 'Tiempo de Resolución',
+      porcentaje: ticket.porcentaje_tiempo_resolucion,
+      transcurrido: ticket.tiempo_resolucion_transcurrido_minutos,
+      limite: ticket.tiempo_resolucion_minutos,
+      fechaLimite: ticket.fecha_limite_resolucion
+    });
+    break;
+    
+  case 'COMPLETADO':
+    // Mostrar resumen de ambas fases
+    mostrarResumen({
+      respuesta: {
+        cumplido: ticket.porcentaje_tiempo_respuesta <= 100,
+        porcentaje: ticket.porcentaje_tiempo_respuesta
+      },
+      resolucion: {
+        cumplido: ticket.porcentaje_tiempo_resolucion <= 100,
+        porcentaje: ticket.porcentaje_tiempo_resolucion
+      }
+    });
+    break;
+    
+  case 'SIN_SLA':
+    // No aplica SLA para este ticket
+    ocultarBarra();
+    break;
+}
+```
+
+### ⚠️ Notas Importantes
+
+- Los porcentajes pueden superar el 100% si se excede el tiempo límite
+- Los campos tendrán valores `null` o `0` si el ticket no tiene SLA aplicable
+- Las pausas de SLA ya están descontadas automáticamente de los tiempos transcurridos
+- Los cálculos se actualizan en tiempo real en cada petición
+- El polling automático refresca los datos cada 30 segundos
+
+---
+
 ## ✅ Cambios Implementados
 
 ### 1. Servicio SLA Actualizado

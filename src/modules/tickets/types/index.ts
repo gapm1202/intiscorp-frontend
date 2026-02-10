@@ -80,6 +80,14 @@ export interface Ticket {
   fecha_limite_resolucion?: string;
   tecnico_asignado_id?: number | null;
   sla_alertas?: number[];
+  // SLA - Sistema de Fases (Respuesta y Resolución)
+  fase_sla_actual?: 'RESPUESTA' | 'RESOLUCION' | 'COMPLETADO' | 'SIN_SLA';
+  tiempo_respuesta_transcurrido_minutos?: number;
+  tiempo_resolucion_transcurrido_minutos?: number;
+  tiempo_respuesta_minutos?: number;
+  tiempo_resolucion_minutos?: number;
+  tiempo_respuesta_restante_minutos?: number;
+  tiempo_resolucion_restante_minutos?: number;
 }
 
 export interface TicketFilter {

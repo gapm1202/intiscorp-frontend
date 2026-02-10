@@ -68,6 +68,17 @@ export default function TicketDetailPage() {
       setError(null);
       const data = await getTicketById(Number(id));
       console.log('📋 Detalle del ticket:', data);
+      console.log('🎯 Campos SLA recibidos:', {
+        fase_sla_actual: data.fase_sla_actual,
+        porcentaje_tiempo_respuesta: data.porcentaje_tiempo_respuesta,
+        porcentaje_tiempo_resolucion: data.porcentaje_tiempo_resolucion,
+        tiempo_respuesta_transcurrido_minutos: data.tiempo_respuesta_transcurrido_minutos,
+        tiempo_resolucion_transcurrido_minutos: data.tiempo_resolucion_transcurrido_minutos,
+        tiempo_respuesta_minutos: data.tiempo_respuesta_minutos,
+        tiempo_resolucion_minutos: data.tiempo_resolucion_minutos,
+        fecha_limite_respuesta: data.fecha_limite_respuesta,
+        fecha_limite_resolucion: data.fecha_limite_resolucion
+      });
       setTicket(data);
       // Reset any chat-disabled flags when reloading ticket details
       setChatDisabled(false);
@@ -643,39 +654,80 @@ export default function TicketDetailPage() {
               </div>
             </div>
 
-            {/* SLA Timer */}
-            {ticket.estado_sla && ticket.estado_sla !== 'NO_APLICA' && (
+            {/* SLA Timer - Sistema de Fases */}
+            {ticket.fase_sla_actual && ticket.fase_sla_actual !== 'SIN_SLA' && (
               <div className="mt-6">
-                {/* Mostrar solo la barra correspondiente según reglas:
-                    - ESPERA o ABIERTO: Tiempo de Respuesta (porcentaje_tiempo_respuesta)
-                    - EN_PROCESO: Tiempo de Resolución (porcentaje_tiempo_resolucion)
-                    - RESUELTO: no mostrar barra */}
-                {(ticket.estado === 'ESPERA' || ticket.estado === 'ABIERTO') && (
+                {/* Fase de Respuesta: Desde ABIERTO hasta EN_PROCESO */}
+                {ticket.fase_sla_actual === 'RESPUESTA' && (
                   <SLATimer
                     estadoSLA={ticket.estado_sla}
                     label="Tiempo de Respuesta"
-                    porcentajeConsumido={ticket.porcentaje_tiempo_respuesta ?? ticket.porcentaje_consumido ?? ticket.porcentaje_sla}
-                    tiempoTranscurridoMinutos={ticket.tiempo_respuesta_minutos ?? ticket.tiempo_transcurrido_minutos}
-                    tiempoRestanteMinutos={ticket.tiempo_respuesta_restante_minutos ?? ticket.tiempo_restante_minutos}
-                    fechaLimite={ticket.fecha_limite_respuesta ?? ticket.fecha_limite_sla ?? ticket.fecha_limite}
-                    slaPausado={ticket.pausado || ticket.estado_sla === 'PAUSADO' || !!ticket.sla_pausado}
-                    motivoPausa={ticket.motivo_pausa ?? ticket.sla_motivo_pausa}
+                    porcentajeConsumido={ticket.porcentaje_tiempo_respuesta}
+                    tiempoTranscurridoMinutos={ticket.tiempo_respuesta_transcurrido_minutos}
+                    tiempoRestanteMinutos={ticket.tiempo_respuesta_restante_minutos}
+                    fechaLimite={ticket.fecha_limite_respuesta}
+                    slaPausado={ticket.pausado || ticket.estado_sla === 'PAUSADO'}
+                    motivoPausa={ticket.motivo_pausa}
                     alertas={ticket.sla_alertas}
                   />
                 )}
 
-                {ticket.estado === 'EN_PROCESO' && (
+                {/* Fase de Resolución: Desde EN_PROCESO hasta RESUELTO */}
+                {ticket.fase_sla_actual === 'RESOLUCION' && (
                   <SLATimer
                     estadoSLA={ticket.estado_sla}
                     label="Tiempo de Resolución"
-                    porcentajeConsumido={ticket.porcentaje_tiempo_resolucion ?? ticket.porcentaje_consumido ?? ticket.porcentaje_sla}
-                    tiempoTranscurridoMinutos={ticket.tiempo_transcurrido_minutos}
-                    tiempoRestanteMinutos={ticket.tiempo_restante_minutos}
-                    fechaLimite={ticket.fecha_limite_resolucion ?? ticket.fecha_limite_sla ?? ticket.fecha_limite}
-                    slaPausado={ticket.pausado || ticket.estado_sla === 'PAUSADO' || !!ticket.sla_pausado}
-                    motivoPausa={ticket.motivo_pausa ?? ticket.sla_motivo_pausa}
+                    porcentajeConsumido={ticket.porcentaje_tiempo_resolucion}
+                    tiempoTranscurridoMinutos={ticket.tiempo_resolucion_transcurrido_minutos}
+                    tiempoRestanteMinutos={ticket.tiempo_resolucion_restante_minutos}
+                    fechaLimite={ticket.fecha_limite_resolucion}
+                    slaPausado={ticket.pausado || ticket.estado_sla === 'PAUSADO'}
+                    motivoPausa={ticket.motivo_pausa}
                     alertas={ticket.sla_alertas}
                   />
+                )}
+
+                {/* Ticket Completado: Mostrar resumen de ambas fases */}
+                {ticket.fase_sla_actual === 'COMPLETADO' && (
+                  <div className="space-y-4">
+                    <div className="bg-linear-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg p-4">
+                      <h3 className="text-sm font-semibold text-emerald-800 mb-3">✓ SLA Completado - Resumen de Fases</h3>
+                      
+                      {/* Resumen Fase de Respuesta */}
+                      <div className="mb-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-700">Fase de Respuesta</span>
+                          <span className={`text-sm font-semibold ${
+                            (ticket.porcentaje_tiempo_respuesta ?? 0) <= 100 ? 'text-emerald-700' : 'text-rose-700'
+                          }`}>
+                            {ticket.porcentaje_tiempo_respuesta?.toFixed(1)}%
+                            {(ticket.porcentaje_tiempo_respuesta ?? 0) <= 100 ? ' ✓ Cumplido' : ' ✕ Excedido'}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          Tiempo transcurrido: {formatMinutes(ticket.tiempo_respuesta_transcurrido_minutos)} 
+                          {ticket.tiempo_respuesta_minutos && ` de ${formatMinutes(ticket.tiempo_respuesta_minutos)}`}
+                        </div>
+                      </div>
+
+                      {/* Resumen Fase de Resolución */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-700">Fase de Resolución</span>
+                          <span className={`text-sm font-semibold ${
+                            (ticket.porcentaje_tiempo_resolucion ?? 0) <= 100 ? 'text-emerald-700' : 'text-rose-700'
+                          }`}>
+                            {ticket.porcentaje_tiempo_resolucion?.toFixed(1)}%
+                            {(ticket.porcentaje_tiempo_resolucion ?? 0) <= 100 ? ' ✓ Cumplido' : ' ✕ Excedido'}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          Tiempo transcurrido: {formatMinutes(ticket.tiempo_resolucion_transcurrido_minutos)}
+                          {ticket.tiempo_resolucion_minutos && ` de ${formatMinutes(ticket.tiempo_resolucion_minutos)}`}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
