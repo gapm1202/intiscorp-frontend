@@ -233,7 +233,9 @@ const EmpresaDetailPage = () => {
     fechaFin: '',
     renovacionAutomatica: true,
     responsableComercial: '',
-    observacionesContractuales: ''
+    observacionesContractuales: '',
+    visitaFrecuencia: '',
+    cantidadVisitas: ''
   });
 
   // Función para determinar si mostrar botón de renovar contrato
@@ -438,6 +440,14 @@ const EmpresaDetailPage = () => {
       'modalidad': 'Modalidad',
       'aplica': 'Aplica a',
       'observaciones': 'Observaciones',
+      'visita_frecuencia': 'Visita - Frecuencia',
+      'visitafrecuencia': 'Visita - Frecuencia',
+      'frecuencia_visita': 'Visita - Frecuencia',
+      'frecuenciavisita': 'Visita - Frecuencia',
+      'cantidad_visitas': 'Cantidad de visitas',
+      'cantidadvisitas': 'Cantidad de visitas',
+      'visita_cantidad': 'Cantidad de visitas',
+      'visitacantidad': 'Cantidad de visitas',
     };
     
     // Si existe en el mapa, retornar el valor mapeado
@@ -521,7 +531,9 @@ const EmpresaDetailPage = () => {
         fechaFin: '',
         renovacionAutomatica: true,
         responsableComercial: '',
-        observacionesContractuales: ''
+        observacionesContractuales: '',
+        visitaFrecuencia: '',
+        cantidadVisitas: ''
       });
       
       setServiciosIncluidos({
@@ -602,6 +614,8 @@ const EmpresaDetailPage = () => {
         renovacionAutomatica: contrato.renovacionAutomatica ?? contrato.renovacion_automatica ?? false,
         responsableComercial: contrato.responsableComercial || contrato.responsable_comercial || '',
         observacionesContractuales: contrato.observaciones || contrato.observaciones_contractuales || '',
+        visitaFrecuencia: contrato.visitaFrecuencia || contrato.visita_frecuencia || '',
+        cantidadVisitas: contrato.cantidadVisitas || contrato.cantidad_visitas || '',
         
         // Servicios Incluidos
         soporteRemoto: contrato.services?.soporteRemoto || contrato.services?.soporte_remoto || false,
@@ -801,6 +815,8 @@ const EmpresaDetailPage = () => {
           const renovacionRaw = getContratoField('renovacionAutomatica', 'renovacion_automatica');
           const responsableRaw = getContratoField('responsableComercial', 'responsable_comercial');
           const observacionesRaw = getContratoField('observaciones', 'observaciones_contractuales');
+          const visitaFrecuenciaRaw = getContratoField('visitaFrecuencia', 'visita_frecuencia');
+          const cantidadVisitasRaw = getContratoField('cantidadVisitas', 'cantidad_visitas');
 
           setContratoData((prev) => ({
             tipoContrato: tipoContratoRaw || prev.tipoContrato || '',
@@ -810,6 +826,8 @@ const EmpresaDetailPage = () => {
             renovacionAutomatica: renovacionRaw ?? prev.renovacionAutomatica ?? true,
             responsableComercial: responsableRaw || prev.responsableComercial || '',
             observacionesContractuales: observacionesRaw || prev.observacionesContractuales || '',
+            visitaFrecuencia: visitaFrecuenciaRaw || prev.visitaFrecuencia || '',
+            cantidadVisitas: cantidadVisitasRaw != null ? String(cantidadVisitasRaw) : (prev.cantidadVisitas || ''),
           }));
 
           if (contratoPayload.services) {
@@ -1402,6 +1420,20 @@ const EmpresaDetailPage = () => {
       alert('Por favor complete todos los campos obligatorios (Tipo de contrato, Estado, Fecha inicio y Fecha fin)');
       return;
     }
+
+    if (!contratoData.visitaFrecuencia || !contratoData.cantidadVisitas) {
+      alert('Por favor complete los campos obligatorios de visita (Frecuencia y Cantidad de visitas)');
+      return;
+    }
+
+    const visitaFrecuencia = contratoData.visitaFrecuencia?.trim() || undefined;
+    const cantidadVisitasRaw = contratoData.cantidadVisitas ? Number(contratoData.cantidadVisitas) : undefined;
+    const cantidadVisitas = Number.isFinite(cantidadVisitasRaw) ? cantidadVisitasRaw : undefined;
+
+    if (!visitaFrecuencia || !cantidadVisitas || cantidadVisitas <= 0) {
+      alert('La frecuencia de visita y la cantidad de visitas deben ser validas');
+      return;
+    }
    
  
     setSavingDatos(true);
@@ -1418,6 +1450,8 @@ const EmpresaDetailPage = () => {
           renovacionAutomatica: contratoData.renovacionAutomatica,
           responsableComercial: contratoData.responsableComercial,
           observaciones: contratoData.observacionesContractuales,
+          visitaFrecuencia,
+          cantidadVisitas,
           motivo: 'Creación inicial del contrato',
         };
         if (contratoData.tipoContrato === 'bolsa_horas') {
@@ -1473,6 +1507,8 @@ const EmpresaDetailPage = () => {
               renovacionAutomatica: contratoData.renovacionAutomatica,
               responsableComercial: contratoData.responsableComercial,
               observaciones: contratoData.observacionesContractuales,
+              visitaFrecuencia,
+              cantidadVisitas,
               motivo,
             });
             setContratoSuccess('✅ Datos del contrato actualizados');
@@ -2629,6 +2665,36 @@ const EmpresaDetailPage = () => {
                     </div>
                   </div>
 
+                  {/* Fila 4: Visitas */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-linear-to-br from-cyan-50 to-slate-50 rounded-lg border border-slate-200 p-6">
+                      <label className="text-sm font-bold text-slate-700 mb-3 block">Visita · Frecuencia <span className="text-red-600">*</span></label>
+                      <select
+                        value={contratoData.visitaFrecuencia}
+                        onChange={(e) => setContratoData({ ...contratoData, visitaFrecuencia: e.target.value })}
+                        required
+                        className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 text-slate-900 font-medium hover:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      >
+                        <option value="">-- SELECCIONAR --</option>
+                        <option value="mensual">Mensual</option>
+                        <option value="semanal">Semanal</option>
+                      </select>
+                    </div>
+
+                    <div className="bg-linear-to-br from-cyan-50 to-slate-50 rounded-lg border border-slate-200 p-6">
+                      <label className="text-sm font-bold text-slate-700 mb-3 block">Cantidad de visitas <span className="text-red-600">*</span></label>
+                      <input
+                        type="number"
+                        min={1}
+                        placeholder="Ej: 2"
+                        value={contratoData.cantidadVisitas}
+                        onChange={(e) => setContratoData({ ...contratoData, cantidadVisitas: e.target.value })}
+                        required
+                        className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 text-slate-900 font-medium hover:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      />
+                    </div>
+                  </div>
+
                   {/* Responsable Comercial */}
                   <div className="bg-linear-to-br from-rose-50 to-slate-50 rounded-lg border border-slate-200 p-6">
                     <label className="text-sm font-bold text-slate-700 mb-3 block">Responsable comercial (INTISCORP)</label>
@@ -3772,7 +3838,30 @@ const EmpresaDetailPage = () => {
                             />
                           </div>
 
-                          {/* Fila 5: Observaciones */}
+                          {/* Fila 5: Visitas */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-blue-50 rounded-lg border border-slate-200 p-6">
+                              <label className="text-sm font-bold text-slate-700 mb-3 block">Visita · Frecuencia</label>
+                              <input 
+                                type="text"
+                                value={contratoHistorico.visitaFrecuencia || ''}
+                                disabled
+                                className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                              />
+                            </div>
+
+                            <div className="bg-blue-50 rounded-lg border border-slate-200 p-6">
+                              <label className="text-sm font-bold text-slate-700 mb-3 block">Cantidad de visitas</label>
+                              <input 
+                                type="text"
+                                value={contratoHistorico.cantidadVisitas || ''}
+                                disabled
+                                className="w-full px-3 py-2 bg-slate-100 rounded-lg border border-slate-300 text-slate-900 font-medium cursor-not-allowed"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Fila 6: Observaciones */}
                           <div className="bg-blue-50 rounded-lg border border-slate-200 p-6">
                             <label className="text-sm font-bold text-slate-700 mb-3 block">Observaciones contractuales</label>
                             <textarea 

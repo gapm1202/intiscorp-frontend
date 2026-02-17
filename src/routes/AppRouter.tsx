@@ -23,6 +23,7 @@ import UsuariosEmpresaPage from "../modules/usuarios/pages/UsuariosEmpresaPage";
 import UsuarioDetailPage from "../modules/usuarios/pages/UsuarioDetailPage";
 import { UsuariosInternosPage } from "../modules/usuarios/pages/UsuariosInternosPage";
 import UsuariosInternosFormPage from "../modules/usuarios/pages/UsuariosInternosFormPage";
+import VisitasPage from "../modules/visitas/pages/VisitasPage";
 
 const AppRouter = () => {
   return (
@@ -150,6 +151,16 @@ const AppRouter = () => {
             <RoleRoute role="admin">
               <AdminLayout>
                 <CatalogoCorreosPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/visitas"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <VisitasPage />
               </AdminLayout>
             </RoleRoute>
           }

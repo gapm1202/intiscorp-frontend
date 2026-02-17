@@ -11,6 +11,7 @@ export default defineConfig({
   server: {
     // Open the browser to /login when the dev server starts
     port: 8088,
+    strictPort: true,
     open: '/login',
     proxy: {
       '/api': {

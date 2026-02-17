@@ -103,6 +103,8 @@ export async function createContrato(empresaId: string | number, data: {
   renovacionAutomatica?: boolean;
   responsableComercial?: string;
   observaciones?: string;
+  visitaFrecuencia?: string;
+  cantidadVisitas?: number;
   motivo: string;
 }) {
   const url = `${API_BASE}/api/empresas/${empresaId}/contratos`;
@@ -134,6 +136,8 @@ export async function updateContratoDatos(empresaId: string | number, contractId
   renovacionAutomatica?: boolean;
   responsableComercial?: string;
   observaciones?: string;
+  visitaFrecuencia?: string;
+  cantidadVisitas?: number;
   motivo: string;
 }) {
   const url = `${API_BASE}/api/empresas/${empresaId}/contratos/${contractId}`;
