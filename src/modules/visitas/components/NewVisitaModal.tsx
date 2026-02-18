@@ -9,6 +9,12 @@ interface NewVisitaModalProps {
   onClose: () => void;
   onVisitaCreada: (visita: Visita) => void;
   onError: (error: string) => void;
+  prefilledData?: {
+    sedeId?: string;
+    tipoVisita?: 'PROGRAMADA' | 'POR_TICKET' | 'PREVENTIVO';
+    ticketId?: string;
+    ticketCodigo?: string;
+  };
 }
 
 interface FormData {
@@ -21,10 +27,11 @@ interface FormData {
   observaciones: string;
 }
 
-export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisitaCreada, onError }: NewVisitaModalProps) {
+export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisitaCreada, onError, prefilledData }: NewVisitaModalProps) {
   const [formData, setFormData] = useState<FormData>({
-    sedeId: '',
-    tipoVisita: 'PROGRAMADA',
+    sedeId: prefilledData?.sedeId || '',
+    tipoVisita: prefilledData?.tipoVisita || 'PROGRAMADA',
+    ticketId: prefilledData?.ticketId,
     fechaProgramada: '',
     tecnicos: [],
     observaciones: '',
@@ -38,10 +45,15 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
   const [selectedTecnico, setSelectedTecnico] = useState('');
   const [tecnicoEncargado, setTecnicoEncargado] = useState('');
   const [validacionError, setValidacionError] = useState('');
+  const isFromTicket = Boolean(prefilledData?.ticketId);
 
   // Cargar datos iniciales
   useEffect(() => {
     cargarDatos();
+    // Si viene con ticketId prellenado, cargar su detalle
+    if (prefilledData?.ticketId) {
+      cargarDetalleTicket(prefilledData.ticketId);
+    }
   }, [empresaId]);
 
   const cargarDatos = async () => {
@@ -295,7 +307,8 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
                 value={formData.sedeId}
                 onChange={(e) => setFormData({ ...formData, sedeId: e.target.value })}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={isFromTicket}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 <option value="">Seleccionar sede...</option>
                 {sedes.map((sede, index) => {
@@ -307,6 +320,7 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
                   );
                 })}
               </select>
+              {isFromTicket && <p className="mt-1 text-xs text-gray-500">✓ Sede del ticket seleccionado</p>}
             </div>
 
             <div>
@@ -314,26 +328,31 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
               <select
                 value={formData.tipoVisita}
                 onChange={(e) => setFormData({ ...formData, tipoVisita: e.target.value as any })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={isFromTicket}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 <option value="PROGRAMADA">Programada</option>
                 <option value="POR_TICKET">Por Ticket</option>
                 <option value="PREVENTIVO">Preventivo</option>
               </select>
+              {isFromTicket && <p className="mt-1 text-xs text-gray-500">✓ Tipo establecido automáticamente</p>}
             </div>
           </div>
 
           {/* Fila 2: Ticket (si es por ticket) */}
           {formData.tipoVisita === 'POR_TICKET' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Ticket</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Ticket {isFromTicket && <span className="text-green-600 text-xs">(Prellenado)</span>}
+              </label>
               <select
                 value={formData.ticketId || ''}
                 onChange={(e) => {
                   setFormData({ ...formData, ticketId: e.target.value });
                   cargarDetalleTicket(e.target.value);
                 }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={isFromTicket}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 <option value="">Seleccionar ticket...</option>
                 {tickets.map((ticket, index) => {
@@ -346,6 +365,9 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
                   );
                 })}
               </select>
+              {isFromTicket && prefilledData?.ticketCodigo && (
+                <p className="mt-1 text-xs text-green-600 font-medium">✓ Ticket {prefilledData.ticketCodigo} seleccionado</p>
+              )}
             </div>
           )}
 

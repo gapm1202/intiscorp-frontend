@@ -83,7 +83,7 @@ export default function VisitasCalendarView({
     const iconMap: Record<EstadoVisita, string> = {
       PENDIENTE_PROGRAMACION: '⏳',
       PROGRAMADA: '📅',
-      EN_CURSO: '🔵',
+      EN_PROCESO: '🔵',
       FINALIZADA: '✅',
       CANCELADA: '❌',
     };
@@ -184,7 +184,7 @@ export default function VisitasCalendarView({
                             className={`text-xs px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80 transition text-white font-medium ${
                               visita.estado === 'PROGRAMADA'
                                 ? 'bg-blue-500'
-                                : visita.estado === 'EN_CURSO'
+                                : visita.estado === 'EN_PROCESO'
                                   ? 'bg-yellow-500'
                                   : visita.estado === 'FINALIZADA'
                                     ? 'bg-green-500'
@@ -322,7 +322,7 @@ export default function VisitasCalendarView({
             </div>
 
             <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
-              {visitaSeleccionada.estado === 'EN_CURSO' && (
+              {visitaSeleccionada.estado === 'EN_PROCESO' && (
                 <button
                   onClick={() => {
                     onFinalizarVisita(visitaSeleccionada);

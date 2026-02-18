@@ -599,3 +599,30 @@ export async function updateActivo(empresaId: string | number, sedeId: string | 
     return data;
   }
 }
+
+// Obtener un activo específico por ID
+export async function getActivoById(activoId: string | number) {
+  const url = `${API_BASE}/api/activos/${activoId}`;
+  const token = getToken();
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token && { "Authorization": `Bearer ${token}` })
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("❌ Error getting activo:", text);
+    const err = new Error(`Error fetching activo: ${res.status} ${res.statusText}`) as ServiceError;
+    err.status = res.status;
+    err.body = text;
+    throw err;
+  }
+
+  const data = await res.json();
+  // Retornar directamente los datos si es un objeto, o acceder a .data si es una respuesta envuelta
+  return data.data || data;
+}

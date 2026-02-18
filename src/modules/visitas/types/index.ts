@@ -1,4 +1,4 @@
-export type EstadoVisita = "PENDIENTE_PROGRAMACION" | "PROGRAMADA" | "EN_CURSO" | "FINALIZADA" | "CANCELADA";
+export type EstadoVisita = "PENDIENTE_PROGRAMACION" | "PROGRAMADA" | "EN_PROCESO" | "FINALIZADA" | "CANCELADA";
 
 export type TipoVisita = "PROGRAMADA" | "POR_TICKET" | "PREVENTIVO";
 

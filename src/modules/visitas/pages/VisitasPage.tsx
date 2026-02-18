@@ -1,16 +1,22 @@
 import { useState, useEffect, useMemo } from 'react';
-import type { Visita, FiltrosVisitas, EstadoVisita, TipoVisita, ResumenContractualVisitas } from '../types';
+import type { Visita, FiltrosVisitas, EstadoVisita, ResumenContractualVisitas } from '../types';
 import { 
   getVisitas, 
   getResumenContractualVisitas
 } from '../services/visitasService';
 import { getEmpresas } from '../services/empresasService';
 import { getContratoActivo } from '@/modules/empresas/services/contratosService';
+import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
+import { getAreasByEmpresa } from '@/modules/inventario/services/areasService';
+import { getCategorias } from '@/modules/inventario/services/categoriasService';
+import { getInventarioBySede } from '@/modules/inventario/services/inventarioService';
+import type { Category } from '@/modules/inventario/services/categoriasService';
 import Toast from '@/components/ui/Toast';
 import NewVisitaModal from "../components/NewVisitaModal";
 import VisitasCalendarView from "../components/VisitasCalendarView";
 import VisitasTableView from "../components/VisitasTableView";
 import FinalizarVisitaModal from "../components/FinalizarVisitaModal";
+import RegisterAssetModal from "@/modules/inventario/components/RegisterAssetModal";
 
 
 interface Toast_Props {
@@ -36,6 +42,11 @@ export default function VisitasPage() {
   const [filtros, setFiltros] = useState<FiltrosVisitas>({});
   const [mesAño, setMesAño] = useState(getCurrentMonthLocal()); // YYYY-MM
   
+  // Datos para RegisterAssetModal
+  const [sedes, setSedes] = useState<any[]>([]);
+  const [areas, setAreas] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  
   // Vistas
   const [vistaActual, setVistaActual] = useState<'calendario' | 'tabla'>('tabla');
   
@@ -46,6 +57,9 @@ export default function VisitasPage() {
   const [showNewVisitaModal, setShowNewVisitaModal] = useState(false);
   const [showFinalizarModal, setShowFinalizarModal] = useState(false);
   const [visitaSeleccionada, setVisitaSeleccionada] = useState<Visita | null>(null);
+  const [prefilledVisitaData, setPrefilledVisitaData] = useState<any>(null);
+  const [showRegisterAssetModal, setShowRegisterAssetModal] = useState(false);
+  const [activoSeleccionadoParaEditar, setActivoSeleccionadoParaEditar] = useState<any>(null);
   
   // Contrato activo de la empresa seleccionada
   const [contratoActivo, setContratoActivo] = useState<any>(null);
@@ -64,7 +78,7 @@ export default function VisitasPage() {
     const base = {
       PENDIENTE_PROGRAMACION: 0,
       PROGRAMADA: 0,
-      EN_CURSO: 0,
+      EN_PROCESO: 0,
       FINALIZADA: 0,
       CANCELADA: 0,
     } as Record<EstadoVisita, number>;
@@ -140,6 +154,32 @@ export default function VisitasPage() {
     cargarResumen();
   }, [contratoActivo?.id]);
 
+  // Cargar sedes, áreas y categorías cuando se selecciona una empresa
+  useEffect(() => {
+    const cargarDatosEmpresas = async () => {
+      if (!filtros.empresaId) {
+        setSedes([]);
+        setAreas([]);
+        return;
+      }
+
+      try {
+        const [sedesData, areasData, categoriasData] = await Promise.all([
+          getSedesByEmpresa(String(filtros.empresaId)),
+          getAreasByEmpresa(String(filtros.empresaId)),
+          getCategorias(),
+        ]);
+        setSedes(sedesData || []);
+        setAreas(areasData || []);
+        setCategories(categoriasData || []);
+      } catch (error) {
+        console.error('Error loading enterprise data:', error);
+      }
+    };
+
+    cargarDatosEmpresas();
+  }, [filtros.empresaId]);
+
   // Cargar visitas con filtros
   useEffect(() => {
     cargarVisitas();
@@ -208,6 +248,7 @@ export default function VisitasPage() {
       mostrarToast('No hay contrato activo para esta empresa', 'warning');
       return;
     }
+    setPrefilledVisitaData(null); // Resetear datos prellenados
     setShowNewVisitaModal(true);
   };
 
@@ -216,13 +257,127 @@ export default function VisitasPage() {
     setShowFinalizarModal(true);
   };
 
-  const handleVisitaCreada = async (nuevaVisita: Visita) => {
+  const handleAbrirModalEditarActivo = async (activo: any) => {
+    try {
+      console.log('📝 [ABRIENDO MODAL EDITAR ACTIVO]', activo);
+      
+      // El activo viene del ticket enriquecido con empresa_id y sede_id
+      const empresaId = activo.empresa_id;
+      const sedeId = activo.sede_id;
+
+      console.log('🔍 [DATOS OBTENIDOS]', { empresaId, sedeId, activoId: activo.activo_id, activoCodigo: activo.activo_codigo });
+
+      if (!empresaId || !sedeId) {
+        console.error('❌ No hay empresa_id o sede_id para obtener el inventario', { empresaId, sedeId });
+        mostrarToast('Error: No hay datos de empresa o sede', 'error');
+        return;
+      }
+
+      // Buscar el nombre de la empresa en la lista de empresas
+      const empresa = empresas.find((emp) => String(emp._id || emp.id) === String(empresaId));
+      const empresaNombre = empresa?.nombre || '';
+
+      // Cargar las sedes de la empresa del activo (no depender de las sedes filtradas)
+      console.log('📡 Cargando sedes para empresa:', empresaId);
+      const sedesDeEmpresa = await getSedesByEmpresa(String(empresaId));
+      const areasDeEmpresa = await getAreasByEmpresa(String(empresaId));
+      const categoriasData = await getCategorias();
+      
+      // Extraer el array de datos si viene en formato { ok: true, data: [...] }
+      const sedesArray = Array.isArray(sedesDeEmpresa) ? sedesDeEmpresa : (sedesDeEmpresa?.data || []);
+      const areasArray = Array.isArray(areasDeEmpresa) ? areasDeEmpresa : (areasDeEmpresa?.data || []);
+      const categoriasArray = Array.isArray(categoriasData) ? categoriasData : (categoriasData?.data || []);
+      
+      console.log('🔎 Buscando sede con ID:', sedeId);
+      console.log('📋 Lista de sedes disponibles:', sedesArray.map(s => ({ id: s._id || s.id, nombre: s.nombre })));
+      const sede = sedesArray.find((s) => String(s._id || s.id) === String(sedeId));
+      const sedeNombre = sede?.nombre || '';
+
+      console.log('🏢 Empresa encontrada:', empresaNombre);
+      console.log('🏪 Sede encontrada:', sedeNombre, 'Objeto sede:', sede);
+      
+      // Actualizar los estados de sedes y áreas para que el modal los use
+      setSedes(sedesArray);
+      setAreas(areasArray);
+      setCategories(categoriasArray);
+      
+      console.log('📋 Áreas cargadas:', areasArray.length, 'lista:', areasArray);
+      console.log('📋 Categorías cargadas:', categoriasArray.length);
+
+      // Obtener el inventario de la sede para encontrar el activo completo
+      console.log('📡 Obteniendo inventario para empresa:', empresaId, 'sede:', sedeId);
+      const inventario = await getInventarioBySede(empresaId, sedeId);
+      console.log('📦 Inventario obtenido:', inventario);
+      
+      // El inventario puede venir como { ok: true, data: [...] } o directamente como array
+      const activosList = Array.isArray(inventario) ? inventario : inventario?.data || [];
+      
+      const activoCompleto = activosList.find((item: any) => 
+        String(item.id) === String(activo.activo_id) || 
+        String(item.codigo) === String(activo.activo_codigo) ||
+        String(item.assetId) === String(activo.activo_codigo)
+      );
+
+      console.log('🔎 Buscando activo con id:', activo.activo_id, 'o codigo:', activo.activo_codigo);
+      console.log('✅ Activo completo encontrado:', activoCompleto);
+      console.log('📊 Lista de activos en inventario:', activosList.map((a: any) => ({ id: a.id, codigo: a.codigo, assetId: a.assetId })));
+
+      if (activoCompleto) {
+        // Enriquecer el activo completo con nombres Y con las áreas para que el modal las tenga disponibles
+        const activoEnriquecido = {
+          ...activoCompleto,
+          empresa_nombre: empresaNombre,
+          empresaNombre: empresaNombre,
+          sede_nombre: sedeNombre,
+          sedeNombre: sedeNombre,
+          _areasDisponibles: areasArray, // Pasar las áreas directamente en el activo
+        };
+        console.log('🎁 Activo enriquecido final (TODOS LOS CAMPOS):', activoEnriquecido);
+        console.log('🔍 Campos críticos:', {
+          condicionFisica: activoEnriquecido.condicionFisica || activoEnriquecido.condicion_fisica,
+          responsable: activoEnriquecido.responsable,
+          campos_personalizados_array: activoEnriquecido.campos_personalizados_array,
+          camposPersonalizadosArray: activoEnriquecido.camposPersonalizadosArray,
+        });
+        
+        // Esperar un tick para que React actualice los estados antes de abrir el modal
+        await new Promise(resolve => setTimeout(resolve, 10));
+        
+        console.log('🚀 [ABRIENDO MODAL] Estados finales:', {
+          sedesLength: sedesArray.length,
+          areasLength: areasArray.length,
+          categoriasLength: categoriasArray.length,
+          activoTieneCamposPersonalizados: !!activoEnriquecido.camposPersonalizadosArray,
+        });
+        
+        setActivoSeleccionadoParaEditar(activoEnriquecido);
+      } else {
+        // Si no encuentra el activo exacto, usar los datos del ticket enriquecidos
+        console.warn('⚠️ Activo no encontrado en inventario, usando datos del ticket');
+        setActivoSeleccionadoParaEditar({
+          id: activo.activo_id,
+          empresa_nombre: empresaNombre,
+          empresaNombre: empresaNombre,
+          sede_nombre: sedeNombre,
+          sedeNombre: sedeNombre,
+          ...activo
+        });
+      }
+      
+      setShowRegisterAssetModal(true);
+    } catch (error) {
+      console.error('❌ Error al cargar el activo:', error);
+      mostrarToast('Error al cargar los detalles del activo', 'error');
+    }
+  };
+
+  const handleVisitaCreada = async () => {
     setShowNewVisitaModal(false);
     mostrarToast('Visita creada exitosamente', 'success');
     cargarVisitas();
   };
 
-  const handleVisitaFinalizada = async (visitaFinalizada: Visita) => {
+  const handleVisitaFinalizada = async () => {
     setShowFinalizarModal(false);
     setVisitaSeleccionada(null);
     mostrarToast('Visita finalizada exitosamente', 'success');
@@ -244,7 +399,7 @@ export default function VisitasPage() {
   const estadoColor: Record<EstadoVisita, string> = {
     PENDIENTE_PROGRAMACION: 'bg-gray-100 text-gray-800',
     PROGRAMADA: 'bg-blue-100 text-blue-800',
-    EN_CURSO: 'bg-yellow-100 text-yellow-800',
+    EN_PROCESO: 'bg-yellow-100 text-yellow-800',
     FINALIZADA: 'bg-green-100 text-green-800',
     CANCELADA: 'bg-red-100 text-red-800',
   };
@@ -343,7 +498,7 @@ export default function VisitasPage() {
                 <option value="">Todos los estados</option>
                 <option value="PENDIENTE_PROGRAMACION">Pendiente Programación</option>
                 <option value="PROGRAMADA">Programada</option>
-                <option value="EN_CURSO">En Curso</option>
+                <option value="EN_PROCESO">En Proceso</option>
                 <option value="FINALIZADA">Finalizada</option>
                 <option value="CANCELADA">Cancelada</option>
               </select>
@@ -396,8 +551,8 @@ export default function VisitasPage() {
                   <p className="text-2xl font-bold text-green-900 mt-2">{resumenEstados.FINALIZADA}</p>
                 </div>
                 <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-4 rounded-lg">
-                  <p className="text-xs text-amber-600 font-medium uppercase">En Curso</p>
-                  <p className="text-2xl font-bold text-amber-900 mt-2">{resumenEstados.EN_CURSO}</p>
+                  <p className="text-xs text-amber-600 font-medium uppercase">En Proceso</p>
+                  <p className="text-2xl font-bold text-amber-900 mt-2">{resumenEstados.EN_PROCESO}</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
@@ -485,9 +640,13 @@ export default function VisitasPage() {
         <NewVisitaModal
           empresaId={filtros.empresaId!}
           contratoId={String(contratoActivo?.id ?? '')}
-          onClose={() => setShowNewVisitaModal(false)}
+          onClose={() => {
+            setShowNewVisitaModal(false);
+            setPrefilledVisitaData(null);
+          }}
           onVisitaCreada={handleVisitaCreada}
           onError={(error) => mostrarToast(error, 'error')}
+          prefilledData={prefilledVisitaData}
         />
       )}
 
@@ -497,6 +656,32 @@ export default function VisitasPage() {
           onClose={() => setShowFinalizarModal(false)}
           onVisitaFinalizada={handleVisitaFinalizada}
           onError={(error) => mostrarToast(error, 'error')}
+          onAbrirModalEditarActivo={handleAbrirModalEditarActivo}
+        />
+      )}
+
+      {showRegisterAssetModal && activoSeleccionadoParaEditar && (
+        <RegisterAssetModal
+          key={`edit-asset-${activoSeleccionadoParaEditar.id}-${Date.now()}`}
+          isOpen={showRegisterAssetModal}
+          onClose={() => {
+            setShowRegisterAssetModal(false);
+            setActivoSeleccionadoParaEditar(null);
+          }}
+          empresaId={String(activoSeleccionadoParaEditar.empresaId || activoSeleccionadoParaEditar.empresa_id || '')}
+          sedeId={String(activoSeleccionadoParaEditar.sedeId || activoSeleccionadoParaEditar.sede_id || '')}
+          empresaNombre={activoSeleccionadoParaEditar.empresaNombre || activoSeleccionadoParaEditar.empresa_nombre}
+          sedeNombre={activoSeleccionadoParaEditar.sedeNombre || activoSeleccionadoParaEditar.sede_nombre}
+          empresa={empresas.find(e => String(e._id || e.id) === String(activoSeleccionadoParaEditar.empresaId || activoSeleccionadoParaEditar.empresa_id))}
+          sedes={sedes}
+          areas={areas}
+          categories={categories}
+          editingAsset={activoSeleccionadoParaEditar}
+          onSuccess={() => {
+            mostrarToast('Activo actualizado exitosamente', 'success');
+            setShowRegisterAssetModal(false);
+            setActivoSeleccionadoParaEditar(null);
+          }}
         />
       )}
 

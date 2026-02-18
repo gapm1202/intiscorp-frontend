@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Visita, EstadoVisita } from '../types';
 import { actualizarVisita, cancelarVisita } from '../services/visitasService';
 
@@ -15,6 +16,7 @@ export default function VisitasTableView({
   estadoColor,
   onRefresh,
 }: VisitasTableViewProps) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({
     key: 'fechaProgramada',
@@ -50,13 +52,28 @@ export default function VisitasTableView({
 
     setLoading(true);
     try {
-      await actualizarVisita(visita._id, { estado: 'EN_CURSO' });
+      await actualizarVisita(visita._id, { estado: 'EN_PROCESO' });
       onRefresh();
+      
+      // Redirigir al detalle del ticket si existe
+      if (visita.ticketId) {
+        navigate(`/admin/tickets/${visita.ticketId}`);
+      }
     } catch (error) {
       console.error('Error starting visita:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Verificar si hoy es el día programado (o después)
+  const esDiaProgramado = (fechaProgramada: string) => {
+    if (!fechaProgramada) return false;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaVisita = new Date(fechaProgramada);
+    fechaVisita.setHours(0, 0, 0, 0);
+    return fechaVisita <= hoy;
   };
 
   const handleCancelarVisita = async (visita: Visita) => {
@@ -149,7 +166,7 @@ export default function VisitasTableView({
                 .filter(Boolean);
               const tooltipTecnicos = nombresTecnicosList.length > 0 ? nombresTecnicosList : ['Solo encargado'];
               const puedeCambiarEstado =
-                visita.estado === 'PROGRAMADA' || visita.estado === 'EN_CURSO' || visita.estado === 'PENDIENTE_PROGRAMACION';
+                visita.estado === 'PROGRAMADA' || visita.estado === 'EN_PROCESO' || visita.estado === 'PENDIENTE_PROGRAMACION';
 
               return (
                 <tr key={visita._id ?? `${visita.fechaProgramada}-${visitaIndex}`} className="hover:bg-gray-50 transition">
@@ -202,29 +219,47 @@ export default function VisitasTableView({
 
                   <td className="px-8 py-4 text-center">
                     <div className="flex justify-center gap-2">
-                      {visita.estado === 'PROGRAMADA' && (
+                      {visita.estado === 'PROGRAMADA' && esDiaProgramado(visita.fechaProgramada) && (
                         <button
                           onClick={() => handleIniciarVisita(visita)}
                           disabled={loading}
                           className="text-blue-600 hover:text-blue-900 disabled:opacity-50 transition"
-                          title="Iniciar visita"
+                          title="Iniciar atención"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         </button>
                       )}
 
-                      {visita.estado === 'EN_CURSO' && (
-                        <button
-                          onClick={() => onFinalizarVisita(visita)}
-                          disabled={loading}
-                          className="text-green-600 hover:text-green-900 disabled:opacity-50 transition"
-                          title="Finalizar visita"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        </button>
+                      {visita.estado === 'PROGRAMADA' && !esDiaProgramado(visita.fechaProgramada) && (
+                        <span className="text-gray-400 text-xs italic" title="Se habilitará el día programado">
+                          Programada
+                        </span>
                       )}
 
-                      {puedeCambiarEstado && visita.estado !== 'EN_CURSO' && (
+                      {visita.estado === 'EN_PROCESO' && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => onFinalizarVisita(visita)}
+                            disabled={loading}
+                            className="text-green-600 hover:text-green-900 disabled:opacity-50 transition"
+                            title="Finalizar visita"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          </button>
+                          {visita.ticketId && (
+                            <button
+                              onClick={() => navigate(`/admin/tickets/${visita.ticketId}`)}
+                              disabled={loading}
+                              className="text-blue-600 hover:text-blue-900 disabled:opacity-50 transition"
+                              title="Ver detalle del ticket"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {puedeCambiarEstado && visita.estado !== 'EN_PROCESO' && (
                         <button
                           onClick={() => handleCancelarVisita(visita)}
                           disabled={loading}

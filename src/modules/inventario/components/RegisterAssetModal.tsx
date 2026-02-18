@@ -46,7 +46,13 @@ const RegisterAssetModal = ({
   editingAsset = null,
 }: Props) => {
   // 🔍 DEBUG: Monitorear props del modal
-  console.log('🔷 [MODAL PROPS]', { isOpen, hasEditingAsset: !!editingAsset });
+  console.log('🔷 [MODAL PROPS]', { 
+    isOpen, 
+    hasEditingAsset: !!editingAsset,
+    areasLength: areas?.length ?? 0,
+    areasIsArray: Array.isArray(areas),
+    areasType: typeof areas
+  });
   
   // Basic fields
   const [categoria, setCategoria] = useState<string>("");
@@ -316,16 +322,38 @@ const RegisterAssetModal = ({
         setModelo(String(asset['modelo'] ?? ''));
         setSerie(String(asset['serie'] ?? ''));
         setAssetId(String(asset['assetId'] ?? asset['codigo'] ?? ''));
-        setArea(String(asset['area'] ?? ''));
+        
+        const areaValue = String(asset['area'] ?? '');
+        console.log('🟩 [ÁREA] Valor encontrado:', areaValue);
+        setArea(areaValue);
         setProveedor(String(asset['proveedor'] ?? ''));
 
         // intentar obtener responsable desde el área si no viene en el activo
-        const areaNameFromAsset = String(asset['area'] ?? '');
-        if (!String(asset['responsable'] ?? '').trim() && areaNameFromAsset && areas && areas.length > 0) {
-          const found = areas.find(a => String(a.name ?? a.nombre ?? '') === areaNameFromAsset);
-          if (found) setResponsable(String(found.responsable ?? ''));
+        const areaNameFromAsset = areaValue;
+        // Usar las áreas que vienen en el activo o las que vienen como prop
+        const areasToUse = Array.isArray(areas) ? areas : (asset['_areasDisponibles'] as any[] || []);
+        console.log('🔍 [RESPONSABLE] Buscando en áreas:', { 
+          areaNameFromAsset, 
+          responsableEnActivo: asset['responsable'] ?? asset['responsable_name'],
+          areasDisponibles: areasToUse?.length ?? 0,
+          areasIsArray: Array.isArray(areasToUse),
+          areasList: Array.isArray(areasToUse) ? areasToUse.map(a => ({ nombre: a.name ?? a.nombre, responsable: a.responsable })) : 'NO ES ARRAY'
+        });
+        if (!String(asset['responsable'] ?? '').trim() && areaNameFromAsset && Array.isArray(areasToUse) && areasToUse.length > 0) {
+          const found = areasToUse.find(a => String(a.name ?? a.nombre ?? '') === areaNameFromAsset);
+          console.log('🔎 [ÁREA ENCONTRADA]:', found);
+          if (found) {
+            const responsableValue = String(found.responsable ?? '');
+            console.log('✅ [RESPONSABLE] Encontrado desde área:', responsableValue);
+            setResponsable(responsableValue);
+          } else {
+            console.log('⚠️ [RESPONSABLE] No se encontró área con nombre:', areaNameFromAsset);
+            setResponsable('');
+          }
         } else {
-          setResponsable(String(asset['responsable'] ?? asset['responsable_name'] ?? ''));
+          const responsableValue = String(asset['responsable'] ?? asset['responsable_name'] ?? '');
+          console.log('✅ [RESPONSABLE] Usando valor del activo:', responsableValue);
+          setResponsable(responsableValue);
         }
 
         // Convertir fechas ISO a formato YYYY-MM-DD para input[type="date"]
@@ -392,7 +420,9 @@ const RegisterAssetModal = ({
           }
         }
 
-        setCondicionFisica(String(asset['condicionFisica'] ?? asset['condicion_fisica'] ?? ''));
+        const condicionValue = String(asset['condicionFisica'] ?? asset['condicion_fisica'] ?? '');
+        console.log('🟦 [CONDICIÓN FÍSICA] Valor encontrado:', condicionValue);
+        setCondicionFisica(condicionValue);
       } catch (e) {
         console.error('Error parsing información contable/garantía:', e);
       }
@@ -439,19 +469,25 @@ const RegisterAssetModal = ({
       // Cargar campos personalizados array (Componentes Múltiples)
       const camposArrayRaw = asset['campos_personalizados_array'] ?? asset['camposPersonalizadosArray'] ?? asset['campos_array'];
       
+      console.log('🟪 [COMPONENTES MÚLTIPLES] Raw data:', camposArrayRaw);
+      console.log('🟪 [COMPONENTES MÚLTIPLES] Tipo:', typeof camposArrayRaw);
+      
         if (camposArrayRaw) {
           try {
             const camposArray = typeof camposArrayRaw === 'string' ? JSON.parse(String(camposArrayRaw)) : camposArrayRaw as unknown;
+            console.log('🟪 [COMPONENTES MÚLTIPLES] Parsed:', camposArray);
             const mappedArr: Record<string, Array<Record<string, string>>> = {};
             Object.keys(camposArray || {}).forEach((origKey) => {
               const k = getFieldKey(origKey);
               mappedArr[k] = (camposArray as Record<string, Array<Record<string, string>>>)[origKey];
             });
+            console.log('🟪 [COMPONENTES MÚLTIPLES] Mapped to state:', mappedArr);
             setDynamicArrayFields(mappedArr || {});
           } catch (err) {
             console.error('❌ Error parsing campos_personalizados_array:', err);
           }
         } else {
+          console.log('⚠️ [COMPONENTES MÚLTIPLES] No hay datos - seteando objeto vacío');
           setDynamicArrayFields({});
         }
 
@@ -583,6 +619,14 @@ const RegisterAssetModal = ({
             console.error('Error parsing fotos:', err);
           }
         }
+        
+        // Log final de todos los estados críticos cargados
+        console.log('🎯 [ESTADOS FINALES CARGADOS]:', {
+          area: areaValue,
+          responsable: 'Se seteará después',
+          condicionFisica: String(asset['condicionFisica'] ?? asset['condicion_fisica'] ?? ''),
+          camposPersonalizadosArray: 'Ver arriba - mapped to state',
+        });
       });
     }
   }, [isOpen, editingAsset, areas]);
@@ -1162,6 +1206,10 @@ const RegisterAssetModal = ({
                     <option value="Bueno">Bueno</option>
                     <option value="Regular">Regular</option>
                     <option value="Malo">Malo</option>
+                    <option value="EXCELENTE">EXCELENTE</option>
+                    <option value="BUENO">BUENO</option>
+                    <option value="REGULAR">REGULAR</option>
+                    <option value="MALO">MALO</option>
                   </select>
                 </div>
 
@@ -1216,6 +1264,12 @@ const RegisterAssetModal = ({
           {/* Dynamic Category Fields (keep existing logic) */}
           {categoria && (() => {
             const selectedCat = categories.find(c => c.nombre === categoria);
+            console.log('🔍 [CATEGORÍA] Buscando campos dinámicos:', { 
+              categoria, 
+              categoriesLength: categories.length,
+              selectedCat: selectedCat ? 'ENCONTRADA' : 'NO ENCONTRADA',
+              campos: selectedCat?.campos?.length ?? 0
+            });
             if (selectedCat && selectedCat.campos && selectedCat.campos.length > 0) {
               return (
                 <div className="space-y-4 pb-4 border-b bg-yellow-50 p-4 rounded">

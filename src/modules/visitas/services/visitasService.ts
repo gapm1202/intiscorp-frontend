@@ -132,7 +132,7 @@ export async function actualizarVisita(visitaId: string, payload: ActualizarVisi
   return await res.json();
 }
 
-// PATCH iniciar visita (cambiar estado a EN_CURSO)
+// PATCH iniciar visita (cambiar estado a EN_PROCESO)
 export async function iniciarVisita(visitaId: string) {
   const url = `${API_BASE}/api/visitas/${visitaId}/iniciar`;
   const token = getToken();
