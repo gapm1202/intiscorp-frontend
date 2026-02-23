@@ -65,6 +65,29 @@ interface FotoItem {
   description?: string;
 }
 
+const getAssetUniqueKey = (item: InventarioItem | null): string => {
+  if (!item) return '';
+  return String(item.assetId ?? item._id ?? item.id ?? item.codigo ?? '');
+};
+
+const getInitialSupportReportUrl = (item: InventarioItem | null): string => {
+  if (!item) return '';
+
+  const directUrl =
+    item.informeSoporteInicialUrl ??
+    item.informe_soporte_inicial_url ??
+    item.soporteInicialPdfUrl ??
+    item.pdfUrlSoporteInicial ??
+    item.supportInitialReportUrl ??
+    item.reporteSoporteInicialUrl;
+
+  if (directUrl) return String(directUrl);
+
+  const nested = (item.informeSoporteInicial as { url?: string } | undefined)?.url
+    ?? (item.reporteSoporteInicial as { url?: string } | undefined)?.url;
+  return nested ? String(nested) : '';
+};
+
 
 const InventarioPage = () => {
   // Initial Support Report modal removed temporarily to restore UI
@@ -98,6 +121,7 @@ const InventarioPage = () => {
   const [showTrasladarModal, setShowTrasladarModal] = useState(false);
   const [assetToTransfer, setAssetToTransfer] = useState<InventarioItem | null>(null);
   const [showSupportReportModal, setShowSupportReportModal] = useState(false);
+  const [supportReportsByAsset, setSupportReportsByAsset] = useState<Record<string, string>>({});
   const [historialData, setHistorialData] = useState<Array<{
     id: number;
     fecha: string;
@@ -1005,6 +1029,12 @@ const InventarioPage = () => {
         <InitialSupportReportModal
           isOpen={showSupportReportModal}
           onClose={() => setShowSupportReportModal(false)}
+          onReportGenerated={(pdfUrl) => {
+            const key = getAssetUniqueKey(viewItem);
+            if (!key) return;
+            setSupportReportsByAsset(prev => ({ ...prev, [key]: pdfUrl }));
+            setViewItem(prev => prev ? ({ ...prev, informeSoporteInicialUrl: pdfUrl }) : prev);
+          }}
           asset={viewItem}
           empresaNombre={String(empresa?.nombre ?? viewItem.empresaNombre ?? viewItem.empresa ?? '')}
           sedeNombre={String((() => {
@@ -1810,15 +1840,49 @@ const InventarioPage = () => {
 
               {/* Botón para generar informe de soporte inicial (debajo de la galería de fotos) */}
               <div className="mt-6">
-                <button
-                  onClick={() => setShowSupportReportModal(true)}
-                  className="w-full text-left flex items-center justify-center gap-3 px-4 py-3 bg-linear-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-semibold rounded-lg shadow-md"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 0v4m0-4h4m-4 0H8" />
-                  </svg>
-                  Generar informe de soporte inicial
-                </button>
+                {(() => {
+                  const assetKey = getAssetUniqueKey(viewItem);
+                  const savedUrl = assetKey ? supportReportsByAsset[assetKey] : '';
+                  const generatedReportUrl = savedUrl || getInitialSupportReportUrl(viewItem);
+                  const isGenerated = Boolean(generatedReportUrl);
+
+                  return (
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => {
+                          if (isGenerated) return;
+                          setShowSupportReportModal(true);
+                        }}
+                        disabled={isGenerated}
+                        className={`flex-1 text-left flex items-center justify-center gap-3 px-4 py-3 text-white font-semibold rounded-lg shadow-md transition-colors ${
+                          isGenerated
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : 'bg-linear-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700'
+                        }`}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 0v4m0-4h4m-4 0H8" />
+                        </svg>
+                        Generar informe de soporte inicial
+                      </button>
+
+                      {isGenerated && (
+                        <p className="text-sm text-gray-600">
+                          El PDF ya ha sido generado y puede verlo
+                          <a
+                            href={generatedReportUrl}
+                            target="_self"
+                            rel="noreferrer"
+                            className="ml-1 font-semibold text-indigo-700 hover:text-indigo-800 underline"
+                          >
+                            aquí
+                          </a>
+                          .
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 

@@ -9,6 +9,7 @@ import Toast from '@/components/ui/Toast';
 type Props = {
   isOpen: boolean;
   onClose: () => void;
+  onReportGenerated?: (pdfUrl: string) => void;
   // Minimal typed shape for the asset. The component accesses many possible
   // fields from the backend, so keep it permissive but typed to avoid `any`.
   asset?: Asset;
@@ -100,7 +101,7 @@ const formatComponentValue = (v: unknown): string => {
   return String(v);
 };
 
-const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: assetRaw, empresaNombre, sedeNombre }) => {
+const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, onReportGenerated, asset: assetRaw, empresaNombre, sedeNombre }) => {
   // Local cast: the `asset` object comes in many shapes from the backend
   // and is used extensively below. Keep a single localized `any` cast to
   // avoid sprinkling casts everywhere while keeping the rest of the file typed.
@@ -124,6 +125,7 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
   const [techEmail, setTechEmail] = useState(user?.email ?? '');
   const [techName, setTechName] = useState(user?.nombre ?? user?.name ?? '');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success');
@@ -153,6 +155,7 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, asset: as
       setActionsObservations('');
       // Resetear estado de generación
       setIsGenerating(false);
+      setShowGenerateConfirm(false);
       setShowToast(false);
       clearCanvas();
       // Debug: log warranty-related raw fields to help diagnose missing display
@@ -431,6 +434,10 @@ ${softwareInstalled || '-'}
 
       if (response.data?.ok && response.data?.data?.pdfUrl) {
         const pdfUrl = response.data.data.pdfUrl;
+
+        // Marcar inmediatamente en la vista padre que el informe ya fue generado
+        // para desactivar el botón sin depender de recargar la página.
+        onReportGenerated?.(pdfUrl);
         
         // Abrir el PDF en nueva pestaña
         const newWindow = window.open(pdfUrl, '_blank', 'noopener,noreferrer');
@@ -439,7 +446,6 @@ ${softwareInstalled || '-'}
           setToastMessage('Por favor permite las ventanas emergentes para ver el informe');
           setToastType('info');
           setShowToast(true);
-          return;
         }
         
         // Mostrar mensaje de éxito con toast bonito
@@ -1746,7 +1752,10 @@ ${softwareInstalled || '-'}
           <div className="flex items-center justify-end gap-3">
             <button onClick={onClose} className="px-4 py-2 rounded-md bg-white border border-gray-200 text-slate-700 hover:bg-slate-50">Cancelar</button>
             <button 
-              onClick={generatePDFFromBackend} 
+              onClick={() => {
+                if (isGenerating) return;
+                setShowGenerateConfirm(true);
+              }} 
               disabled={isGenerating}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-linear-to-r from-indigo-600 to-indigo-700 text-white shadow-sm hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -1768,6 +1777,40 @@ ${softwareInstalled || '-'}
               )}
             </button>
           </div>
+
+          {showGenerateConfirm && (
+            <div className="fixed inset-0 z-80 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-xl rounded-xl bg-white border border-gray-200 shadow-2xl">
+                <div className="px-6 py-5 border-b border-gray-200">
+                  <h4 className="text-lg font-bold text-gray-900">Confirmación</h4>
+                </div>
+                <div className="px-6 py-5">
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    Esta seguro de generar el informe de soporte inicial? Recuerde que solo se puede generar una sola vez y la opcion de Generar informe de soporte inicial quedará desactivada.
+                  </p>
+                </div>
+                <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowGenerateConfirm(false)}
+                    className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50"
+                  >
+                    NO
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowGenerateConfirm(false);
+                      generatePDFFromBackend();
+                    }}
+                    className="px-5 py-2.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700"
+                  >
+                    SI
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
