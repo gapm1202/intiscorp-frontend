@@ -40,3 +40,40 @@ export const createArea = async (
     };
   }
 };
+
+export const updateArea = async (
+  empresaId: string,
+  areaId: string,
+  name: string,
+  responsable?: string
+): Promise<Record<string, unknown>> => {
+  const payload = {
+    name,
+    ...(responsable !== undefined && { responsable }),
+  };
+
+  try {
+    const response = await axiosClient.put(`/api/empresas/${empresaId}/areas/${areaId}`, payload);
+    return response.data;
+  } catch (error: unknown) {
+    const err = error as AxiosErrorLike;
+
+    if (err.response?.status === 404 || err.response?.status === 405) {
+      try {
+        const response = await axiosClient.patch(`/api/empresas/${empresaId}/areas/${areaId}`, payload);
+        return response.data;
+      } catch (patchError: unknown) {
+        const patchErr = patchError as AxiosErrorLike;
+        throw {
+          status: patchErr.response?.status,
+          body: patchErr.response?.data?.message || patchErr.message || "Error al actualizar área",
+        };
+      }
+    }
+
+    throw {
+      status: err.response?.status,
+      body: err.response?.data?.message || err.message || "Error al actualizar área",
+    };
+  }
+};

@@ -1,21 +1,47 @@
-import React, { useState } from "react";
-import { createArea } from "../services/areasService";
+import React, { useEffect, useState } from "react";
+import { createArea, updateArea } from "../services/areasService";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   empresaId?: string;
   sedeId?: string;
+  areaId?: string;
+  initialName?: string;
+  initialResponsable?: string;
+  mode?: "create" | "edit";
   onSuccess?: (areaName: string) => void;
 }
 
-const AddAreaModal = ({ isOpen, onClose, empresaId, sedeId, onSuccess }: Props) => {
+const AddAreaModal = ({
+  isOpen,
+  onClose,
+  empresaId,
+  sedeId,
+  areaId,
+  initialName,
+  initialResponsable,
+  mode = "create",
+  onSuccess,
+}: Props) => {
   const [name, setName] = useState("");
   const [responsable, setResponsable] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [createdName, setCreatedName] = useState<string | null>(null);
+
+  const isEditMode = mode === "edit";
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setName(initialName ?? "");
+    setResponsable(initialResponsable ?? "");
+    setError(null);
+    setLoading(false);
+    setCreatedAt(null);
+    setCreatedName(null);
+  }, [isOpen, initialName, initialResponsable]);
 
   if (!isOpen) return null;
 
@@ -30,22 +56,32 @@ const AddAreaModal = ({ isOpen, onClose, empresaId, sedeId, onSuccess }: Props) 
       return;
     }
 
+    if (isEditMode && !areaId) {
+      setError("ID de área no disponible");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-    const res = await createArea(empresaId, name, sedeId, responsable);
-    // Show preview popup with timestamp
-    const now = new Date();
-    setCreatedAt(now.toLocaleString());
-    const created = res as Record<string, unknown>;
-    setCreatedName(String(created?.name ?? name));
-      // keep modal open to show preview; stop loading
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Error al crear área";
+      if (isEditMode) {
+        await updateArea(empresaId, areaId!, name.trim(), responsable.trim());
+        onSuccess?.(name.trim());
+        onClose();
+        return;
+      }
+
+      const res = await createArea(empresaId, name.trim(), sedeId, responsable.trim());
+      const now = new Date();
+      setCreatedAt(now.toLocaleString());
+      const created = res as Record<string, unknown>;
+      setCreatedName(String(created?.name ?? name));
+      setLoading(false);
+    } catch (err: unknown) {
+      const maybe = err as { body?: string; message?: string };
+      const errorMsg = maybe?.body || maybe?.message || (isEditMode ? "Error al actualizar área" : "Error al crear área");
       setError(errorMsg);
       setLoading(false);
-    } finally {
-      // leave loading false so preview can be interacted with
     }
   };
 
@@ -53,7 +89,7 @@ const AddAreaModal = ({ isOpen, onClose, empresaId, sedeId, onSuccess }: Props) 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-lg w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Agregar Área</h3>
+          <h3 className="text-lg font-semibold">{isEditMode ? "Editar Área" : "Agregar Área"}</h3>
           <button onClick={onClose} className="text-gray-600">✕</button>
         </div>
         <form onSubmit={handleSubmit}>
@@ -84,12 +120,12 @@ const AddAreaModal = ({ isOpen, onClose, empresaId, sedeId, onSuccess }: Props) 
           <div className="flex justify-end gap-2 mt-4">
             <button type="button" onClick={onClose} className="px-4 py-2 border rounded" disabled={loading}>Cancelar</button>
             <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50" disabled={loading}>
-              {loading ? "Creando..." : "Crear área"}
+              {loading ? (isEditMode ? "Guardando..." : "Creando...") : (isEditMode ? "Guardar cambios" : "Crear área")}
             </button>
           </div>
         </form>
         {/* Preview popup after create */}
-        {createdName && createdAt && (
+        {!isEditMode && createdName && createdAt && (
           <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/30">
             <div className="bg-white rounded-lg w-full max-w-sm p-6 border">
               <h4 className="text-lg font-semibold mb-2">Área creada</h4>

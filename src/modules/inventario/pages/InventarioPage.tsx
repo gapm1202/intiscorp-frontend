@@ -83,11 +83,15 @@ const InventarioPage = () => {
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showAddAreaModal, setShowAddAreaModal] = useState(false);
+  const [showEditAreaModal, setShowEditAreaModal] = useState(false);
+  const [editingArea, setEditingArea] = useState<AreaItem | null>(null);
   const [areas, setAreas] = useState<AreaItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryPreview, setCategoryPreview] = useState<{ nombre: string; subcategorias: string[]; campos: CategoryField[]; createdAt: string } | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [categoryNameInput, setCategoryNameInput] = useState('');
+  const [subcategoriesInput, setSubcategoriesInput] = useState('');
   const [currentView, setCurrentView] = useState<'main' | 'areas' | 'categories' | 'viewAsset' | 'historialAsset' | 'generalView'>('main');
   const [newCategoryFields, setNewCategoryFields] = useState<CategoryField[]>([]);
   const [editingAsset, setEditingAsset] = useState<InventarioItem | null>(null);
@@ -324,6 +328,7 @@ const InventarioPage = () => {
                       <tr className="border-b-2 border-gray-200 bg-gray-50">
                         <th className="text-left py-4 px-6 text-xs font-bold text-gray-700 uppercase tracking-wider">Nombre del Área</th>
                         <th className="text-left py-4 px-6 text-xs font-bold text-gray-700 uppercase tracking-wider">Responsable</th>
+                        <th className="text-left py-4 px-6 text-xs font-bold text-gray-700 uppercase tracking-wider">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -340,6 +345,20 @@ const InventarioPage = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600">{String(a.responsable ?? '—')}</td>
+                          <td className="px-6 py-4">
+                            <button
+                              onClick={() => {
+                                setEditingArea(a);
+                                setShowEditAreaModal(true);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 font-medium rounded-lg border border-amber-200 hover:border-amber-300 transition-all duration-200"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              Editar
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -379,7 +398,15 @@ const InventarioPage = () => {
                     </div>
                   </div>
                   <button 
-                    onClick={() => setShowCategoryModal(true)} 
+                    onClick={() => {
+                      setEditingCategoryId(null);
+                      setCategoryNameInput('');
+                      setSubcategoriesInput('');
+                      setNewCategoryFields([]);
+                      setCategoryPreview(null);
+                      setShowPreview(false);
+                      setShowCategoryModal(true);
+                    }} 
                     className="flex items-center gap-2 px-4 py-2.5 bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -463,17 +490,12 @@ const InventarioPage = () => {
                             onClick={() => {
                               // Guardar ID de categoría en edición
                               setEditingCategoryId(c.id || null);
+                              setCategoryNameInput(c.nombre || '');
+                              setSubcategoriesInput((c.subcategorias || []).join(', '));
                               setNewCategoryFields(c.campos || []);
+                              setCategoryPreview(null);
+                              setShowPreview(false);
                               setShowCategoryModal(true);
-                              // Usar setTimeout para que el modal se abra primero
-                              setTimeout(() => {
-                                setCategoryPreview({
-                                  nombre: c.nombre,
-                                  subcategorias: c.subcategorias || [],
-                                  campos: c.campos || [],
-                                  createdAt: new Date().toISOString()
-                                });
-                              }, 0);
                             }}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 font-medium rounded-lg border border-amber-200 hover:border-amber-300 transition-all duration-200"
                           >
@@ -2252,6 +2274,35 @@ const InventarioPage = () => {
         }}
       />
 
+      <AddAreaModal
+        isOpen={showEditAreaModal}
+        onClose={() => {
+          setShowEditAreaModal(false);
+          setEditingArea(null);
+        }}
+        empresaId={empresaId}
+        mode="edit"
+        areaId={String(editingArea?._id ?? editingArea?.id ?? '')}
+        initialName={String(editingArea?.name ?? editingArea?.nombre ?? '')}
+        initialResponsable={String(editingArea?.responsable ?? '')}
+        onSuccess={async () => {
+          if (empresaId) {
+            try {
+              const areasData = await getAreasByEmpresa(empresaId);
+              const areasList = Array.isArray(areasData) ? areasData : ((areasData as Record<string, unknown>)['data'] as unknown[]) ?? [];
+              setAreas(areasList as AreaItem[]);
+              setSuccessMessage('Área actualizada exitosamente');
+              setShowSuccessToast(true);
+              setTimeout(() => setShowSuccessToast(false), 3000);
+            } catch (err) {
+              console.warn("Error refetching areas:", err);
+            }
+          }
+          setShowEditAreaModal(false);
+          setEditingArea(null);
+        }}
+      />
+
       {/* Trasladar Asset Modal */}
       <TrasladarAssetModal
         isOpen={showTrasladarModal}
@@ -2289,14 +2340,48 @@ const InventarioPage = () => {
       {/* Add Category Modal */}
       {showCategoryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-y-auto">
-          <div className="bg-white rounded-lg w-full max-w-2xl p-6 my-8 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4">Añadir categoría</h3>
+          <div className="bg-white rounded-xl w-full max-w-3xl p-0 my-8 max-h-[90vh] overflow-hidden shadow-2xl border border-gray-200">
+            <div className="px-6 py-5 border-b border-gray-200 bg-linear-to-r from-purple-50 to-pink-50">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">{editingCategoryId ? 'Editar categoría' : 'Añadir categoría'}</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {editingCategoryId
+                      ? 'Actualiza subcategorías y campos personalizados para mejorar el registro de activos.'
+                      : 'Define la categoría y sus campos para que el formulario sea claro para el usuario final.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCategoryModal(false);
+                    setNewCategoryFields([]);
+                    setCategoryPreview(null);
+                    setShowPreview(false);
+                    setEditingCategoryId(null);
+                    setCategoryNameInput('');
+                    setSubcategoriesInput('');
+                  }}
+                  className="text-gray-500 hover:text-gray-700 transition-colors"
+                  aria-label="Cerrar modal"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className="px-6 py-5 overflow-y-auto max-h-[calc(90vh-88px)]">
             <form onSubmit={(e) => {
               e.preventDefault();
-              const form = e.target as HTMLFormElement;
-              const fd = new FormData(form);
-              const cat = String(fd.get('categoria') || '');
-              const subs = String(fd.get('subcategorias') || '').split(',').map(s => s.trim()).filter(Boolean);
+              const cat = String(categoryNameInput || '').trim();
+              const subs = String(subcategoriesInput || '').split(',').map(s => s.trim()).filter(Boolean);
+              if (!cat) {
+                setErrorMessage('El nombre de la categoría es obligatorio');
+                setShowErrorToast(true);
+                setTimeout(() => setShowErrorToast(false), 3000);
+                return;
+              }
               // Normalize fields for preview (trim names and options) but allow spaces inside names
               const cleanedCampos = (newCategoryFields || []).map((f) => ({
                 ...f,
@@ -2313,27 +2398,44 @@ const InventarioPage = () => {
               setShowPreview(true);
             }}>
               <div className="space-y-4">
-                <div>
+                <div className="rounded-lg border border-purple-100 bg-purple-50/60 px-4 py-3 text-sm text-purple-900">
+                  <strong className="font-semibold">Recomendación:</strong> usa un nombre claro y agrega subcategorías sólo si realmente ayudan al usuario a elegir mejor.
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de categoría *</label>
                   <input 
-                    name="categoria" 
-                    className="w-full p-2 border rounded" 
-                    placeholder="ej: Laptop, Monitor, etc." 
-                    defaultValue={categoryPreview?.nombre || ''}
-                    readOnly={!!categoryPreview}
-                    style={categoryPreview ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
+                    name="categoria"
+                    value={categoryNameInput}
+                    onChange={(e) => setCategoryNameInput(e.target.value)}
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-purple-500 focus:border-purple-500" 
+                    placeholder="ej: Laptop" 
+                    readOnly={!!editingCategoryId}
+                    style={editingCategoryId ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
                     required 
                   />
-                  {categoryPreview && <p className="text-xs text-gray-500 mt-1">⚠️ No se puede editar el nombre de la categoría</p>}
-                </div>
-                <div>
+                  {editingCategoryId && <p className="text-xs text-gray-500 mt-1">El nombre no se edita para mantener consistencia en los activos registrados.</p>}
+                  </div>
+                  <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Subcategorías (separadas por coma)</label>
-                  <input name="subcategorias" className="w-full p-2 border rounded" placeholder="ej: Laptops, Monitores" />
+                  <input
+                    name="subcategorias"
+                    value={subcategoriesInput}
+                    onChange={(e) => setSubcategoriesInput(e.target.value)}
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    placeholder="ej: Asus,HP,Lenovo (separar por comas)"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Ejemplo: una categoría "Laptop" con subcategorías por tipo de uso.</p>
+                  </div>
                 </div>
                 
                 <div className="border-t pt-4">
                   <div className="flex items-center justify-between mb-3">
-                    <label className="block text-sm font-medium text-gray-700">Campos personalizados para el formulario</label>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Campos personalizados para el formulario</label>
+                      <p className="text-xs text-gray-500">Estos campos aparecerán cuando se registre un activo de esta categoría.</p>
+                    </div>
                     <button 
                       type="button"
                       onClick={() => setNewCategoryFields([...newCategoryFields, { nombre: '', tipo: 'text', requerido: false }])}
@@ -2348,73 +2450,92 @@ const InventarioPage = () => {
                   ) : (
                     <div className="space-y-3">
                       {newCategoryFields.map((field, idx) => (
-                        <div key={idx} className="p-3 bg-gray-50 rounded border space-y-2">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              placeholder="Nombre del campo (ej: Procesador)"
-                              value={field.nombre}
-                              onChange={(e) => {
-                                const updated = [...newCategoryFields];
-                                // Allow spaces while typing; will trim on submit/confirm
-                                updated[idx].nombre = e.target.value;
-                                setNewCategoryFields(updated);
-                              }}
-                              className="flex-1 p-2 border rounded text-sm"
-                            />
-                            <select
-                              value={field.tipo}
-                              onChange={(e) => {
-                                const updated = [...newCategoryFields];
-                                updated[idx].tipo = e.target.value as CategoryField['tipo'];
-                                setNewCategoryFields(updated);
-                              }}
-                              className="p-2 border rounded text-sm"
-                            >
-                              <option value="text">Texto</option>
-                              <option value="number">Número</option>
-                              <option value="textarea">Texto largo</option>
-                              <option value="select">Selección</option>
-                            </select>
-                            <label className="flex items-center gap-1 text-sm">
+                        <div key={idx} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Campo #{idx + 1}</p>
+                            <div className="flex items-center gap-3">
+                              <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={field.requerido}
+                                  onChange={(e) => {
+                                    const updated = [...newCategoryFields];
+                                    updated[idx].requerido = e.target.checked;
+                                    setNewCategoryFields(updated);
+                                  }}
+                                  className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                                />
+                                Requerido
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => setNewCategoryFields(newCategoryFields.filter((_, i) => i !== idx))}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-red-200 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                aria-label="Eliminar campo"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div className="md:col-span-2">
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Nombre del campo</label>
                               <input
-                                type="checkbox"
-                                checked={field.requerido}
+                                type="text"
+                                placeholder="Ej: Procesador"
+                                value={field.nombre}
                                 onChange={(e) => {
                                   const updated = [...newCategoryFields];
-                                  updated[idx].requerido = e.target.checked;
+                                  updated[idx].nombre = e.target.value;
                                   setNewCategoryFields(updated);
                                 }}
+                                className="w-full p-2.5 border border-slate-300 rounded-md text-sm bg-white text-slate-900 placeholder:text-slate-400"
                               />
-                              Requerido
-                            </label>
-                            <button
-                              type="button"
-                              onClick={() => setNewCategoryFields(newCategoryFields.filter((_, i) => i !== idx))}
-                              className="text-red-600 hover:text-red-800 px-2"
-                            >
-                              ✕
-                            </button>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Tipo</label>
+                              <select
+                                value={field.tipo}
+                                onChange={(e) => {
+                                  const updated = [...newCategoryFields];
+                                  updated[idx].tipo = e.target.value as CategoryField['tipo'];
+                                  setNewCategoryFields(updated);
+                                }}
+                                className="w-full p-2.5 border border-slate-300 rounded-md text-sm bg-white text-slate-900"
+                              >
+                                <option value="text">Texto</option>
+                                <option value="number">Número</option>
+                                <option value="textarea">Texto largo</option>
+                                <option value="select">Selección</option>
+                              </select>
+                            </div>
                           </div>
+
                           {field.tipo === 'select' && (
-                            <textarea
-                              placeholder="Opciones separadas por coma&#10;Ejemplo: Intel, AMD, Apple"
-                              value={field.opciones?.join(', ') || ''}
-                              onChange={(e) => {
-                                const updated = [...newCategoryFields];
-                                // Keep raw split so the user can type commas; normalize later on confirm
-                                updated[idx].opciones = e.target.value.split(',');
-                                setNewCategoryFields(updated);
-                              }}
-                              className="w-full p-2 border rounded text-sm"
-                              rows={2}
-                            />
+                            <div>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Opciones del campo</label>
+                              <textarea
+                                placeholder="Separadas por coma. Ej: Intel, AMD, Apple"
+                                value={field.opciones?.join(', ') || ''}
+                                onChange={(e) => {
+                                  const updated = [...newCategoryFields];
+                                  updated[idx].opciones = e.target.value.split(',');
+                                  setNewCategoryFields(updated);
+                                }}
+                                className="w-full p-2.5 border border-slate-300 rounded-md text-sm bg-white text-slate-900 placeholder:text-slate-400"
+                                rows={2}
+                              />
+                            </div>
                           )}
                           
                           {/* Subcampos */}
-                          <div className="mt-2">
+                          <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50/40 p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <label className="text-xs font-medium text-gray-600">Subcampos (opcional)</label>
+                              <div>
+                                <label className="text-xs font-semibold uppercase tracking-wide text-blue-700">Subcampos (opcional)</label>
+                                <p className="text-xs text-slate-500 mt-0.5">Útil para agrupar datos relacionados (ej: RAM tipo + capacidad).</p>
+                              </div>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -2423,66 +2544,80 @@ const InventarioPage = () => {
                                   updated[idx].subcampos!.push({ nombre: '', tipo: 'text', opciones: [] });
                                   setNewCategoryFields(updated);
                                 }}
-                                className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded hover:bg-blue-100"
+                                className="text-xs bg-blue-100 text-blue-800 px-2.5 py-1.5 rounded-md hover:bg-blue-200 font-medium"
                               >
                                 + Agregar subcampo
                               </button>
                             </div>
                             
                             {field.subcampos && field.subcampos.length > 0 && (
-                              <div className="space-y-2 pl-4 border-l-2 border-blue-200">
+                              <div className="space-y-2">
                                 {field.subcampos.map((subfield, subIdx) => (
-                                  <div key={subIdx} className="flex items-center gap-2 bg-blue-50 p-2 rounded">
-                                    <input
-                                      type="text"
-                                      placeholder="Nombre subcampo (ej: Tipo, Capacidad)"
-                                      value={subfield.nombre}
-                                      onChange={(e) => {
-                                        const updated = [...newCategoryFields];
-                                        // Allow spaces while typing; trim on submit
-                                        updated[idx].subcampos![subIdx].nombre = e.target.value;
-                                        setNewCategoryFields(updated);
-                                      }}
-                                      className="flex-1 p-1 border rounded text-xs"
-                                    />
-                                    <select
-                                      value={subfield.tipo}
-                                      onChange={(e) => {
-                                        const updated = [...newCategoryFields];
-                                        updated[idx].subcampos![subIdx].tipo = e.target.value as 'text' | 'number' | 'select';
-                                        setNewCategoryFields(updated);
-                                      }}
-                                      className="p-1 border rounded text-xs"
-                                    >
-                                      <option value="text">Texto</option>
-                                      <option value="number">Número</option>
-                                      <option value="select">Selección</option>
-                                    </select>
-                                    {subfield.tipo === 'select' && (
-                                      <input
-                                        type="text"
-                                        placeholder="Opciones: DDR3, DDR4, DDR5"
-                                        value={subfield.opciones?.join(', ') || ''}
-                                        onChange={(e) => {
+                                  <div key={subIdx} className="bg-white border border-blue-100 p-3 rounded-lg space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <p className="text-xs font-semibold text-blue-700">Subcampo #{subIdx + 1}</p>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
                                           const updated = [...newCategoryFields];
-                                          // Preserve commas while typing; normalize on confirm
-                                          updated[idx].subcampos![subIdx].opciones = e.target.value.split(',');
+                                          updated[idx].subcampos = updated[idx].subcampos!.filter((_, i) => i !== subIdx);
                                           setNewCategoryFields(updated);
                                         }}
-                                        className="flex-1 p-1 border rounded text-xs"
-                                      />
+                                        className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-red-200 text-red-600 hover:text-red-700 hover:bg-red-50 text-xs"
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                      <div className="md:col-span-2">
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">Nombre</label>
+                                        <input
+                                          type="text"
+                                          placeholder="Ej: Tipo, Capacidad"
+                                          value={subfield.nombre}
+                                          onChange={(e) => {
+                                            const updated = [...newCategoryFields];
+                                            updated[idx].subcampos![subIdx].nombre = e.target.value;
+                                            setNewCategoryFields(updated);
+                                          }}
+                                          className="w-full p-2 border border-slate-300 rounded-md text-sm bg-white text-slate-900 placeholder:text-slate-400"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">Tipo</label>
+                                        <select
+                                          value={subfield.tipo}
+                                          onChange={(e) => {
+                                            const updated = [...newCategoryFields];
+                                            updated[idx].subcampos![subIdx].tipo = e.target.value as 'text' | 'number' | 'select';
+                                            setNewCategoryFields(updated);
+                                          }}
+                                          className="w-full p-2 border border-slate-300 rounded-md text-sm bg-white text-slate-900"
+                                        >
+                                          <option value="text">Texto</option>
+                                          <option value="number">Número</option>
+                                          <option value="select">Selección</option>
+                                        </select>
+                                      </div>
+                                    </div>
+
+                                    {subfield.tipo === 'select' && (
+                                      <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">Opciones</label>
+                                        <input
+                                          type="text"
+                                          placeholder="Ej: DDR3, DDR4, DDR5"
+                                          value={subfield.opciones?.join(', ') || ''}
+                                          onChange={(e) => {
+                                            const updated = [...newCategoryFields];
+                                            updated[idx].subcampos![subIdx].opciones = e.target.value.split(',');
+                                            setNewCategoryFields(updated);
+                                          }}
+                                          className="w-full p-2 border border-slate-300 rounded-md text-sm bg-white text-slate-900 placeholder:text-slate-400"
+                                        />
+                                      </div>
                                     )}
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const updated = [...newCategoryFields];
-                                        updated[idx].subcampos = updated[idx].subcampos!.filter((_, i) => i !== subIdx);
-                                        setNewCategoryFields(updated);
-                                      }}
-                                      className="text-red-600 hover:text-red-800 px-1 text-xs"
-                                    >
-                                      ✕
-                                    </button>
                                   </div>
                                 ))}
                               </div>
@@ -2494,18 +2629,21 @@ const InventarioPage = () => {
                   )}
                 </div>
                 
-                <div className="flex justify-end gap-2 pt-4">
+                <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
                   <button type="button" onClick={() => { 
                     setShowCategoryModal(false); 
                     setNewCategoryFields([]); 
                     setCategoryPreview(null); 
                     setShowPreview(false);
                     setEditingCategoryId(null);
+                    setCategoryNameInput('');
+                    setSubcategoriesInput('');
                   }} className="px-4 py-2 rounded border hover:bg-gray-50">Cancelar</button>
                   <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Previsualizar</button>
                 </div>
               </div>
             </form>
+            </div>
 
             {showPreview && categoryPreview && (
               <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4">
@@ -2691,6 +2829,8 @@ const InventarioPage = () => {
                         setShowCategoryModal(false);
                         setNewCategoryFields([]);
                         setEditingCategoryId(null);
+                        setCategoryNameInput('');
+                        setSubcategoriesInput('');
                       } catch (err) {
                         console.error('❌ Error:', err);
                         const errorMsg = err instanceof Error ? err.message : 'Error al guardar la categoría';
