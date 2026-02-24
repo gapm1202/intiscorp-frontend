@@ -91,9 +91,10 @@ const formatComponentValue = (v: unknown): string => {
   if (v === null || v === undefined) return '';
   if (Array.isArray(v)) return (v as unknown[]).map(formatComponentValue).filter(Boolean).join(' • ');
   if (typeof v === 'object') {
-    try {
+      try {
       const rec = v as Record<string, unknown>;
-      return Object.entries(rec).map(([k, val]) => `${k}: ${val ?? ''}`).join(' • ');
+      const prettyKey = (k: string) => k === '_opcion' ? 'OPCION' : String(k).replace(/_/g, ' ');
+      return Object.entries(rec).map(([k, val]) => `${prettyKey(k)}: ${val ?? ''}`).join(' • ');
     } catch {
       try { return JSON.stringify(v); } catch { return String(v); }
     }
@@ -167,14 +168,15 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, onReportG
   }, [isOpen, user, asset]);
 
   // Normalize users and photos for rendering
-  const usuariosRaw = asset?.usuariosAsignados || asset?.usuario_asignado || [];
-  const usuariosArrayRender = Array.isArray(usuariosRaw) ? usuariosRaw : (typeof usuariosRaw === 'string' ? JSON.parse(usuariosRaw || '[]') : []);
+  // Normalize possible shapes for assigned users (many backends use different keys)
+  const usuariosRaw = asset?.usuariosAsignados || asset?.usuarios_asignados || asset?.usuarios_asignados_m2n || asset?.usuarios || asset?.usuario_asignado || asset?.usuariosAsignadosArray || asset?.usuariosAsignadosIds || [];
+  const usuariosArrayRender = Array.isArray(usuariosRaw) ? usuariosRaw : (typeof usuariosRaw === 'string' ? (() => { try { return JSON.parse(usuariosRaw || '[]'); } catch { return [usuariosRaw]; } })() : [usuariosRaw]);
   // Detailed users for modal: include correo and cargo/position when available
   const usuariosDetailed = usuariosArrayRender.map((u: unknown) => {
-    const uu = u as UsuarioItem;
+    const uu = u as UsuarioItem & Record<string, unknown>;
     return {
-      nombre: getStringField(uu, ['nombre', 'nombreUsuario', 'name']),
-      correo: getStringField(uu, ['correo', 'email', 'mail']),
+      nombre: getStringField(uu, ['nombreCompleto', 'nombre', 'nombreUsuario', 'name', 'fullName']),
+      correo: getStringField(uu, ['correo', 'email', 'mail', 'correoPrincipal']),
       cargo: getStringField(uu, ['cargo', 'role', 'puesto'])
     } as { nombre: string; correo: string; cargo: string };
   });
@@ -246,15 +248,94 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, onReportG
   const antiguedadComputed = computeAntiguedad(asset) || getStringField(asset, ['antiguedad','antiguedad_anios','antiguedad_meses']);
 
   // Parse componentes (campos con arrays) and custom fields, merge defensively
-  const camposArrayRaw = asset?.camposPersonalizadosArray || asset?.campos_personalizados_array || asset?.camposArray || null;
-  let componentes: Record<string, unknown> = {};
+  const _rawA = asset?.camposPersonalizadosArray;
+  const _rawB = asset?.campos_personalizados_array;
+  const _rawC = asset?.camposArray;
+  // Development log: raw camposArray sources
   try {
-    componentes = (typeof camposArrayRaw === 'string' ? JSON.parse(camposArrayRaw || '{}') : (camposArrayRaw || {})) as Record<string, unknown>;
-  } catch {
-    componentes = (camposArrayRaw || {}) as Record<string, unknown>;
+    if ((import.meta as any).env && (import.meta as any).env.MODE === 'development') {
+      // eslint-disable-next-line no-console
+      console.debug('[DEBUG] raw camposArray sources:', {
+        camposPersonalizadosArray: _rawA,
+        campos_personalizados_array: _rawB,
+        camposArray: _rawC,
+      });
+    }
+  } catch (e) {
+    // noop
   }
 
+  const safeParse = (x: unknown) => {
+    if (!x) return {} as Record<string, unknown>;
+    try {
+      return (typeof x === 'string' ? JSON.parse(x || '{}') : (x || {})) as Record<string, unknown>;
+    } catch {
+      return (x as Record<string, unknown>) || {};
+    }
+  };
+
+  const srcA = safeParse(_rawA);
+  const srcB = safeParse(_rawB);
+  const srcC = safeParse(_rawC);
+
+  // Merge all sources (snake_case and camelCase) while preserving
+  // duplicate instances that originate from the same source (important for
+  // identical RAM sticks) but avoiding cross-source duplication.
+  const componentesEntries: Record<string, Array<{ val: unknown; key: string; sources: Set<number> }>> = {};
+
+  const makeKey = (item: unknown) => {
+    try {
+      if (item === null || item === undefined) return String(item);
+      if (typeof item === 'object') return JSON.stringify(item);
+      return String(item);
+    } catch {
+      return String(item);
+    }
+  };
+
+  const mergeSourceIntoEntries = (src: Record<string, unknown>, sourceIndex: number) => {
+    Object.entries(src || {}).forEach(([k, v]) => {
+      if (v === null || v === undefined) return;
+      if (!componentesEntries[k]) componentesEntries[k] = [];
+
+      const pushVal = (val: unknown) => {
+        const kstr = makeKey(val);
+        // Find if an existing entry with same key was created by a different source
+        const existingIdx = componentesEntries[k].findIndex(e => e.key === kstr && Array.from(e.sources).some(s => s !== sourceIndex));
+        if (existingIdx !== -1) {
+          // already present coming from another source -> skip to avoid cross-source duplicate
+          return;
+        }
+        // Otherwise, append as a distinct instance and mark its source
+        componentesEntries[k].push({ val, key: kstr, sources: new Set<number>([sourceIndex]) });
+      };
+
+      if (Array.isArray(v)) {
+        for (const it of v) pushVal(it);
+      } else {
+        pushVal(v as unknown);
+      }
+    });
+  };
+
+  // Order: prefer snake_case source first, then camelCase, then legacy fields
+  mergeSourceIntoEntries(srcB, 0);
+  mergeSourceIntoEntries(srcA, 1);
+  mergeSourceIntoEntries(srcC, 2);
+
   const camposPersonalizadosRaw = asset?.camposPersonalizados || asset?.campos_personalizados || asset?.campos || {};
+  try {
+    if ((import.meta as any).env && (import.meta as any).env.MODE === 'development') {
+      // eslint-disable-next-line no-console
+      console.debug('[DEBUG] raw camposPersonalizados sources:', {
+        camposPersonalizados: asset?.camposPersonalizados,
+        campos_personalizados: asset?.campos_personalizados,
+        campos: asset?.campos,
+      });
+    }
+  } catch (e) {
+    // noop
+  }
   let parsedCamposPersonalizados: Record<string, unknown> = {};
   try {
     parsedCamposPersonalizados = (typeof camposPersonalizadosRaw === 'string' ? JSON.parse(camposPersonalizadosRaw || '{}') : (camposPersonalizadosRaw || {})) as Record<string, unknown>;
@@ -263,21 +344,55 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, onReportG
   }
 
   // Merge: if parsedCamposPersonalizados contains arrays/objects that look like componentes, add them to componentes
-  Object.entries(parsedCamposPersonalizados || {}).forEach(([k, v]) => {
-    if (!v) return;
-    if (Array.isArray(v)) {
-      if (!componentes[k]) componentes[k] = v;
-    } else if (typeof v === 'object') {
-      if (!componentes[k]) componentes[k] = [v];
-    } else {
-      // Valor primitivo: si la clave parece corresponder a un componente (heurística), la convertimos
-      const keyLower = String(k).toLowerCase();
-      if (/tarjeta\s*de\s*video|tarjeta.*video|gpu|tarjeta\s*video|vga/i.test(keyLower)) {
-        if (!componentes[k]) componentes[k] = [{ Valor: v }];
+  // Merge parsedCamposPersonalizados as an additional source (index 3)
+  const srcParsed = parsedCamposPersonalizados || {} as Record<string, unknown>;
+  const mergeParsed = (src: Record<string, unknown>, sourceIndex: number) => {
+    Object.entries(src || {}).forEach(([k, v]) => {
+      if (v === null || v === undefined) return;
+      if (!componentesEntries[k]) componentesEntries[k] = [];
+
+      const pushVal = (val: unknown) => {
+        const kstr = makeKey(val);
+        const existingIdx = componentesEntries[k].findIndex(e => e.key === kstr && Array.from(e.sources).some(s => s !== sourceIndex));
+        if (existingIdx !== -1) return; // already present from other source
+        componentesEntries[k].push({ val, key: kstr, sources: new Set<number>([sourceIndex]) });
+      };
+
+      if (Array.isArray(v)) {
+        for (const it of v) pushVal(it);
+      } else if (typeof v === 'object') {
+        pushVal(v as unknown);
+      } else {
+        const keyLower = String(k).toLowerCase();
+        if (/tarjeta\s*de\s*video|tarjeta.*video|gpu|tarjeta\s*video|vga/i.test(keyLower)) {
+          pushVal({ Valor: v });
+        }
       }
-      // De lo contrario, se mantiene como campo simple (handled later)
-    }
+    });
+  };
+
+  mergeParsed(srcParsed, 3);
+
+  // Normalizar entradas que sean objetos indexados (p.ej. {"0": {...}, "1": {...}})
+  // para convertirlos en arrays reales y asegurar que múltiples instancias se rendericen correctamente.
+  // Build final 'componentes' structure from componentesEntries.
+  const componentes: Record<string, unknown> = {};
+  Object.entries(componentesEntries).forEach(([k, arr]) => {
+    // For each logical entry we stored, take its value. This preserves multiple
+    // identical values that came from the same source (they were appended as
+    // separate entries) while removing duplicates that appeared across sources.
+    componentes[k] = arr.map(e => e.val);
   });
+
+  // Debug: print componentes shape in development to help diagnose missing instances
+  try {
+    if ((import.meta as any).env && (import.meta as any).env.MODE === 'development') {
+      // eslint-disable-next-line no-console
+      console.debug('[DEBUG] componentes after normalization:', componentes);
+    }
+  } catch (e) {
+    // noop
+  }
 
   // Simple custom fields (primitives) excluding those that are present in componentes
   const componentKeysSet = new Set(Object.keys(componentes || {}).map(k => String(k).toLowerCase()));
@@ -590,7 +705,8 @@ ${softwareInstalled || '-'}
         }
         if (typeof val === 'object') {
           const rec = val as Record<string, unknown>;
-          return Object.entries(rec).map(([k, v]) => `<div style="margin-top:4px;font-size:13px;color:#374151">${k}: ${v ?? ''}</div>`).join('');
+          const prettyKey = (s: string) => s === '_opcion' ? 'OPCION' : String(s).replace(/_/g, ' ');
+          return Object.entries(rec).map(([k, v]) => `<div style="margin-top:4px;font-size:13px;color:#374151">${prettyKey(k)}: ${v ?? ''}</div>`).join('');
         }
         const sRaw = String(val ?? '');
         const s = sRaw.replace(/\u00A0/g, ' ').trim();
@@ -759,7 +875,9 @@ ${softwareInstalled || '-'}
     try {
       if (componentes && Object.keys(componentes).length > 0) {
         // Exclude keys that are already shown in the main meta-grid (to avoid duplication)
-        const skipIfContains = ['disco', 'tarjeta', 'antig', 'modelo', 'marca', 'memoria', 'ram', 'garantia', 'garantía', 'serie', 'codigo', 'código', 'area', 'categoria', 'fabricante', 'estado', 'observaciones', 'video'];
+        // Note: we intentionally DO NOT exclude 'memoria'/'ram' here so the PDF shows each memoria instance
+        const skipIfContains = ['disco', 'tarjeta', 'antig', 'modelo', 'marca', 'garantia', 'garantía', 'serie', 'codigo', 'código', 'area', 'categoria', 'fabricante', 'estado', 'observaciones', 'video'];
+        const prettyKey = (s: string) => s === '_opcion' ? 'OPCION' : String(s).replace(/_/g, ' ');
         Object.entries(componentes).forEach(([k, items]) => {
           const keyLower = String(k).toLowerCase().trim();
           if (skipIfContains.some(ex => keyLower.includes(ex))) return; // skip duplicate-like keys
@@ -770,36 +888,29 @@ ${softwareInstalled || '-'}
           const count = arr.length;
           // Special handling for some component types to produce concise summaries
 
-          // RAM/Memoria: skip entirely (already shown in main grid)
-          if (keyLower.includes('memoria') || keyLower.includes('ram')) {
-            return; // skip - already shown
-          }
-
-          // Disco Duro: skip entirely (already shown in main grid)
-          if (keyLower.includes('disco')) {
-            return; // skip - already shown
-          }
-
-          // Tarjeta de video: skip entirely (already shown in main grid)
-          if (keyLower.includes('tarjeta') || keyLower.includes('video')) {
-            return; // skip - already shown
-          }
+          // Disco Duro and Tarjeta de video remain skipped (already shown in main grid)
+          if (keyLower.includes('disco')) return;
+          if (keyLower.includes('tarjeta') || keyLower.includes('video')) return;
 
           let block = `<div style="margin-top:12px;page-break-inside:avoid">`;
-          block += `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--blue-700);color:#fff;padding:8px 10px;border-radius:6px"><div style="font-size:12px;font-weight:700">${k}:</div><div style="font-weight:700">${count}</div></div>`;
+          block += `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--blue-700);color:#fff;padding:8px 10px;border-radius:6px"><div style="font-size:12px;font-weight:700">${prettyKey(k)}:</div><div style="font-weight:700">${count}</div></div>`;
           block += `<div style="margin-top:8px;color:#475569">`;
 
           // Render each original item exactly like the form: if it's an object, render each key/value on its own line;
           // if it's a string, render it as-is (but split common bullet separators into separate lines for readability).
-          arr.forEach((it) => {
+          arr.forEach((it, itemIdx) => {
             // Each item should appear as in the UI: a block per item, and within an object
             // each key:value on its own line. Strings containing bullets are split into lines.
+            // Add an "Instancia N" label when there are multiple instances.
+            const shouldNumber = arr.length > 1;
             if (it && typeof it === 'object') {
               try {
                 const entries = Object.entries(it as Record<string, unknown>);
                 block += `<div style="margin-top:6px;margin-bottom:8px">`;
+                if (shouldNumber) block += `<div style="font-size:13px;font-weight:700;margin-bottom:6px">Instancia ${itemIdx + 1}</div>`;
                 entries.forEach(([sk, sv]) => {
-                  block += `<div style="font-size:13px;color:#374151">${sk}: ${sv ?? ''}</div>`;
+                  const prettyKey = sk === '_opcion' ? 'OPCION' : String(sk).replace(/_/g, ' ');
+                  block += `<div style="font-size:13px;color:#374151">${prettyKey}: ${sv ?? ''}</div>`;
                 });
                 block += `</div>`;
               } catch {
@@ -812,10 +923,11 @@ ${softwareInstalled || '-'}
               if (hasBullet) {
                 const tokens = s.split(/\s*[•·\u2022\u00B7]\s*/).map(t => t.replace(/[\u00A0\s]+/g, ' ').trim()).filter(Boolean).map(t => t.replace(/[•·\u2022\u00B7]/g, '').trim());
                 block += `<div style="margin-top:6px;margin-bottom:8px">`;
+                if (shouldNumber) block += `<div style="font-size:13px;font-weight:700;margin-bottom:6px">Instancia ${itemIdx + 1}</div>`;
                 tokens.forEach(tk => block += `<div style="font-size:13px;color:#374151">${tk}</div>`);
                 block += `</div>`;
               } else {
-                block += `<div style="margin-top:6px;margin-bottom:8px;font-size:13px;color:#374151">${s}</div>`;
+                block += `<div style="margin-top:6px;margin-bottom:8px;font-size:13px;color:#374151">${shouldNumber ? `<div style="font-size:13px;font-weight:700;margin-bottom:6px">Instancia ${itemIdx + 1}</div>` : ''}${s}</div>`;
               }
             }
           });
@@ -1036,16 +1148,13 @@ ${softwareInstalled || '-'}
                   </div>
                   ${warrantyHtml}
 
-                  <!-- Componentes renderizados como pares meta (evitando duplicados) -->
-                  ${componentesHtml}
-
                   <!-- Usuarios y Observaciones ocupan todo el ancho; usuarios se muestran como tabla organizada -->
                   <div style="grid-column:1 / -1; margin-top:8px">
                     <div style="margin-bottom:8px">${usuariosHtml || '-'}</div>
                     <div style="margin-top:6px" class="meta-pair"><div class="meta-label">Observaciones</div><div class="meta-value">${asset?.observaciones ?? '-'}</div></div>
                   </div>
 
-                  ${simpleCamposHtml}
+                  ${ (componentesHtml || simpleCamposHtml) ? `<div style="margin-top:10px"><strong>Campos Personalizados:</strong><div style="margin-top:6px">${componentesHtml}${simpleCamposHtml}</div></div>` : '' }
                 </div>
               </div>
 
@@ -1474,55 +1583,7 @@ ${softwareInstalled || '-'}
               </div>
             </div>
 
-            {/* Componentes Múltiples */}
-            {componentesRenderEntries && componentesRenderEntries.length > 0 && (
-              <div className="bg-white rounded-lg p-4 mb-4 shadow-sm border border-slate-200">
-                <h5 className="font-bold text-sm text-blue-900 mb-3 uppercase tracking-wide flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                  </svg>
-                  Componentes Múltiples
-                </h5>
-                <div className="space-y-4">
-                  {componentesRenderEntries.map(([key, items]) => {
-                    const arr = Array.isArray(items) ? items : [items];
-                    return (
-                      <div key={key} className="border-l-4 border-blue-500 pl-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="w-8 h-8 bg-linear-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center shadow-sm">
-                            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                            </svg>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <p className="text-base font-bold text-blue-900">{key}</p>
-                            <span className="text-xs font-bold text-white bg-blue-600 px-2.5 py-1 rounded-full shadow-sm">{arr.length}</span>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          {arr.map((it, idx) => (
-                            <div key={idx} className="bg-linear-to-br from-blue-50 to-cyan-50 p-3 rounded-lg border-2 border-blue-200 hover:shadow-md transition-shadow">
-                              {it && typeof it === 'object' ? (
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                  {Object.entries(it as Record<string, unknown>).map(([sk, sv]) => (
-                                    <div key={sk}>
-                                      <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">{sk}</p>
-                                      <p className="font-bold text-gray-900">{String(sv ?? '-')}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="font-bold text-gray-900">{String(it ?? '-')}</div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {/* Componentes Múltiples removed — merged into Campos Personalizados */}
             {/* Usuarios y Observaciones */}
             <div className="bg-white rounded-lg p-4 shadow-sm border border-slate-200">
               <h5 className="font-bold text-sm text-blue-900 mb-3 uppercase tracking-wide flex items-center gap-2">
@@ -1557,8 +1618,8 @@ ${softwareInstalled || '-'}
               </div>
             </div>
 
-            {/* Campos Personalizados Simples */}
-            {Object.keys(simpleCustomFields).length > 0 && (
+            {/* Campos Personalizados (incluye entradas con subcampos) */}
+            {(Object.keys(simpleCustomFields).length > 0 || (componentesRenderEntries && componentesRenderEntries.length > 0)) && (
               <div className="bg-white rounded-lg p-4 shadow-sm border border-slate-200">
                 <h5 className="font-bold text-sm text-amber-900 mb-3 uppercase tracking-wide flex items-center gap-2">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1566,14 +1627,66 @@ ${softwareInstalled || '-'}
                   </svg>
                   Campos Personalizados
                 </h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {Object.entries(simpleCustomFields).map(([key, value]) => (
-                    <div key={key} className="bg-linear-to-br from-amber-50 to-yellow-50 p-3 rounded-lg border-2 border-amber-200 hover:shadow-md transition-shadow">
-                      <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">{key}</p>
-                      <p className="font-bold text-gray-900">{String(value)}</p>
-                    </div>
-                  ))}
-                </div>
+
+                {/* Simple custom fields (primitives) */}
+                {Object.keys(simpleCustomFields).length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                    {Object.entries(simpleCustomFields).map(([key, value]) => (
+                      <div key={key} className="bg-linear-to-br from-amber-50 to-yellow-50 p-3 rounded-lg border-2 border-amber-200 hover:shadow-md transition-shadow">
+                        <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">{key}</p>
+                        <p className="font-bold text-gray-900">{String(value)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Entradas con subcampos / instancias (antes 'Componentes Múltiples') */}
+                {componentesRenderEntries && componentesRenderEntries.length > 0 && (
+                  <div className="space-y-4">
+                    {componentesRenderEntries.map(([key, items]) => {
+                      const arr = Array.isArray(items) ? items : [items];
+                      const prettyKey = (s: string) => String(s).replace(/_/g, ' ');
+                      return (
+                        <div key={key} className="border-l-4 border-blue-500 pl-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-8 h-8 bg-linear-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center shadow-sm">
+                              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                              </svg>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-base font-bold text-blue-900">{prettyKey(key)}</p>
+                              <span className="text-xs font-bold text-white bg-blue-600 px-2.5 py-1 rounded-full shadow-sm">{arr.length}</span>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            {arr.map((it, idx) => (
+                              <div key={idx} className="bg-linear-to-br from-blue-50 to-cyan-50 p-3 rounded-lg border-2 border-blue-200 hover:shadow-md transition-shadow">
+                                {it && typeof it === 'object' ? (
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                    {arr.length > 1 && (
+                                      <div className="col-span-full">
+                                        <p className="text-sm font-semibold text-blue-700">Instancia {idx + 1}</p>
+                                      </div>
+                                    )}
+                                    {Object.entries(it as Record<string, unknown>).map(([sk, sv]) => (
+                                      <div key={sk}>
+                                        <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">{sk === '_opcion' ? 'OPCION' : String(sk).replace(/_/g, ' ')}</p>
+                                        <p className="font-bold text-gray-900">{String(sv ?? '-')}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="font-bold text-gray-900">{String(it ?? '-')}</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

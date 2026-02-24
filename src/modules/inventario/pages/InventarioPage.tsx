@@ -1730,87 +1730,7 @@ const InventarioPage = () => {
                 ) : null;
               })()}
 
-              {/* Campos con Arrays (subcampos) - Componentes Múltiples
-                  Ahora también intentamos extraer posibles componentes desde
-                  `camposPersonalizados` cuando éstos contienen arrays, objetos
-                  o claves que indican un componente (ej.: 'Tarjeta de Video'). */}
-              {(() => {
-                const camposArrayRaw = viewItem.camposPersonalizadosArray || viewItem.campos_personalizados_array;
-                // Parseamos si viene como string
-                const campos: Record<string, unknown> = typeof camposArrayRaw === 'string' ? JSON.parse(camposArrayRaw || '{}') as Record<string, unknown> : (camposArrayRaw || {}) as Record<string, unknown>;
-
-                // También consideramos campos personalizados sueltos
-                const camposPersonalizadosRaw = viewItem.camposPersonalizados || viewItem.campos_personalizados;
-                const parsedCamposPersonalizados: Record<string, unknown> = typeof camposPersonalizadosRaw === 'string' ? JSON.parse(camposPersonalizadosRaw || '{}') as Record<string, unknown> : (camposPersonalizadosRaw || {}) as Record<string, unknown>;
-
-                // Fusion defensiva: si hay entradas en campos personalizados que sean arrays u objetos
-                // o que su clave indique claramente un componente (p.ej. 'tarjeta de video'), las incluimos
-                try {
-                  Object.entries(parsedCamposPersonalizados || {}).forEach(([k, v]) => {
-                    if (v === null || v === undefined) return;
-
-                    if (Array.isArray(v)) {
-                      if (!campos[k]) campos[k] = v;
-                    } else if (typeof v === 'object') {
-                      // Si es un objeto, lo convertimos en array de un elemento para mantener formato
-                      if (!campos[k]) campos[k] = [v];
-                    } else {
-                      // Valor primitivo: si la clave parece corresponder a un componente (heurística), la convertimos
-                      const keyLower = String(k).toLowerCase();
-                      if (/tarjeta\s*de\s*video|tarjeta.*video|gpu|tarjeta\s*video|vga/i.test(keyLower)) {
-                        if (!campos[k]) campos[k] = [{ Valor: v }];
-                      }
-                    }
-                  });
-                } catch {
-                  // Si el parse falla por cualquier razón, continuamos sin bloquear la vista
-                  console.warn('Error parsing campos personalizados para componentes:');
-                }
-
-                // Finalmente, renderizamos si hay al menos una entrada
-                return campos && Object.keys(campos).length > 0 ? (
-                <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
-                  <div className="bg-linear-to-r from-blue-50 to-cyan-50 px-6 py-4 border-b border-blue-100">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-linear-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                        </svg>
-                      </div>
-                      <h4 className="font-bold text-xl text-gray-900">Componentes Múltiples</h4>
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    {Object.entries(campos).map(([key, items]) => (
-                      <div key={key} className="mb-6 last:mb-0">
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="w-8 h-8 bg-linear-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
-                            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                            </svg>
-                          </div>
-                          <p className="text-base font-bold text-blue-900">{key}</p>
-                        </div>
-                        <div className="space-y-3">
-                          {(items as Array<Record<string, string>>).map((item, idx) => (
-                            <div key={idx} className="bg-linear-to-br from-blue-50 to-cyan-50 p-4 rounded-lg border-2 border-blue-200 hover:shadow-md transition-shadow">
-                              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                {Object.entries(item).map(([subKey, subValue]) => (
-                                  <div key={subKey}>
-                                    <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">{subKey}</p>
-                                    <p className="font-bold text-gray-900">{String(subValue)}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                ) : null;
-              })()}
+              {/* Componentes Múltiples removed; use Campos Personalizados section only */}
 
               {/* Observaciones */}
               {String(viewItem.observaciones ?? '') !== '' && (
@@ -2069,7 +1989,7 @@ const InventarioPage = () => {
                           'srvCpu': 'CPU Servidor',
                           'srvRams': 'RAM Servidor',
                           'srvStorages': 'Almacenamiento Servidor',
-                          'camposPersonalizadosArray': 'Componentes Múltiples',
+                          'camposPersonalizadosArray': 'Campos Personalizados',
                         };
                         return mapeo[campo] || campo.charAt(0).toUpperCase() + campo.slice(1).replace(/_/g, ' ');
                       };
