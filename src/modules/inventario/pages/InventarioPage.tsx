@@ -5,7 +5,7 @@ import { getEmpresaById } from "@/modules/empresas/services/empresasService";
 import { getSedesByEmpresa } from "@/modules/empresas/services/sedesService";
 import { getAreasByEmpresa } from "@/modules/inventario/services/areasService";
 import { getCategorias, createCategoria, updateCategoria } from "@/modules/inventario/services/categoriasService";
-import type { Category, CategoryField } from "@/modules/inventario/services/categoriasService";
+import type { Category, CategoryField, FieldOption } from "@/modules/inventario/services/categoriasService";
 import RegisterAssetModal from "../components/RegisterAssetModal";
 import AddAreaModal from "../components/AddAreaModal";
 import TrasladarAssetModal from "../components/TrasladarAssetModal";
@@ -68,24 +68,6 @@ interface FotoItem {
 const getAssetUniqueKey = (item: InventarioItem | null): string => {
   if (!item) return '';
   return String(item.assetId ?? item._id ?? item.id ?? item.codigo ?? '');
-};
-
-const getInitialSupportReportUrl = (item: InventarioItem | null): string => {
-  if (!item) return '';
-
-  const directUrl =
-    item.informeSoporteInicialUrl ??
-    item.informe_soporte_inicial_url ??
-    item.soporteInicialPdfUrl ??
-    item.pdfUrlSoporteInicial ??
-    item.supportInitialReportUrl ??
-    item.reporteSoporteInicialUrl;
-
-  if (directUrl) return String(directUrl);
-
-  const nested = (item.informeSoporteInicial as { url?: string } | undefined)?.url
-    ?? (item.reporteSoporteInicial as { url?: string } | undefined)?.url;
-  return nested ? String(nested) : '';
 };
 
 
@@ -1097,7 +1079,6 @@ const InventarioPage = () => {
               <div className="flex gap-3">
                 <button 
                   onClick={() => {
-                    console.log('🔵 [BOTÓN EDITAR CLICKEADO]', { viewItem });
                     setEditingAsset(viewItem);
                     setShowRegisterModal(true);
                     // NO cambiar vista - el modal se mostrará encima
@@ -1236,18 +1217,11 @@ const InventarioPage = () => {
 
               {/* Usuarios Asignados */}
               {(() => {
-                console.log('🔍 [VISTA DETALLE] viewItem completo:', viewItem);
-                console.log('🔍 [VISTA DETALLE] usuariosAsignados:', viewItem.usuariosAsignados);
-                
                 // PRIORIDAD 1: Intentar leer el array de usuarios M:N (NUEVO)
                 const usuarios = viewItem.usuariosAsignados || viewItem.usuario_asignado;
-                console.log('🔍 [VISTA DETALLE] usuarios extraídos:', usuarios);
                 
                 const usuariosArray = Array.isArray(usuarios) ? usuarios : 
                                      typeof usuarios === 'string' ? JSON.parse(usuarios || '[]') : [];
-                
-                console.log('🔍 [VISTA DETALLE] usuariosArray procesado:', usuariosArray);
-                console.log('🔍 [VISTA DETALLE] usuariosArray.length:', usuariosArray.length);
                 
                 if (usuariosArray.length > 0) {
                   return (
@@ -1290,7 +1264,6 @@ const InventarioPage = () => {
                 
                 // PRIORIDAD 2 (FALLBACK LEGACY): Si no hay array, intentar campo único usuarioAsignadoData
                 const usuarioData = viewItem.usuarioAsignadoData || viewItem.usuario_asignado_data;
-                console.log('🔍 [VISTA DETALLE] usuarioAsignadoData (fallback):', usuarioData);
                 
                 if (usuarioData && (usuarioData.nombreCompleto || usuarioData.nombre)) {
                   return (
@@ -1578,33 +1551,112 @@ const InventarioPage = () => {
 
               {/* Campos Personalizados */}
               {(() => {
-                const camposPersonalizados = viewItem.camposPersonalizados || viewItem.campos_personalizados;
+                // Leer desde campos_personalizados_array (donde realmente están los datos)
+                const camposPersonalizados = viewItem.campos_personalizados_array || viewItem.camposPersonalizadosArray || viewItem.camposPersonalizados || viewItem.campos_personalizados;
                 const parsed: Record<string, unknown> = typeof camposPersonalizados === 'string' ? JSON.parse(camposPersonalizados || '{}') as Record<string, unknown> : (camposPersonalizados || {}) as Record<string, unknown>;
 
-                // Separar campos simples (primitivos) de los complejos (arrays/objetos)
-                // Excluir claves que ya estén presentes en Componentes Múltiples
-                const simpleCampos: Record<string, string | number | boolean> = {};
-                try {
-                  // Obtener claves declaradas en componentes múltiples (si vienen como string u objeto)
-                  const componentesRaw = viewItem.camposPersonalizadosArray || viewItem.campos_personalizados_array;
-                  const parsedComponentes: Record<string, unknown> = typeof componentesRaw === 'string' ? JSON.parse(componentesRaw || '{}') as Record<string, unknown> : (componentesRaw || {}) as Record<string, unknown>;
-                  const componentKeys = new Set(Object.keys(parsedComponentes || {}).map(k => String(k).toLowerCase()));
+                // Agrupar campos: principales y sus subcampos
+                interface FieldGroup {
+                  mainValue: string;
+                  subfields: Array<{ label: string; value: string }>;
+                }
+                
+                const groupedFields: Record<string, FieldGroup> = {};
+                const arrayFields: Record<string, Array<Record<string, string>>> = {};
+                const standaloneFields: Record<string, string> = {};
 
-                  Object.entries(parsed || {}).forEach(([k, v]) => {
-                    if (v === null || v === undefined) return;
-                    const keyLower = String(k).toLowerCase();
-                    const t = typeof v;
-                    // Si la clave aparece en los componentes, la omitimos aquí para evitar duplicados
-                    if (componentKeys.has(keyLower)) return;
-                    if (t === 'string' || t === 'number' || t === 'boolean') {
-                      simpleCampos[k] = v as string | number | boolean;
+                try {
+                  const allKeys = Object.keys(parsed || {});
+                  
+                  // PASO 1: Separar arrays de valores simples
+                  Object.entries(parsed || {}).forEach(([key, value]) => {
+                    if (value === null || value === undefined) return;
+                    
+                    // Si es un array, es un campo con múltiples instancias
+                    if (Array.isArray(value)) {
+                      arrayFields[key] = value as Array<Record<string, string>>;
+                      return;
                     }
                   });
-                } catch {
-                  console.warn('Error parsing campos personalizados (simple):');
+                  
+                  // PASO 2: Identificar campos principales (los que no son subcampos de otros)
+                  const mainFields = new Set<string>();
+                  allKeys.forEach(key => {
+                    // Skip arrays (already processed)
+                    if (arrayFields[key]) return;
+                    
+                    // Un campo es principal si no existe otro campo que sea su prefijo + "_"
+                    const isPotentialSubfield = allKeys.some(otherKey => 
+                      otherKey !== key && key.startsWith(otherKey + '_')
+                    );
+                    if (!isPotentialSubfield) {
+                      mainFields.add(key);
+                    }
+                  });
+
+                  // PASO 3: Procesar campos flat (para compatibilidad con datos antiguos)
+                  Object.entries(parsed || {}).forEach(([key, value]) => {
+                    if (value === null || value === undefined || arrayFields[key]) return;
+                    
+                    // Buscar si este campo es subcampo de algún campo principal
+                    let matchedMainField: string | null = null;
+                    for (const mainField of mainFields) {
+                      if (key.startsWith(mainField + '_') && key !== mainField) {
+                        matchedMainField = mainField;
+                        break;
+                      }
+                    }
+
+                    if (matchedMainField) {
+                      // Es un subcampo: formato es {mainField}_{optionValue}_{subfieldName}
+                      const remainder = key.substring(matchedMainField.length + 1); // Quita "Memoria_RAM_"
+                      const parts = remainder.split('_');
+                      
+                      if (parts.length >= 2) {
+                        // parts[0] es optionValue ("Selecciona")
+                        const subfieldName = parts.slice(1).join(' '); // "Tipos" o "Capacidad"
+                        
+                        if (!groupedFields[matchedMainField]) {
+                          groupedFields[matchedMainField] = {
+                            mainValue: '',
+                            subfields: []
+                          };
+                        }
+                        
+                        groupedFields[matchedMainField].subfields.push({
+                          label: subfieldName,
+                          value: String(value)
+                        });
+                      }
+                    } else if (mainFields.has(key)) {
+                      // Es un campo principal
+                      const fieldName = key.replace(/_/g, ' ');
+                      
+                      // Verificar si tiene subcampos
+                      const hasSubfields = allKeys.some(k => k.startsWith(key + '_'));
+                      
+                      if (hasSubfields) {
+                        if (!groupedFields[key]) {
+                          groupedFields[key] = {
+                            mainValue: String(value),
+                            subfields: []
+                          };
+                        } else {
+                          groupedFields[key].mainValue = String(value);
+                        }
+                      } else {
+                        // Campo simple sin subcampos
+                        standaloneFields[fieldName] = String(value);
+                      }
+                    }
+                  });
+                } catch (err) {
+                  console.warn('Error parsing campos personalizados:', err);
                 }
 
-                return Object.keys(simpleCampos).length > 0 ? (
+                const hasContent = Object.keys(groupedFields).length > 0 || Object.keys(standaloneFields).length > 0 || Object.keys(arrayFields).length > 0;
+
+                return hasContent ? (
                   <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
                     <div className="bg-linear-to-r from-yellow-50 to-amber-50 px-6 py-4 border-b border-yellow-100">
                       <div className="flex items-center gap-3">
@@ -1616,15 +1668,63 @@ const InventarioPage = () => {
                         <h4 className="font-bold text-xl text-gray-900">Campos Personalizados</h4>
                       </div>
                     </div>
-                    <div className="p-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {Object.entries(simpleCampos).map(([key, value]) => (
-                          <div key={key} className="bg-linear-to-br from-yellow-50 to-amber-50 p-4 rounded-lg border-2 border-yellow-200 hover:shadow-md transition-shadow">
-                            <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-2">{key}</p>
-                            <p className="font-bold text-gray-900">{String(value)}</p>
-                          </div>
-                        ))}
-                      </div>
+                    <div className="p-6 space-y-4">
+                      {/* Campos con múltiples instancias (array format) */}
+                      {Object.entries(arrayFields).map(([fieldKey, instances]) => (
+                        <div key={fieldKey} className="space-y-3">
+                          <p className="text-sm font-bold text-purple-800 mb-2">{fieldKey.replace(/_/g, ' ')}</p>
+                          {instances.map((instance, idx) => (
+                            <div key={idx} className="bg-linear-to-br from-purple-50 to-indigo-50 p-4 rounded-lg border-2 border-purple-200">
+                              <p className="text-xs text-purple-600 font-semibold mb-2">Instancia {idx + 1}</p>
+                              {Object.entries(instance).map(([subKey, subValue]) => (
+                                <div key={subKey} className="mb-1">
+                                  {subKey === '_opcion' ? (
+                                    <p className="text-xs text-purple-700 mb-1">
+                                      <span className="font-medium">Opción: </span>
+                                      <span className="font-semibold text-gray-900">{subValue}</span>
+                                    </p>
+                                  ) : (
+                                    <p className="text-xs">
+                                      <span className="text-purple-700">{subKey}: </span>
+                                      <span className="text-sm font-semibold text-gray-900">{subValue}</span>
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                      
+                      {/* Campos agrupados con subcampos (flat format - legacy) */}
+                      {Object.entries(groupedFields).map(([fieldKey, group]) => (
+                        <div key={fieldKey} className="bg-linear-to-br from-yellow-50 to-amber-50 p-4 rounded-lg border-2 border-yellow-200">
+                          <p className="text-sm font-bold text-yellow-800 mb-1">{fieldKey.replace(/_/g, ' ')}</p>
+                          <p className="text-xs text-yellow-600 mb-3">{group.mainValue}</p>
+                          {group.subfields.length > 0 && (
+                            <div className="space-y-2 pl-3 border-l-2 border-yellow-300">
+                              {group.subfields.map((sub, idx) => (
+                                <div key={idx}>
+                                  <span className="text-xs text-yellow-700">{sub.label}: </span>
+                                  <span className="text-sm font-semibold text-gray-900">{sub.value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      
+                      {/* Campos simples sin subcampos */}
+                      {Object.keys(standaloneFields).length > 0 && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {Object.entries(standaloneFields).map(([key, value]) => (
+                            <div key={key} className="bg-linear-to-br from-yellow-50 to-amber-50 p-4 rounded-lg border-2 border-yellow-200">
+                              <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-2">{key}</p>
+                              <p className="font-bold text-gray-900">{value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : null;
@@ -1843,7 +1943,9 @@ const InventarioPage = () => {
                 {(() => {
                   const assetKey = getAssetUniqueKey(viewItem);
                   const savedUrl = assetKey ? supportReportsByAsset[assetKey] : '';
-                  const generatedReportUrl = savedUrl || getInitialSupportReportUrl(viewItem);
+                  // Only consider reports generated in this session (from supportReportsByAsset)
+                  // Ignore backend-provided informeSoporteInicialUrl to allow re-generation
+                  const generatedReportUrl = savedUrl;
                   const isGenerated = Boolean(generatedReportUrl);
 
                   return (
@@ -2447,16 +2549,40 @@ const InventarioPage = () => {
                 return;
               }
               // Normalize fields for preview (trim names and options) but allow spaces inside names
-              const cleanedCampos = (newCategoryFields || []).map((f) => ({
-                ...f,
-                nombre: String(f.nombre || '').trim(),
-                opciones: (f.opciones || []).map(s => String(s || '').trim()).filter(Boolean),
-                subcampos: (f.subcampos || []).map((sf) => ({
-                  ...sf,
-                  nombre: String(sf.nombre || '').trim(),
-                  opciones: (sf.opciones || []).map(s => String(s || '').trim()).filter(Boolean)
-                }))
-              }));
+              const cleanedCampos = (newCategoryFields || []).map((f) => {
+                // Limpiar opciones según el formato
+                let cleanedOptions = f.opciones;
+                if (f.opciones && f.opciones.length > 0) {
+                  const firstOpt = f.opciones[0];
+                  if (typeof firstOpt === 'string') {
+                    // Formato antiguo: string[]
+                    cleanedOptions = f.opciones.map(s => String(s || '').trim()).filter(Boolean);
+                  } else {
+                    // Formato nuevo: FieldOption[]
+                    cleanedOptions = (f.opciones as FieldOption[])
+                      .map(opt => ({
+                        value: String(opt.value || '').trim(),
+                        subcampos: (opt.subcampos || []).map(sf => ({
+                          nombre: String(sf.nombre || '').trim(),
+                          tipo: sf.tipo,
+                          opciones: (sf.opciones || []).map(s => String(s || '').trim()).filter(Boolean)
+                        })).filter(sf => sf.nombre) // Eliminar subcampos sin nombre
+                      }))
+                      .filter(opt => opt.value); // Eliminar opciones sin valor
+                  }
+                }
+                
+                return {
+                  ...f,
+                  nombre: String(f.nombre || '').trim(),
+                  opciones: cleanedOptions,
+                  subcampos: (f.subcampos || []).map((sf) => ({
+                    ...sf,
+                    nombre: String(sf.nombre || '').trim(),
+                    opciones: (sf.opciones || []).map(s => String(s || '').trim()).filter(Boolean)
+                  })).filter(sf => sf.nombre) // Eliminar subcampos sin nombre
+                };
+              });
               // show preview with timestamp
               setCategoryPreview({ nombre: String(cat).trim(), subcategorias: subs, campos: cleanedCampos, createdAt: new Date().toLocaleString() });
               setShowPreview(true);
@@ -2577,24 +2703,198 @@ const InventarioPage = () => {
                           </div>
 
                           {field.tipo === 'select' && (
-                            <div>
-                              <label className="block text-xs font-medium text-slate-600 mb-1">Opciones del campo</label>
-                              <textarea
-                                placeholder="Separadas por coma. Ej: Intel, AMD, Apple"
-                                value={field.opciones?.join(', ') || ''}
-                                onChange={(e) => {
-                                  const updated = [...newCategoryFields];
-                                  updated[idx].opciones = e.target.value.split(',');
-                                  setNewCategoryFields(updated);
-                                }}
-                                className="w-full p-2.5 border border-slate-300 rounded-md text-sm bg-white text-slate-900 placeholder:text-slate-400"
-                                rows={2}
-                              />
+                            <div className="mt-2 rounded-lg border border-purple-200 bg-purple-50/40 p-3">
+                              <div className="flex items-center justify-between mb-3">
+                                <div>
+                                  <label className="text-xs font-semibold uppercase tracking-wide text-purple-700">Opciones de selección</label>
+                                  <p className="text-xs text-slate-500 mt-0.5">Define las opciones y sus subcampos específicos.</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = [...newCategoryFields];
+                                    if (!Array.isArray(updated[idx].opciones)) {
+                                      updated[idx].opciones = [];
+                                    }
+                                    // Add new option as FieldOption object
+                                    const currentOpts = updated[idx].opciones as FieldOption[];
+                                    currentOpts.push({ value: '', subcampos: [] });
+                                    updated[idx].opciones = currentOpts;
+                                    setNewCategoryFields(updated);
+                                  }}
+                                  className="text-xs bg-purple-100 text-purple-800 px-2.5 py-1.5 rounded-md hover:bg-purple-200 font-medium"
+                                >
+                                  + Agregar opción
+                                </button>
+                              </div>
+
+                              {(!field.opciones || (field.opciones as FieldOption[]).length === 0) ? (
+                                <p className="text-sm text-gray-500 italic text-center py-2">No hay opciones. Agrega opciones de selección.</p>
+                              ) : (
+                                <div className="space-y-3">
+                                  {(field.opciones as FieldOption[]).map((option, optIdx) => (
+                                    <div key={optIdx} className="bg-white border border-purple-100 p-3 rounded-lg space-y-3">
+                                      <div className="flex items-center gap-2">
+                                        <div className="flex-1">
+                                          <label className="block text-xs font-medium text-slate-600 mb-1">Opción #{optIdx + 1}</label>
+                                          <input
+                                            type="text"
+                                            placeholder="Ej: Intel, AMD"
+                                            value={typeof option === 'string' ? option : option.value}
+                                            onChange={(e) => {
+                                              const updated = [...newCategoryFields];
+                                              const opts = updated[idx].opciones as FieldOption[];
+                                              const currentOpt = opts[optIdx];
+                                              if (typeof currentOpt === 'string') {
+                                                opts[optIdx] = { value: e.target.value, subcampos: [] };
+                                              } else {
+                                                currentOpt.value = e.target.value;
+                                              }
+                                              setNewCategoryFields(updated);
+                                            }}
+                                            className="w-full p-2 border border-slate-300 rounded-md text-sm bg-white text-slate-900 placeholder:text-slate-400"
+                                          />
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const updated = [...newCategoryFields];
+                                            updated[idx].opciones = (updated[idx].opciones as FieldOption[]).filter((_, i) => i !== optIdx);
+                                            setNewCategoryFields(updated);
+                                          }}
+                                          className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-red-200 text-red-600 hover:text-red-700 hover:bg-red-50 text-xs mt-6"
+                                          aria-label="Eliminar opción"
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+
+                                      {/* Subcampos específicos de esta opción */}
+                                      <div className="ml-4 pl-3 border-l-2 border-blue-300">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <label className="text-xs font-semibold text-blue-700">Subcampos para "{typeof option === 'string' ? option : option.value || 'esta opción'}"</label>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const updated = [...newCategoryFields];
+                                              const opts = updated[idx].opciones as FieldOption[];
+                                              const currentOpt = opts[optIdx];
+                                              if (typeof currentOpt === 'string') {
+                                                opts[optIdx] = { value: currentOpt, subcampos: [{ nombre: '', tipo: 'text', opciones: [] }] };
+                                              } else {
+                                                if (!currentOpt.subcampos) currentOpt.subcampos = [];
+                                                currentOpt.subcampos.push({ nombre: '', tipo: 'text', opciones: [] });
+                                              }
+                                              setNewCategoryFields(updated);
+                                            }}
+                                            className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-md hover:bg-blue-200 font-medium"
+                                          >
+                                            + Subcampo
+                                          </button>
+                                        </div>
+
+                                        {typeof option !== 'string' && option.subcampos && option.subcampos.length > 0 ? (
+                                          <div className="space-y-2">
+                                            {option.subcampos.map((subfield, subIdx) => (
+                                              <div key={subIdx} className="bg-blue-50 border border-blue-100 p-2 rounded-md space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                  <p className="text-xs font-semibold text-blue-700">Subcampo #{subIdx + 1}</p>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      const updated = [...newCategoryFields];
+                                                      const opts = updated[idx].opciones as FieldOption[];
+                                                      const currentOpt = opts[optIdx];
+                                                      if (typeof currentOpt !== 'string' && currentOpt.subcampos) {
+                                                        currentOpt.subcampos = currentOpt.subcampos.filter((_, i) => i !== subIdx);
+                                                      }
+                                                      setNewCategoryFields(updated);
+                                                    }}
+                                                    className="inline-flex items-center justify-center w-6 h-6 rounded-md border border-red-200 text-red-600 hover:text-red-700 hover:bg-red-50 text-xs"
+                                                  >
+                                                    ✕
+                                                  </button>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                                  <div className="md:col-span-2">
+                                                    <label className="block text-xs font-medium text-slate-600 mb-1">Nombre</label>
+                                                    <input
+                                                      type="text"
+                                                      placeholder="Ej: Generación, Frecuencia"
+                                                      value={subfield.nombre}
+                                                      onChange={(e) => {
+                                                        const updated = [...newCategoryFields];
+                                                        const opts = updated[idx].opciones as FieldOption[];
+                                                        const currentOpt = opts[optIdx];
+                                                        if (typeof currentOpt !== 'string' && currentOpt.subcampos) {
+                                                          currentOpt.subcampos[subIdx].nombre = e.target.value;
+                                                        }
+                                                        setNewCategoryFields(updated);
+                                                      }}
+                                                      className="w-full p-2 border border-slate-300 rounded-md text-sm bg-white text-slate-900 placeholder:text-slate-400"
+                                                    />
+                                                  </div>
+                                                  <div>
+                                                    <label className="block text-xs font-medium text-slate-600 mb-1">Tipo</label>
+                                                    <select
+                                                      value={subfield.tipo}
+                                                      onChange={(e) => {
+                                                        const updated = [...newCategoryFields];
+                                                        const opts = updated[idx].opciones as FieldOption[];
+                                                        const currentOpt = opts[optIdx];
+                                                        if (typeof currentOpt !== 'string' && currentOpt.subcampos) {
+                                                          currentOpt.subcampos[subIdx].tipo = e.target.value as 'text' | 'number' | 'select';
+                                                        }
+                                                        setNewCategoryFields(updated);
+                                                      }}
+                                                      className="w-full p-2 border border-slate-300 rounded-md text-sm bg-white text-slate-900"
+                                                    >
+                                                      <option value="text">Texto</option>
+                                                      <option value="number">Número</option>
+                                                      <option value="select">Selección</option>
+                                                    </select>
+                                                  </div>
+                                                </div>
+
+                                                {subfield.tipo === 'select' && (
+                                                  <div>
+                                                    <label className="block text-xs font-medium text-slate-600 mb-1">Opciones</label>
+                                                    <input
+                                                      type="text"
+                                                      placeholder="Separadas por coma. Ej: 10ma, 11va, 12va"
+                                                      value={subfield.opciones?.join(', ') || ''}
+                                                      onChange={(e) => {
+                                                        const updated = [...newCategoryFields];
+                                                        const opts = updated[idx].opciones as FieldOption[];
+                                                        const currentOpt = opts[optIdx];
+                                                        if (typeof currentOpt !== 'string' && currentOpt.subcampos) {
+                                                          // Solo dividir, mapear y trim, pero NO filtrar vacíos aún (permite escribir comas)
+                                                          currentOpt.subcampos[subIdx].opciones = e.target.value.split(',').map(v => v.trim());
+                                                        }
+                                                        setNewCategoryFields(updated);
+                                                      }}
+                                                      className="w-full p-2 border border-slate-300 rounded-md text-sm bg-white text-slate-900 placeholder:text-slate-400"
+                                                    />
+                                                  </div>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="text-xs text-gray-500 italic text-center py-2">Sin subcampos. Haz clic en "+ Subcampo" para agregar.</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           )}
                           
-                          {/* Subcampos */}
-                          <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50/40 p-3">
+                          {/* Subcampos generales (solo para campos que NO son de tipo 'select') */}
+                          {field.tipo !== 'select' && (
+                            <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50/40 p-3">
                             <div className="flex items-center justify-between mb-2">
                               <div>
                                 <label className="text-xs font-semibold uppercase tracking-wide text-blue-700">Subcampos (opcional)</label>
@@ -2675,7 +2975,8 @@ const InventarioPage = () => {
                                           value={subfield.opciones?.join(', ') || ''}
                                           onChange={(e) => {
                                             const updated = [...newCategoryFields];
-                                            updated[idx].subcampos![subIdx].opciones = e.target.value.split(',');
+                                            // Solo dividir, mapear y trim, pero NO filtrar vacíos aún (permite escribir comas)
+                                            updated[idx].subcampos![subIdx].opciones = e.target.value.split(',').map(v => v.trim());
                                             setNewCategoryFields(updated);
                                           }}
                                           className="w-full p-2 border border-slate-300 rounded-md text-sm bg-white text-slate-900 placeholder:text-slate-400"
@@ -2687,6 +2988,7 @@ const InventarioPage = () => {
                               </div>
                             )}
                           </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -2801,7 +3103,7 @@ const InventarioPage = () => {
                                   <div className="flex flex-wrap gap-1">
                                     {campo.opciones.map((opt, oidx) => (
                                       <span key={oidx} className="inline-block bg-white px-2 py-0.5 rounded text-xs text-gray-700 border border-gray-300">
-                                        {opt}
+                                        {typeof opt === 'string' ? opt : opt.value}
                                       </span>
                                     ))}
                                   </div>
@@ -2833,16 +3135,49 @@ const InventarioPage = () => {
                         if (editingCategoryId) {
                           // EDITAR categoría existente
                           // Ensure final normalization before sending
-                          const finalCampos = (categoryPreview.campos || []).map((f) => ({
-                            ...f,
-                            nombre: String(f.nombre || '').trim(),
-                            opciones: (f.opciones || []).map(s => String(s || '').trim()).filter(Boolean),
-                            subcampos: (f.subcampos || []).map((sf) => ({
-                              ...sf,
-                              nombre: String(sf.nombre || '').trim(),
-                              opciones: (sf.opciones || []).map(s => String(s || '').trim()).filter(Boolean)
-                            }))
-                          }));
+                          const finalCampos = (categoryPreview.campos || []).map((f) => {
+                            // Procesar opciones según formato
+                            let processedOptions = f.opciones;
+                            if (f.opciones && f.opciones.length > 0) {
+                              const firstOpt = f.opciones[0];
+                              if (typeof firstOpt === 'string') {
+                                // Formato antiguo: string[]
+                                processedOptions = f.opciones.map(s => String(s || '').trim()).filter(Boolean);
+                              } else {
+                                // Formato nuevo: FieldOption[] - mantener como objetos
+                                processedOptions = (f.opciones as FieldOption[])
+                                  .filter(opt => typeof opt === 'object' && opt.value)
+                                  .map(opt => ({
+                                    value: String(opt.value || '').trim(),
+                                    ...(opt.subcampos && opt.subcampos.length > 0 && {
+                                      subcampos: opt.subcampos
+                                        .filter(sf => sf.nombre)
+                                        .map(sf => ({
+                                          nombre: String(sf.nombre || '').trim(),
+                                          tipo: sf.tipo,
+                                          ...(sf.opciones && sf.opciones.length > 0 && {
+                                            opciones: sf.opciones.map(s => String(s || '').trim()).filter(Boolean)
+                                          })
+                                        }))
+                                    })
+                                  }));
+                              }
+                            }
+                            
+                            return {
+                              nombre: String(f.nombre || '').trim(),
+                              tipo: f.tipo,
+                              requerido: f.requerido,
+                              opciones: processedOptions,
+                              subcampos: (f.subcampos || []).map((sf) => ({
+                                nombre: String(sf.nombre || '').trim(),
+                                tipo: sf.tipo,
+                                ...(sf.opciones && sf.opciones.length > 0 && {
+                                  opciones: sf.opciones.map(s => String(s || '').trim()).filter(Boolean)
+                                })
+                              }))
+                            };
+                          });
                           const updated = await updateCategoria(editingCategoryId, {
                             subcategorias: categoryPreview.subcategorias,
                             campos: finalCampos
@@ -2861,19 +3196,49 @@ const InventarioPage = () => {
                           
                           const finalCampos = (categoryPreview.campos || [])
                             .filter(f => f.nombre && String(f.nombre).trim().length > 0)
-                            .map((f) => ({
-                              ...f,
-                              nombre: String(f.nombre || '').trim(),
-                              tipo: f.tipo || 'text',
-                              requerido: Boolean(f.requerido),
-                              opciones: (f.opciones || []).map(s => String(s || '').trim()).filter(Boolean),
-                              subcampos: (f.subcampos || []).map((sf) => ({
-                                ...sf,
-                                nombre: String(sf.nombre || '').trim(),
-                                tipo: sf.tipo || 'text',
-                                opciones: (sf.opciones || []).map(s => String(s || '').trim()).filter(Boolean)
-                              }))
-                            }));
+                            .map((f) => {
+                              // Procesar opciones según formato
+                              let processedOptions = f.opciones;
+                              if (f.opciones && f.opciones.length > 0) {
+                                const firstOpt = f.opciones[0];
+                                if (typeof firstOpt === 'string') {
+                                  // Formato antiguo: string[]
+                                  processedOptions = f.opciones.map(s => String(s || '').trim()).filter(Boolean);
+                                } else {
+                                  // Formato nuevo: FieldOption[] - mantener como objetos
+                                  processedOptions = (f.opciones as FieldOption[])
+                                    .filter(opt => typeof opt === 'object' && opt.value)
+                                    .map(opt => ({
+                                      value: String(opt.value || '').trim(),
+                                      ...(opt.subcampos && opt.subcampos.length > 0 && {
+                                        subcampos: opt.subcampos
+                                          .filter(sf => sf.nombre)
+                                          .map(sf => ({
+                                            nombre: String(sf.nombre || '').trim(),
+                                            tipo: sf.tipo,
+                                            ...(sf.opciones && sf.opciones.length > 0 && {
+                                              opciones: sf.opciones.map(s => String(s || '').trim()).filter(Boolean)
+                                            })
+                                          }))
+                                      })
+                                    }));
+                                }
+                              }
+                              
+                              return {
+                                nombre: String(f.nombre || '').trim(),
+                                tipo: f.tipo || 'text',
+                                requerido: Boolean(f.requerido),
+                                opciones: processedOptions,
+                                subcampos: (f.subcampos || []).map((sf) => ({
+                                  nombre: String(sf.nombre || '').trim(),
+                                  tipo: sf.tipo || 'text',
+                                  ...(sf.opciones && sf.opciones.length > 0 && {
+                                    opciones: sf.opciones.map(s => String(s || '').trim()).filter(Boolean)
+                                  })
+                                }))
+                              };
+                            });
                           
                           const payload = {
                             nombre: categoryPreview.nombre.trim(),

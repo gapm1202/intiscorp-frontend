@@ -6,12 +6,17 @@ export interface SubField {
   opciones?: string[];
 }
 
+export interface FieldOption {
+  value: string;
+  subcampos?: SubField[];
+}
+
 export interface CategoryField {
   nombre: string;
   tipo: 'text' | 'number' | 'select' | 'textarea' | 'group';
-  opciones?: string[];
+  opciones?: string[] | FieldOption[]; // Support both old and new format
   requerido: boolean;
-  subcampos?: SubField[];
+  subcampos?: SubField[]; // Deprecated - for backward compatibility
 }
 
 export interface Category {

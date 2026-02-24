@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getWarrantyInfo } from "@/modules/inventario/utils/warranty";
 import { formatAssetCode, getCompanyPrefix, getCategoryPrefix } from "@/utils/helpers";
-import type { Category } from "@/modules/inventario/services/categoriasService";
+import type { Category, FieldOption, SubField } from "@/modules/inventario/services/categoriasService";
 import { createActivo, updateActivo } from "@/modules/inventario/services/inventarioService";
 import { getUsuariosByEmpresa, type Usuario } from "@/modules/usuarios/services/usuariosService";
 
@@ -45,14 +45,7 @@ const RegisterAssetModal = ({
   categories = [],
   editingAsset = null,
 }: Props) => {
-  // 🔍 DEBUG: Monitorear props del modal
-  console.log('🔷 [MODAL PROPS]', { 
-    isOpen, 
-    hasEditingAsset: !!editingAsset,
-    areasLength: areas?.length ?? 0,
-    areasIsArray: Array.isArray(areas),
-    areasType: typeof areas
-  });
+  // Props monitoring disabled to reduce console noise
   
   // Basic fields
   const [categoria, setCategoria] = useState<string>("");
@@ -111,7 +104,6 @@ const RegisterAssetModal = ({
   const [fechaCompra, setFechaCompra] = useState<string>("");
   const [fechaFinGarantia, setFechaFinGarantia] = useState<string>("");
   const [proveedor, setProveedor] = useState<string>("");
-  // Información contable / compra
   const [tipoDocumentoCompra, setTipoDocumentoCompra] = useState<string>("Desconocido");
   const [numeroDocumentoCompra, setNumeroDocumentoCompra] = useState<string>("");
   const [fechaCompraUnknown, setFechaCompraUnknown] = useState<boolean>(false);
@@ -120,15 +112,12 @@ const RegisterAssetModal = ({
   const [purchaseDocumentExisting, setPurchaseDocumentExisting] = useState<string>("");
   const [purchaseDocumentDescription, setPurchaseDocumentDescription] = useState<string>("");
 
-  // Información de garantía / archivos
-  // Nueva: duración de garantía (mostrar select en UI)
+  // Warranty / files
   const [garantiaDuracion, setGarantiaDuracion] = useState<string>("");
-  // nota: ya no usamos `garantiaFechaInicio` como campo separado; se utiliza `garantia` (garantiaDuracion)
   const [warrantyDocumentFile, setWarrantyDocumentFile] = useState<File | null>(null);
   const [warrantyDocumentExisting, setWarrantyDocumentExisting] = useState<string>("");
   const [warrantyDocumentDescription, setWarrantyDocumentDescription] = useState<string>("");
 
-  // Estado y antigüedad
   const [condicionFisica, setCondicionFisica] = useState<string>("");
   const [antiguedadCalculada, setAntiguedadCalculada] = useState<string>("");
   const [ip, setIp] = useState<string>("");
@@ -148,135 +137,27 @@ const RegisterAssetModal = ({
 
   // Helper para generar una clave interna estable (sin espacios) a partir de la etiqueta
   const getFieldKey = (label: string) => String(label || '').trim().replace(/\s+/g, '_');
-
   // Cargar usuarios cuando cambia la empresa o sede
   useEffect(() => {
     const loadUsuarios = async () => {
-      // Usar empresaId de props y selectedSedeId o sedeId
-      const currentSedeId = selectedSedeId || sedeId;
-      
-      if (!empresaId || !currentSedeId) {
-        setUsuariosDisponibles([]);
-        return;
-      }
-      
       setLoadingUsuarios(true);
       try {
-        const usuarios = await getUsuariosByEmpresa(empresaId, currentSedeId);
-        console.log('✅ [USUARIOS CARGADOS]:', usuarios.length, 'usuarios para empresa', empresaId, 'sede', currentSedeId);
-        console.log('👥 Usuarios disponibles:', usuarios);
-        setUsuariosDisponibles(usuarios);
-      } catch (error) {
-        console.error('❌ [ERROR] Al cargar usuarios:', error);
+        if (empresaId) {
+          const res = await getUsuariosByEmpresa(empresaId);
+          const list = res?.data || res || [];
+          setUsuariosDisponibles(Array.isArray(list) ? list : []);
+        } else {
+          setUsuariosDisponibles([]);
+        }
+      } catch (err) {
+        console.error('Error cargando usuarios:', err);
         setUsuariosDisponibles([]);
       } finally {
         setLoadingUsuarios(false);
       }
     };
-
     loadUsuarios();
-  }, [empresaId, selectedSedeId, sedeId]);
-
-  useEffect(() => {
-    if (isOpen && !editingAsset) {
-      // Defer multiple setState calls to avoid cascading render warning
-      Promise.resolve().then(() => {
-        // Limpiar TODOS los campos cuando se abre el modal para crear nuevo activo
-        setCategoria("");
-        setFabricante("");
-        setModelo("");
-        setSerie("");
-        setAssetId("");
-        setArea("");
-        setResponsable("");
-        setProveedor("");
-        setFechaCompra("");
-        setFechaFinGarantia("");
-        setIp("");
-        setMac("");
-        setCodigoAccesoRemoto("");
-        setObservaciones("");
-        setEstadoActivo("activo");
-        setEstadoOperativo("operativo");
-        setUsuariosAsignadosIds([]);
-        setFotos([]);
-        setFotosExistentes([]);
-        setDynamicFields({});
-        setDynamicArrayFields({});
-        // Reset contable/garantía
-        setTipoDocumentoCompra("Desconocido");
-        setNumeroDocumentoCompra("");
-        setFechaCompraUnknown(false);
-        setFechaCompraAprox("");
-        setPurchaseDocumentFile(null);
-        setPurchaseDocumentExisting("");
-        // no usamos garantiaFechaInicio en el nuevo contrato
-        setGarantiaDuracion("");
-        setWarrantyDocumentFile(null);
-        setWarrantyDocumentExisting("");
-        setCondicionFisica("");
-        setAntiguedadCalculada("");
-        
-        // Laptop
-        setLapCpu("");
-        setLapCpuSerie("");
-        setLapRams([]);
-        setLapStorages([]);
-        setLapGpuIntegrada("");
-        setLapGpuDedicada("");
-        
-        // PC
-        setPcCpu("");
-        setPcCpuGen("");
-        setPcCooler("");
-        setPcPlacaBase("");
-        setPcChipset("");
-        setPcRams([]);
-        setPcStorages([]);
-        setPcGpuIntegrada("");
-        setPcGpuDedicada("");
-        setPcFuente("");
-        
-        // Servidor
-        setSrvCpuModelo("");
-        setSrvCpuCantidad("");
-        setSrvCpuGen("");
-        setSrvRams([]);
-        setSrvStorages([]);
-        setSrvRaidControladora("");
-        setSrvTipo("");
-        setSrvSO("");
-        setSrvSOVer("");
-        setSrvVirtualizacion("");
-        setSrvRoles("");
-        setSrvBackup("No");
-      });
-    }
-  }, [isOpen, editingAsset]);
-
-  // Calcular antigüedad automáticamente cuando cambie la fecha de compra (exacta o aproximada)
-  useEffect(() => {
-    const compute = () => {
-      try {
-        // Si el tipo de documento es 'Desconocido' interpretamos que solo hay año aproximado
-        const base = tipoDocumentoCompra === 'Desconocido' ? (fechaCompraAprox || fechaCompra) : (fechaCompra || fechaCompraAprox);
-        if (!base) {
-          setAntiguedadCalculada('');
-          return;
-        }
-        const now = new Date();
-        const then = new Date(base);
-        const diffMs = now.getTime() - then.getTime();
-        const years = diffMs / (1000 * 60 * 60 * 24 * 365);
-        const rounded = Math.round(years * 10) / 10; // 1 decimal
-        setAntiguedadCalculada(String(rounded));
-      } catch (err) {
-        console.error('Error calculando antiguedad:', err);
-        setAntiguedadCalculada('');
-      }
-    };
-    compute();
-  }, [fechaCompra, fechaCompraAprox, tipoDocumentoCompra]);
+  }, [empresaId, sedeId]);
 
   // Calcular fechaFinGarantia automáticamente cuando cambien fechaCompra/fechaCompraAprox o garantiaDuracion
   useEffect(() => {
@@ -306,16 +187,9 @@ const RegisterAssetModal = ({
 
   // Cargar datos cuando se está editando
   useEffect(() => {
-    console.log('🔶 [useEffect DISPARADO] isOpen:', isOpen, '| hasEditingAsset:', !!editingAsset);
-    
     if (isOpen && editingAsset) {
-      console.log('✅ [CONDICIÓN CUMPLIDA] Entrando al bloque de carga...');
       Promise.resolve().then(() => {
         const asset = editingAsset as Record<string, unknown>;
-        console.log('🟢 [MODAL ABIERTO] Datos del activo recibidos:', asset);
-        console.log('🔍 usuarios_asignados_m2n:', asset['usuarios_asignados_m2n']);
-        console.log('🔍 usuariosAsignados:', asset['usuariosAsignados']);
-        console.log('🔍 usuarios_asignados:', asset['usuarios_asignados']);
         
         setCategoria(String(asset['categoria'] ?? ''));
         setFabricante(String(asset['fabricante'] ?? ''));
@@ -324,7 +198,6 @@ const RegisterAssetModal = ({
         setAssetId(String(asset['assetId'] ?? asset['codigo'] ?? ''));
         
         const areaValue = String(asset['area'] ?? '');
-        console.log('🟩 [ÁREA] Valor encontrado:', areaValue);
         setArea(areaValue);
         setProveedor(String(asset['proveedor'] ?? ''));
 
@@ -332,27 +205,16 @@ const RegisterAssetModal = ({
         const areaNameFromAsset = areaValue;
         // Usar las áreas que vienen en el activo o las que vienen como prop
         const areasToUse = Array.isArray(areas) ? areas : (asset['_areasDisponibles'] as any[] || []);
-        console.log('🔍 [RESPONSABLE] Buscando en áreas:', { 
-          areaNameFromAsset, 
-          responsableEnActivo: asset['responsable'] ?? asset['responsable_name'],
-          areasDisponibles: areasToUse?.length ?? 0,
-          areasIsArray: Array.isArray(areasToUse),
-          areasList: Array.isArray(areasToUse) ? areasToUse.map(a => ({ nombre: a.name ?? a.nombre, responsable: a.responsable })) : 'NO ES ARRAY'
-        });
         if (!String(asset['responsable'] ?? '').trim() && areaNameFromAsset && Array.isArray(areasToUse) && areasToUse.length > 0) {
           const found = areasToUse.find(a => String(a.name ?? a.nombre ?? '') === areaNameFromAsset);
-          console.log('🔎 [ÁREA ENCONTRADA]:', found);
           if (found) {
             const responsableValue = String(found.responsable ?? '');
-            console.log('✅ [RESPONSABLE] Encontrado desde área:', responsableValue);
             setResponsable(responsableValue);
           } else {
-            console.log('⚠️ [RESPONSABLE] No se encontró área con nombre:', areaNameFromAsset);
             setResponsable('');
           }
         } else {
           const responsableValue = String(asset['responsable'] ?? asset['responsable_name'] ?? '');
-          console.log('✅ [RESPONSABLE] Usando valor del activo:', responsableValue);
           setResponsable(responsableValue);
         }
 
@@ -421,7 +283,6 @@ const RegisterAssetModal = ({
         }
 
         const condicionValue = String(asset['condicionFisica'] ?? asset['condicion_fisica'] ?? '');
-        console.log('🟦 [CONDICIÓN FÍSICA] Valor encontrado:', condicionValue);
         setCondicionFisica(condicionValue);
       } catch (e) {
         console.error('Error parsing información contable/garantía:', e);
@@ -431,65 +292,72 @@ const RegisterAssetModal = ({
       // Backend devuelve: usuarios_asignados_m2n (nuevo) o usuarios_asignados (legacy)
       const usuariosAsignados = asset['usuarios_asignados_m2n'] ?? asset['usuariosAsignados'] ?? asset['usuarios_asignados'] ?? [];
       if (Array.isArray(usuariosAsignados) && usuariosAsignados.length > 0) {
-        console.log('📦 Array usuariosAsignados completo:', usuariosAsignados);
         const ids = usuariosAsignados.map((u: any) => {
           const extractedId = String(u.usuarioId ?? u.usuario_id ?? u.id ?? '');
-          console.log('  → Usuario:', u, '| ID extraído:', extractedId);
           return extractedId;
         }).filter(Boolean);
-        console.log('🔵 Usuarios asignados cargados:', ids);
         setUsuariosAsignadosIds(ids);
       } else {
-        // Fallback: soporte legacy para usuario único
         const usuarioId = asset['usuarioAsignadoId'] ?? asset['usuario_asignado_id'] ?? '';
         if (usuarioId) {
-          console.log('🟡 Cargando usuario único (legacy):', usuarioId);
           setUsuariosAsignadosIds([String(usuarioId)]);
         } else {
-          console.log('⚪ No hay usuarios asignados');
           setUsuariosAsignadosIds([]);
         }
       }
 
-      // Cargar campos personalizados
-        if (asset['campos_personalizados']) {
-          try {
-            const campos = typeof asset['campos_personalizados'] === 'string' ? JSON.parse(String(asset['campos_personalizados'])) : asset['campos_personalizados'];
-            const mapped: Record<string, string> = {};
-            Object.keys((campos as Record<string, unknown>) || {}).forEach((origKey) => {
-              const k = getFieldKey(origKey);
-              mapped[k] = (campos as Record<string, string>)[origKey];
-            });
-            setDynamicFields(mapped);
-          } catch (err) {
-            console.error('Error parsing campos_personalizados:', err);
-          }
-        }
-
-      // Cargar campos personalizados array (Componentes Múltiples)
-      const camposArrayRaw = asset['campos_personalizados_array'] ?? asset['camposPersonalizadosArray'] ?? asset['campos_array'];
+      // Cargar campos personalizados desde campos_personalizados_array
+      // Backend guarda todo en campos_personalizados_array (estructura flat + arrays)
+      const camposRaw = asset['campos_personalizados_array'] ?? asset['camposPersonalizadosArray'] ?? asset['campos_personalizados'] ?? asset['campos_array'];
       
-      console.log('🟪 [COMPONENTES MÚLTIPLES] Raw data:', camposArrayRaw);
-      console.log('🟪 [COMPONENTES MÚLTIPLES] Tipo:', typeof camposArrayRaw);
-      
-        if (camposArrayRaw) {
-          try {
-            const camposArray = typeof camposArrayRaw === 'string' ? JSON.parse(String(camposArrayRaw)) : camposArrayRaw as unknown;
-            console.log('🟪 [COMPONENTES MÚLTIPLES] Parsed:', camposArray);
-            const mappedArr: Record<string, Array<Record<string, string>>> = {};
-            Object.keys(camposArray || {}).forEach((origKey) => {
-              const k = getFieldKey(origKey);
-              mappedArr[k] = (camposArray as Record<string, Array<Record<string, string>>>)[origKey];
-            });
-            console.log('🟪 [COMPONENTES MÚLTIPLES] Mapped to state:', mappedArr);
-            setDynamicArrayFields(mappedArr || {});
-          } catch (err) {
-            console.error('❌ Error parsing campos_personalizados_array:', err);
-          }
-        } else {
-          console.log('⚠️ [COMPONENTES MÚLTIPLES] No hay datos - seteando objeto vacío');
+      if (camposRaw) {
+        try {
+          const campos = typeof camposRaw === 'string' ? JSON.parse(String(camposRaw)) : camposRaw as unknown;
+          const mappedFlat: Record<string, string> = {};
+          const mappedArr: Record<string, Array<Record<string, string>>> = {};
+          const cat = String(asset['categoria'] ?? '');
+          const selectedCat = categories.find(c => c.nombre === cat);
+          Object.keys(campos || {}).forEach((origKey) => {
+            const k = getFieldKey(origKey);
+            const value = (campos as Record<string, unknown>)[origKey];
+            if (Array.isArray(value)) {
+              mappedArr[k] = value as Array<Record<string, string>>;
+            } else if (typeof value === 'object' && value !== null) {
+              mappedArr[k] = [value as Record<string, string>];
+            } else if (typeof value === 'string' || typeof value === 'number') {
+              let shouldBeArray = false;
+              if (selectedCat && selectedCat.campos) {
+                const field = selectedCat.campos.find(f => getFieldKey(f.nombre) === k);
+                if (field) {
+                  const firstOpt = field.opciones && field.opciones[0];
+                  const hasOptionSubcampos = firstOpt && typeof firstOpt !== 'string' && 
+                    (field.opciones as FieldOption[]).some(opt => 
+                      typeof opt !== 'string' && opt.subcampos && opt.subcampos.length > 0
+                    );
+                  if (hasOptionSubcampos) {
+                    mappedArr[k] = [{ _opcion: String(value) }];
+                  } else {
+                    mappedFlat[k] = String(value);
+                  }
+                } else {
+                  mappedFlat[k] = String(value);
+                }
+              } else {
+                mappedFlat[k] = String(value);
+              }
+            }
+          });
+          setDynamicFields(mappedFlat);
+          setDynamicArrayFields(mappedArr);
+        } catch (err) {
+          console.error('❌ Error parsing campos_personalizados_array:', err);
+          setDynamicFields({});
           setDynamicArrayFields({});
         }
+      } else {
+        setDynamicFields({});
+        setDynamicArrayFields({});
+      }
 
       // Cargar campos específicos de categoría
       const cat = String(asset['categoria'] ?? '');
@@ -619,14 +487,7 @@ const RegisterAssetModal = ({
             console.error('Error parsing fotos:', err);
           }
         }
-        
-        // Log final de todos los estados críticos cargados
-        console.log('🎯 [ESTADOS FINALES CARGADOS]:', {
-          area: areaValue,
-          responsable: 'Se seteará después',
-          condicionFisica: String(asset['condicionFisica'] ?? asset['condicion_fisica'] ?? ''),
-          camposPersonalizadosArray: 'Ver arriba - mapped to state',
-        });
+
       });
     }
   }, [isOpen, editingAsset, areas]);
@@ -673,12 +534,157 @@ const RegisterAssetModal = ({
     await procesarCreacion(empresaId, targetSedeId);
   };
 
+  // Crear activo (procesarCreacion)
+  const procesarCreacion = async (empresaId: string, sedeId: string) => {
+    setIsSubmitting(true);
+    try {
+      // Construir datos para creación
+      let categoryData: Record<string, unknown> = {};
+      if (categoria === "Laptop") {
+        categoryData = {
+          lapCpu,
+          lapCpuSerie,
+          lapRams,
+          lapStorages,
+          lapGpuIntegrada,
+          lapGpuDedicada,
+        };
+      } else if (categoria === "PC") {
+        categoryData = {
+          pcCpu,
+          pcCpuGen,
+          pcCooler,
+          pcPlacaBase,
+          pcChipset,
+          pcRams,
+          pcStorages,
+          pcGpuIntegrada,
+          pcGpuDedicada,
+          pcFuente,
+        };
+      } else if (categoria === "Servidor") {
+        categoryData = {
+          srvCpuModelo,
+          srvCpuCantidad,
+          srvCpuGen,
+          srvRams,
+          srvStorages,
+          srvRaidControladora,
+          srvTipo,
+          srvSO,
+          srvSOVer,
+          srvVirtualizacion,
+          srvRoles,
+          srvBackup,
+        };
+      }
+
+      // Reconstruir payloads
+      const camposPersonalizados = (() => {
+        const payload: Record<string, unknown> = {};
+        const selectedCat = categories.find(c => c.nombre === categoria);
+        if (selectedCat && selectedCat.campos && selectedCat.campos.length > 0) {
+          selectedCat.campos.forEach(f => {
+            const firstOpt = f.opciones && f.opciones[0];
+            const hasOptionSubcampos = firstOpt && typeof firstOpt !== 'string' &&
+              (f.opciones as FieldOption[]).some(opt => typeof opt !== 'string' && opt.subcampos && opt.subcampos.length > 0);
+            if (!hasOptionSubcampos && !f.subcampos) {
+              const fk = getFieldKey(f.nombre);
+              payload[fk] = dynamicFields[fk] ?? "";
+            }
+          });
+        }
+        return payload;
+      })();
+
+      const camposPersonalizadosArray = (() => {
+        const payloadArr: Record<string, unknown> = {};
+        const selectedCat = categories.find(c => c.nombre === categoria);
+        if (selectedCat && selectedCat.campos && selectedCat.campos.length > 0) {
+          selectedCat.campos.forEach(f => {
+            const fk = getFieldKey(f.nombre);
+            if (f.subcampos && f.subcampos.length > 0) {
+              payloadArr[fk] = dynamicArrayFields[fk] || [];
+            }
+            const firstOpt = f.opciones && f.opciones[0];
+            const hasOptionSubcampos = firstOpt && typeof firstOpt !== 'string' &&
+              (f.opciones as FieldOption[]).some(opt => typeof opt !== 'string' && opt.subcampos && opt.subcampos.length > 0);
+            if (hasOptionSubcampos) {
+              payloadArr[fk] = dynamicArrayFields[fk] || [];
+            }
+          });
+        } else {
+          Object.keys(dynamicArrayFields).forEach(k => {
+            payloadArr[k] = dynamicArrayFields[k];
+          });
+        }
+        return payloadArr;
+      })();
+
+      const fotosExistentesPayload = fotosExistentes.map(f => ({ url: f.url, name: f.name, description: f.description }));
+      const fotosNuevasPayload = fotos.map(f => ({ name: f.file.name, description: f.description }));
+      const fotosFilesPayload = fotos.length > 0 ? fotos : undefined;
+
+      const datosCreacion = {
+        categoria,
+        fabricante,
+        modelo,
+        serie,
+        assetId,
+        area,
+        estadoActivo,
+        estadoOperativo,
+        fechaCompra,
+        fechaFinGarantia,
+        proveedor,
+        tipoDocumentoCompra,
+        numeroDocumentoCompra,
+        fechaCompraAprox,
+        fechaCompraUnknown,
+        purchaseDocumentExisting,
+        purchaseDocumentFile: purchaseDocumentFile ? purchaseDocumentFile : undefined,
+        purchaseDocumentDescription,
+        garantia: garantiaDuracion,
+        warrantyDocumentExisting,
+        warrantyDocumentFile: warrantyDocumentFile ? warrantyDocumentFile : undefined,
+        warrantyDocumentDescription,
+        condicionFisica,
+        antiguedadCalculada,
+        ip,
+        mac,
+        codigoAccesoRemoto: codigoAccesoRemoto || undefined,
+        usuariosAsignadosIds: usuariosAsignadosIds.length > 0 ? usuariosAsignadosIds : undefined,
+        observaciones,
+        ...categoryData,
+        camposPersonalizados,
+        camposPersonalizadosArray,
+        fotosExistentes: fotosExistentesPayload,
+        fotosNuevas: fotosNuevasPayload,
+        fotosFiles: fotosFilesPayload,
+      };
+
+      console.log('🟢 [DEBUG] Payload enviado al backend (CREATE):', datosCreacion);
+      const response = await createActivo(empresaId, sedeId, datosCreacion);
+      const activoCreado = response?.data || response;
+      if (activoCreado.fotos && typeof activoCreado.fotos === 'string') {
+        activoCreado.fotos = JSON.parse(activoCreado.fotos);
+      }
+      onSuccess?.(activoCreado);
+      onClose();
+    } catch (error) {
+      console.error('❌ Error creando activo:', error);
+      alert('Error al crear el activo. Revisa la consola para más detalles.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const procesarActualizacion = async (motivo: string) => {
     if (!editingAsset || !empresaId || !sedeId) return;
 
     const activoId = String((editingAsset as Record<string, unknown>)['id'] ?? (editingAsset as Record<string, unknown>)['_id'] ?? '');
-    
-    // Construir datos actuales
+
+    // Construir datos actuales (categoría específica)
     let categoryData: Record<string, unknown> = {};
     if (categoria === "Laptop") {
       categoryData = {
@@ -718,6 +724,53 @@ const RegisterAssetModal = ({
         srvBackup,
       };
     }
+
+    // Reconstruir payload de campos personalizados (flat)
+    const camposPersonalizados = (() => {
+      const payload: Record<string, unknown> = {};
+      const selectedCat = categories.find(c => c.nombre === categoria);
+      if (selectedCat && selectedCat.campos && selectedCat.campos.length > 0) {
+        selectedCat.campos.forEach(f => {
+          const firstOpt = f.opciones && f.opciones[0];
+          const hasOptionSubcampos = firstOpt && typeof firstOpt !== 'string' &&
+            (f.opciones as FieldOption[]).some(opt => typeof opt !== 'string' && opt.subcampos && opt.subcampos.length > 0);
+          if (!hasOptionSubcampos && !f.subcampos) {
+            const fk = getFieldKey(f.nombre);
+            (payload as Record<string, unknown>)[fk] = dynamicFields[fk] ?? "";
+          }
+        });
+      }
+      return payload;
+    })();
+
+    // Reconstruir payload de campos personalizados (arrays / subcampos)
+    const camposPersonalizadosArray = (() => {
+      const payloadArr: Record<string, unknown> = {};
+      const selectedCat = categories.find(c => c.nombre === categoria);
+      if (selectedCat && selectedCat.campos && selectedCat.campos.length > 0) {
+        selectedCat.campos.forEach(f => {
+          const fk = getFieldKey(f.nombre);
+          if (f.subcampos && f.subcampos.length > 0) {
+            payloadArr[fk] = dynamicArrayFields[fk] || [];
+          }
+          const firstOpt = f.opciones && f.opciones[0];
+          const hasOptionSubcampos = firstOpt && typeof firstOpt !== 'string' &&
+            (f.opciones as FieldOption[]).some(opt => typeof opt !== 'string' && opt.subcampos && opt.subcampos.length > 0);
+          if (hasOptionSubcampos) {
+            payloadArr[fk] = dynamicArrayFields[fk] || [];
+          }
+        });
+      } else {
+        Object.keys(dynamicArrayFields).forEach(k => {
+          payloadArr[k] = dynamicArrayFields[k];
+        });
+      }
+      return payloadArr;
+    })();
+
+    const fotosExistentesPayload = fotosExistentes.map(f => ({ url: f.url, name: f.name, description: f.description }));
+    const fotosNuevasPayload = fotos.map(f => ({ name: f.file.name, description: f.description }));
+    const fotosFilesPayload = fotos.length > 0 ? fotos : undefined;
 
     const datosActualizados = {
       categoria,
@@ -731,7 +784,6 @@ const RegisterAssetModal = ({
       fechaCompra,
       fechaFinGarantia,
       proveedor,
-      // Información contable / compra
       tipoDocumentoCompra,
       numeroDocumentoCompra,
       fechaCompraAprox,
@@ -739,12 +791,10 @@ const RegisterAssetModal = ({
       purchaseDocumentExisting,
       purchaseDocumentFile: purchaseDocumentFile ? purchaseDocumentFile : undefined,
       purchaseDocumentDescription,
-      // Garantía (campo único): enviar la opción seleccionada, p.ej. '6 meses', '1 año'
       garantia: garantiaDuracion,
       warrantyDocumentExisting,
       warrantyDocumentFile: warrantyDocumentFile ? warrantyDocumentFile : undefined,
       warrantyDocumentDescription,
-      // Estado / cálculo
       condicionFisica,
       antiguedadCalculada,
       ip,
@@ -753,63 +803,20 @@ const RegisterAssetModal = ({
       usuariosAsignadosIds: usuariosAsignadosIds.length > 0 ? usuariosAsignadosIds : undefined,
       observaciones,
       ...categoryData,
-      // Reconstruir objetos con las etiquetas originales (con espacios) antes de enviar
-      camposPersonalizados: (() => {
-        const payload: Record<string, unknown> = {};
-        const selectedCat = categories.find(c => c.nombre === categoria);
-        if (selectedCat && selectedCat.campos && selectedCat.campos.length > 0) {
-          selectedCat.campos.forEach(f => {
-            const fk = getFieldKey(f.nombre);
-            payload[f.nombre] = dynamicFields[fk] ?? "";
-          });
-        } else {
-          // Fallback: convertir claves internas a etiquetas (underscore -> space)
-          Object.keys(dynamicFields).forEach(k => {
-            payload[k.replace(/_/g, ' ')] = dynamicFields[k];
-          });
-        }
-        return payload;
-      })(),
-      camposPersonalizadosArray: (() => {
-        const payloadArr: Record<string, unknown> = {};
-        const selectedCat = categories.find(c => c.nombre === categoria);
-        if (selectedCat && selectedCat.campos && selectedCat.campos.length > 0) {
-          selectedCat.campos.forEach(f => {
-            if (f.subcampos && f.subcampos.length > 0) {
-              const fk = getFieldKey(f.nombre);
-              payloadArr[f.nombre] = dynamicArrayFields[fk] || [];
-            }
-          });
-        } else {
-          Object.keys(dynamicArrayFields).forEach(k => {
-            payloadArr[k.replace(/_/g, ' ')] = dynamicArrayFields[k];
-          });
-        }
-        return payloadArr;
-      })(),
-      // Solo enviar fotos existentes que NO fueron eliminadas
-      fotosExistentes: fotosExistentes.map(f => ({
-        url: f.url,
-        name: f.name,
-        description: f.description
-      })),
-      // Metadata de nuevas fotos a subir
-      fotosNuevas: fotos.map(f => ({ 
-        name: f.file.name, 
-        description: f.description 
-      })),
-      // Archivos reales de nuevas fotos
-      fotosFiles: fotos.length > 0 ? fotos : undefined,
+      camposPersonalizados,
+      camposPersonalizadosArray,
+      fotosExistentes: fotosExistentesPayload,
+      fotosNuevas: fotosNuevasPayload,
+      fotosFiles: fotosFilesPayload,
     };
 
     try {
-      
       // Agregar el motivo al objeto
       const payload = {
         ...datosActualizados,
         motivo: motivo,
       };
-
+      console.log('🟣 [DEBUG] Payload enviado al backend (UPDATE):', payload);
       const response = await updateActivo(empresaId, sedeId, activoId, payload);
       
       const activoActualizado = response?.data || response;
@@ -821,148 +828,6 @@ const RegisterAssetModal = ({
       onSuccess?.(activoActualizado);
       onClose();
     } catch (error) {
-      console.error('❌ Error actualizando activo:', error);
-      alert('Error al actualizar el activo. Revisa la consola para más detalles.');
-    }
-  };
-
-  const procesarCreacion = async (empresaIdOverride?: string | number, sedeIdOverride?: string | number) => {
-    const eId = empresaIdOverride ?? empresaId;
-    const sId = sedeIdOverride ?? sedeId;
-    if (!eId || !sId) return;
-
-    let categoryData: Record<string, unknown> = {};
-    if (categoria === "Laptop") {
-      categoryData = {
-        lapCpu,
-        lapCpuSerie,
-        lapRams,
-        lapStorages,
-        lapGpuIntegrada,
-        lapGpuDedicada,
-      };
-    } else if (categoria === "PC") {
-      categoryData = {
-        pcCpu,
-        pcCpuGen,
-        pcCooler,
-        pcPlacaBase,
-        pcChipset,
-        pcRams,
-        pcStorages,
-        pcGpuIntegrada,
-        pcGpuDedicada,
-        pcFuente,
-      };
-    } else if (categoria === "Servidor") {
-      categoryData = {
-        srvCpuModelo,
-        srvCpuCantidad,
-        srvCpuGen,
-        srvRams,
-        srvStorages,
-        srvRaidControladora,
-        srvTipo,
-        srvSO,
-        srvSOVer,
-        srvVirtualizacion,
-        srvRoles,
-        srvBackup,
-      };
-    }
-
-    const newItem = {
-      nombre: `${categoria} ${modelo || serie || formatAssetCode(assetId)}`,
-      categoria,
-      fabricante,
-      modelo,
-      serie,
-      assetId,
-      area,
-      estadoActivo,
-      estadoOperativo,
-      fechaCompra,
-      fechaFinGarantia,
-      proveedor,
-      // Información contable / compra
-      tipoDocumentoCompra,
-      numeroDocumentoCompra,
-      fechaCompraAprox,
-      fechaCompraUnknown,
-      purchaseDocumentFile: purchaseDocumentFile ? purchaseDocumentFile : undefined,
-      purchaseDocumentDescription,
-      // Garantía (campo único)
-      garantia: garantiaDuracion,
-      warrantyDocumentFile: warrantyDocumentFile ? warrantyDocumentFile : undefined,
-      warrantyDocumentDescription,
-      // Estado / cálculo
-      condicionFisica,
-      antiguedadCalculada,
-      ip,
-      mac,
-      codigoAccesoRemoto: codigoAccesoRemoto || undefined,
-      usuariosAsignadosIds: usuariosAsignadosIds.length > 0 ? usuariosAsignadosIds : undefined,
-      observaciones,
-      motivo,
-      empresaId,
-      sedeId,
-      empresaNombre,
-      sedeNombre,
-      empresa: empresaNombre ?? empresaId,
-      sede: sedeNombre ?? sedeId,
-      ...categoryData,
-      camposPersonalizados: (() => {
-        const payload: Record<string, string> = {};
-        const selectedCat = categories.find(c => c.nombre === categoria);
-        if (selectedCat && selectedCat.campos && selectedCat.campos.length > 0) {
-          selectedCat.campos.forEach(f => {
-            const fk = getFieldKey(f.nombre);
-            payload[f.nombre] = dynamicFields[fk] ?? "";
-          });
-        } else {
-          Object.keys(dynamicFields).forEach(k => {
-            payload[k.replace(/_/g, ' ')] = dynamicFields[k];
-          });
-        }
-        return payload;
-      })(),
-      camposPersonalizadosArray: (() => {
-        const payloadArr: Record<string, Array<Record<string, string>>> = {};
-        const selectedCat = categories.find(c => c.nombre === categoria);
-        if (selectedCat && selectedCat.campos && selectedCat.campos.length > 0) {
-          selectedCat.campos.forEach(f => {
-            if (f.subcampos && f.subcampos.length > 0) {
-              const fk = getFieldKey(f.nombre);
-              payloadArr[f.nombre] = dynamicArrayFields[fk] || [];
-            }
-          });
-        } else {
-          Object.keys(dynamicArrayFields).forEach(k => {
-            payloadArr[k.replace(/_/g, ' ')] = dynamicArrayFields[k];
-          });
-        }
-        return payloadArr;
-      })(),
-      fotos: fotos.map(f => ({ name: f.file.name, description: f.description })),
-      fotosFiles: fotos.length > 0 ? fotos : undefined, // Archivos reales para FormData
-    };
-
-    setIsSubmitting(true);
-    try {
-      const response = await createActivo(eId, sId, newItem);
-      
-      // Usar los datos del backend (incluye assetId y fotos con URLs)
-      const activoCreado = response?.data || response;
-      
-      // Si fotos viene como string JSON, parsearlo
-      if (activoCreado.fotos && typeof activoCreado.fotos === 'string') {
-        activoCreado.fotos = JSON.parse(activoCreado.fotos);
-      }
-      
-      // Actualizar UI con los datos del backend (NO con newItem)
-      onSuccess?.(activoCreado);
-      onClose();
-    } catch (error) {
       console.error('❌ Error guardando activo:', error);
       alert('Error al guardar el activo. Revisa la consola para más detalles.');
     } finally {
@@ -970,12 +835,11 @@ const RegisterAssetModal = ({
     }
   };
 
+  // ...existing code...
+
   if (!isOpen) {
-    console.log('🚫 [MODAL CERRADO] isOpen es false, no renderizando modal');
     return null;
   }
-  
-  console.log('🟩 [MODAL RENDERIZANDO] Modal visible, editingAsset:', !!editingAsset);
 
   const editingAssetId = editingAsset ? String((editingAsset as Record<string, unknown>)['asset_id'] ?? (editingAsset as Record<string, unknown>)['id'] ?? (editingAsset as Record<string, unknown>)['_id'] ?? '') : '';
 
@@ -1264,12 +1128,6 @@ const RegisterAssetModal = ({
           {/* Dynamic Category Fields (keep existing logic) */}
           {categoria && (() => {
             const selectedCat = categories.find(c => c.nombre === categoria);
-            console.log('🔍 [CATEGORÍA] Buscando campos dinámicos:', { 
-              categoria, 
-              categoriesLength: categories.length,
-              selectedCat: selectedCat ? 'ENCONTRADA' : 'NO ENCONTRADA',
-              campos: selectedCat?.campos?.length ?? 0
-            });
             if (selectedCat && selectedCat.campos && selectedCat.campos.length > 0) {
               return (
                 <div className="space-y-4 pb-4 border-b bg-yellow-50 p-4 rounded">
@@ -1314,7 +1172,176 @@ const RegisterAssetModal = ({
                           // normal field
                           <>
                             {field.tipo === 'select' && field.opciones ? (
-                              <select value={dynamicFields[getFieldKey(field.nombre)] || ''} onChange={e => setDynamicFields(prev => ({ ...prev, [getFieldKey(field.nombre)]: e.target.value }))} className="w-full p-2 border rounded" required={field.requerido}><option value="">-- Seleccionar --</option>{field.opciones.map((opt, optIdx) => (<option key={optIdx} value={opt}>{opt}</option>))}</select>
+                              (() => {
+                                // Check if this select has option-specific subcampos
+                                const firstOpt = field.opciones[0];
+                                const hasOptionSubcampos = firstOpt && typeof firstOpt !== 'string' && 
+                                  (field.opciones as FieldOption[]).some(opt => 
+                                    typeof opt !== 'string' && opt.subcampos && opt.subcampos.length > 0
+                                  );
+
+                                // If has option-specific subcampos, render as MULTIPLE INSTANCES (array)
+                                if (hasOptionSubcampos) {
+                                  const fieldKey = getFieldKey(field.nombre);
+                                  const instances = dynamicArrayFields[fieldKey] || [];
+
+                                  return (
+                                    <div className="border-l-4 border-purple-400 pl-4 bg-purple-50 p-3 rounded">
+                                      <div className="flex items-center justify-between mb-3">
+                                        <span className="text-sm font-medium text-gray-700">Instancias</span>
+                                        <button 
+                                          type="button" 
+                                          onClick={() => {
+                                            setDynamicArrayFields(prev => {
+                                              const current = prev[fieldKey] || [];
+                                              const newEntry: Record<string, string> = { _opcion: '' };
+                                              return { ...prev, [fieldKey]: [...current, newEntry] };
+                                            });
+                                          }} 
+                                          className="text-xs bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700"
+                                        >
+                                          + Añadir {field.nombre}
+                                        </button>
+                                      </div>
+
+                                      <div className="space-y-3">
+                                        {instances.map((entry, entryIdx) => {
+                                          const selectedValue = entry._opcion || '';
+                                          const selectedOption = selectedValue ? 
+                                            (field.opciones as FieldOption[]).find(opt => typeof opt !== 'string' && opt.value === selectedValue) 
+                                            : null;
+
+                                          return (
+                                            <div key={entryIdx} className="bg-white border border-gray-200 p-3 rounded">
+                                              <div className="flex items-start gap-2">
+                                                <div className="flex-1 space-y-3">
+                                                  {/* Select dropdown */}
+                                                  <div>
+                                                    <label className="block text-xs text-gray-600 font-medium mb-1">Opción</label>
+                                                    <select 
+                                                      value={selectedValue} 
+                                                      onChange={e => {
+                                                        const newOpcion = e.target.value;
+                                                        setDynamicArrayFields(prev => {
+                                                          const updated = [...(prev[fieldKey] || [])];
+                                                          // Reset entry with new option
+                                                          updated[entryIdx] = { _opcion: newOpcion };
+                                                          return { ...prev, [fieldKey]: updated };
+                                                        });
+                                                      }}
+                                                      className="w-full p-2 border rounded text-sm"
+                                                    >
+                                                      <option value="">-- Seleccionar --</option>
+                                                      {field.opciones.map((opt, optIdx) => {
+                                                        const optValue = typeof opt === 'string' ? opt : opt.value;
+                                                        return <option key={optIdx} value={optValue}>{optValue}</option>;
+                                                      })}
+                                                    </select>
+                                                  </div>
+
+                                                  {/* Option-specific subcampos */}
+                                                  {selectedOption && typeof selectedOption !== 'string' && selectedOption.subcampos && selectedOption.subcampos.length > 0 && (
+                                                    <div className="ml-2 pl-3 border-l-2 border-purple-300 space-y-2">
+                                                      <p className="text-xs font-semibold text-purple-700">Campos para "{selectedValue}"</p>
+                                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                        {selectedOption.subcampos.map((subfield, subIdx) => (
+                                                          <div key={subIdx}>
+                                                            <label className="block text-xs text-gray-600 font-medium mb-1">{subfield.nombre}</label>
+                                                            {subfield.tipo === 'select' && subfield.opciones ? (
+                                                              <select 
+                                                                value={entry[subfield.nombre] || ''} 
+                                                                onChange={e => {
+                                                                  setDynamicArrayFields(prev => {
+                                                                    const updated = [...(prev[fieldKey] || [])];
+                                                                    updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value };
+                                                                    return { ...prev, [fieldKey]: updated };
+                                                                  });
+                                                                }}
+                                                                className="w-full p-2 border rounded text-sm"
+                                                              >
+                                                                <option value="">-- Seleccionar --</option>
+                                                                {subfield.opciones.map((sopt, soptIdx) => (
+                                                                  <option key={soptIdx} value={sopt}>{sopt}</option>
+                                                                ))}
+                                                              </select>
+                                                            ) : subfield.tipo === 'number' ? (
+                                                              <input 
+                                                                type="number" 
+                                                                value={entry[subfield.nombre] || ''} 
+                                                                onChange={e => {
+                                                                  setDynamicArrayFields(prev => {
+                                                                    const updated = [...(prev[fieldKey] || [])];
+                                                                    updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value };
+                                                                    return { ...prev, [fieldKey]: updated };
+                                                                  });
+                                                                }}
+                                                                className="w-full p-2 border rounded text-sm" 
+                                                              />
+                                                            ) : (
+                                                              <input 
+                                                                type="text" 
+                                                                value={entry[subfield.nombre] || ''} 
+                                                                onChange={e => {
+                                                                  setDynamicArrayFields(prev => {
+                                                                    const updated = [...(prev[fieldKey] || [])];
+                                                                    updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value };
+                                                                    return { ...prev, [fieldKey]: updated };
+                                                                  });
+                                                                }}
+                                                                className="w-full p-2 border rounded text-sm" 
+                                                              />
+                                                            )}
+                                                          </div>
+                                                        ))}
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                </div>
+
+                                                {/* Delete button */}
+                                                <button 
+                                                  type="button" 
+                                                  onClick={() => {
+                                                    setDynamicArrayFields(prev => {
+                                                      const updated = (prev[fieldKey] || []).filter((_, i) => i !== entryIdx);
+                                                      return { ...prev, [fieldKey]: updated };
+                                                    });
+                                                  }}
+                                                  className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600 text-xs"
+                                                >
+                                                  X
+                                                </button>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+
+                                        {instances.length === 0 && (
+                                          <div className="text-center text-gray-500 text-sm py-2">
+                                            No hay entradas. Haz clic en "+ Añadir {field.nombre}" para agregar.
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                // Regular select without option-specific subcampos
+                                return (
+                                  <select 
+                                    value={dynamicFields[getFieldKey(field.nombre)] || ''} 
+                                    onChange={e => setDynamicFields(prev => ({ ...prev, [getFieldKey(field.nombre)]: e.target.value }))} 
+                                    className="w-full p-2 border rounded" 
+                                    required={field.requerido}
+                                  >
+                                    <option value="">-- Seleccionar --</option>
+                                    {field.opciones.map((opt, optIdx) => {
+                                      const optValue = typeof opt === 'string' ? opt : opt.value;
+                                      return <option key={optIdx} value={optValue}>{optValue}</option>;
+                                    })}
+                                  </select>
+                                );
+                              })()
                             ) : field.tipo === 'textarea' ? (
                               <textarea value={dynamicFields[getFieldKey(field.nombre)] || ''} onChange={e => setDynamicFields(prev => ({ ...prev, [getFieldKey(field.nombre)]: e.target.value }))} className="w-full p-2 border rounded" rows={3} required={field.requerido} />
                             ) : field.tipo === 'number' ? (
@@ -1369,26 +1396,14 @@ const RegisterAssetModal = ({
                         )}
                       </div>
                       <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto">
-                        {(() => {
-                          console.log('🎨 [RENDERIZANDO USUARIOS]');
-                          console.log('  → usuariosAsignadosIds:', usuariosAsignadosIds);
-                          console.log('  → usuariosDisponibles:', usuariosDisponibles.length, 'usuarios');
-                          return null;
-                        })()}
                         {usuariosAsignadosIds.map((userId) => {
-                          console.log('🔍 [BUSCANDO USUARIO]', userId, 'tipo:', typeof userId);
-                          
                           // Buscar usuario con comparación flexible (string vs number)
                           const usuario = usuariosDisponibles.find(u => 
                             String(u.id || u._id || '') === String(userId)
                           );
                           
-                          console.log('  → Resultado:', usuario ? `✅ ${usuario.nombreCompleto}` : '❌ NO ENCONTRADO');
-                          
                           // Debug: mostrar si no se encuentra el usuario
                           if (!usuario) {
-                            console.warn('⚠️ Usuario no encontrado en disponibles:', userId);
-                            console.log('IDs disponibles:', usuariosDisponibles.map(u => u.id || u._id));
                             return (
                               <div key={userId} className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 text-xs text-yellow-700">
                                 Usuario ID {userId} no encontrado en la lista
@@ -1396,7 +1411,6 @@ const RegisterAssetModal = ({
                             );
                           }
                           
-                          console.log('✨ [RENDERIZANDO TARJETA]', usuario.nombreCompleto);
                           return (
                             <div
                               key={userId}
