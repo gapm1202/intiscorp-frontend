@@ -156,6 +156,14 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
       restData['codigo_acceso_remoto'] = restData['codigoAccesoRemoto'];
     }
 
+    // Asegurar campos personalizados (compatibilidad camelCase + snake_case)
+    if (typeof restData['camposPersonalizadosArray'] !== 'undefined') {
+      restData['campos_personalizados_array'] = restData['camposPersonalizadosArray'];
+    }
+    if (typeof restData['camposPersonalizados'] !== 'undefined') {
+      restData['campos_personalizados'] = restData['camposPersonalizados'];
+    }
+
     const jsonData = JSON.stringify(restData);
     // Añadir condicion_fisica también como campo top-level en FormData (compatibilidad)
     if (typeof restData['condicion_fisica'] !== 'undefined') {
@@ -240,6 +248,14 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
         restCopy['codigo_acceso_remoto'] = restCopy['codigoAccesoRemoto'];
       }
 
+      // Asegurar campos personalizados (compatibilidad camelCase + snake_case)
+      if (typeof restCopy['camposPersonalizadosArray'] !== 'undefined') {
+        restCopy['campos_personalizados_array'] = restCopy['camposPersonalizadosArray'];
+      }
+      if (typeof restCopy['camposPersonalizados'] !== 'undefined') {
+        restCopy['campos_personalizados'] = restCopy['camposPersonalizados'];
+      }
+
       const jsonData2 = JSON.stringify(restCopy);
 
       if (purchaseDocumentFile && (purchaseDocumentFile as FileLike).name) {
@@ -300,6 +316,13 @@ export async function createActivo(empresaId: string | number, sedeId: string | 
         }
         if (typeof copy['codigoAccesoRemoto'] !== 'undefined') {
           copy['codigo_acceso_remoto'] = copy['codigoAccesoRemoto'];
+        }
+        // Asegurar campos personalizados (compatibilidad camelCase + snake_case)
+        if (typeof copy['camposPersonalizadosArray'] !== 'undefined') {
+          copy['campos_personalizados_array'] = copy['camposPersonalizadosArray'];
+        }
+        if (typeof copy['camposPersonalizados'] !== 'undefined') {
+          copy['campos_personalizados'] = copy['camposPersonalizados'];
         }
         return copy;
       })())
@@ -440,6 +463,14 @@ export async function updateActivo(empresaId: string | number, sedeId: string | 
       restData2['codigo_acceso_remoto'] = restData2['codigoAccesoRemoto'];
     }
 
+    // Asegurar campos personalizados (compatibilidad camelCase + snake_case)
+    if (typeof restData2['camposPersonalizadosArray'] !== 'undefined') {
+      restData2['campos_personalizados_array'] = restData2['camposPersonalizadosArray'];
+    }
+    if (typeof restData2['camposPersonalizados'] !== 'undefined') {
+      restData2['campos_personalizados'] = restData2['camposPersonalizados'];
+    }
+
     const purchaseDocumentFile = payload['purchaseDocumentFile'] ?? payload['purchaseDocument'];
     const warrantyDocumentFile = payload['warrantyDocumentFile'] ?? payload['warrantyDocument'];
 
@@ -526,6 +557,14 @@ export async function updateActivo(empresaId: string | number, sedeId: string | 
         restCopy['codigo_acceso_remoto'] = restCopy['codigoAccesoRemoto'];
       }
 
+        // Asegurar campos personalizados (compatibilidad camelCase + snake_case)
+        if (typeof restCopy['camposPersonalizadosArray'] !== 'undefined') {
+          restCopy['campos_personalizados_array'] = restCopy['camposPersonalizadosArray'];
+        }
+        if (typeof restCopy['camposPersonalizados'] !== 'undefined') {
+          restCopy['campos_personalizados'] = restCopy['camposPersonalizados'];
+        }
+
       const jsonData4 = JSON.stringify(restCopy);
 
       if (purchaseDocumentFile && (purchaseDocumentFile as FileLike).name) {
@@ -581,6 +620,13 @@ export async function updateActivo(empresaId: string | number, sedeId: string | 
         const copy: Record<string, unknown> = { ...payload };
         if (typeof copy['codigoAccesoRemoto'] !== 'undefined') {
           copy['codigo_acceso_remoto'] = copy['codigoAccesoRemoto'];
+        }
+        // Asegurar campos personalizados (compatibilidad camelCase + snake_case)
+        if (typeof copy['camposPersonalizadosArray'] !== 'undefined') {
+          copy['campos_personalizados_array'] = copy['camposPersonalizadosArray'];
+        }
+        if (typeof copy['camposPersonalizados'] !== 'undefined') {
+          copy['campos_personalizados'] = copy['camposPersonalizados'];
         }
         return copy;
       })())
