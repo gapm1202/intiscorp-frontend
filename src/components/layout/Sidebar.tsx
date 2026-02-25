@@ -291,30 +291,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                       Bandeja de Tickets
                     </button>
                   </li>
-                  <li>
-                    <button
-                      onClick={() => guardedNavigate('/admin/tickets/qr')}
-                      className={`w-full text-left text-[12px] py-1.5 px-2.5 rounded-md transition-colors ${
-                        location.pathname === '/admin/tickets/qr'
-                          ? 'bg-purple-600/20 text-white font-medium'
-                          : 'text-slate-400 hover:bg-white/[0.04] hover:text-white'
-                      }`}
-                    >
-                      Tickets QR
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      onClick={() => guardedNavigate('/admin/tickets/internos')}
-                      className={`w-full text-left text-[12px] py-1.5 px-2.5 rounded-md transition-colors ${
-                        location.pathname === '/admin/tickets/internos'
-                          ? 'bg-purple-600/20 text-white font-medium'
-                          : 'text-slate-400 hover:bg-white/[0.04] hover:text-white'
-                      }`}
-                    >
-                      Tickets Internos
-                    </button>
-                  </li>
+                  {/* Entradas de Tickets QR y Tickets Internos eliminadas */}
                 </ul>
               )}
             </li>

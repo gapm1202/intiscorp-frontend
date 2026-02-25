@@ -185,6 +185,51 @@ const RegisterAssetModal = ({
     }
   }, [fechaCompra, fechaCompraAprox, garantiaDuracion, tipoDocumentoCompra]);
 
+  // Calcular antigüedad (años/meses) automáticamente a partir de fechaCompra/fechaCompraAprox
+  useEffect(() => {
+    try {
+      const inputFecha = tipoDocumentoCompra === 'Desconocido' ? (fechaCompraAprox || fechaCompra) : (fechaCompra || fechaCompraAprox);
+      if (!inputFecha) {
+        Promise.resolve().then(() => setAntiguedadCalculada(''));
+        return;
+      }
+      const maybeYear = Number(String(inputFecha).slice(0, 4));
+      const now = new Date();
+      if (!Number.isNaN(maybeYear) && String(inputFecha).length <= 4) {
+        const years = now.getFullYear() - maybeYear;
+        const v = years > 0 ? `${years} año${years > 1 ? 's' : ''}` : '0 años';
+        Promise.resolve().then(() => setAntiguedadCalculada(v));
+        return;
+      }
+      const d = new Date(String(inputFecha));
+      if (isNaN(d.getTime())) {
+        Promise.resolve().then(() => setAntiguedadCalculada(''));
+        return;
+      }
+      let years = now.getFullYear() - d.getFullYear();
+      let months = now.getMonth() - d.getMonth();
+      if (months < 0) { years -= 1; months += 12; }
+      if (years <= 0 && months <= 0) {
+        Promise.resolve().then(() => setAntiguedadCalculada('0 meses'));
+        return;
+      }
+      if (years <= 0) {
+        const v = `${months} mes${months > 1 ? 'es' : ''}`;
+        Promise.resolve().then(() => setAntiguedadCalculada(v));
+        return;
+      }
+      if (months <= 0) {
+        const v = `${years} año${years > 1 ? 's' : ''}`;
+        Promise.resolve().then(() => setAntiguedadCalculada(v));
+        return;
+      }
+      const v = `${years} año${years > 1 ? 's' : ''} ${months} mes${months > 1 ? 'es' : ''}`;
+      Promise.resolve().then(() => setAntiguedadCalculada(v));
+    } catch (e) {
+      Promise.resolve().then(() => setAntiguedadCalculada(''));
+    }
+  }, [fechaCompra, fechaCompraAprox, tipoDocumentoCompra]);
+
   // Cargar datos cuando se está editando
   useEffect(() => {
     if (isOpen && editingAsset) {
@@ -251,6 +296,37 @@ const RegisterAssetModal = ({
               if (!isNaN(fa.getTime())) setFechaCompraAprox(fa.toISOString().split('T')[0]);
             }
             setFechaCompraUnknown(true);
+          }
+
+          // Calcular antigüedad inicial al abrir el modal (si el activo ya trae fecha)
+          try {
+            const rawFecha = asset['fechaCompra'] ?? asset['fecha_compra'] ?? asset['fechaCompraAprox'] ?? asset['fecha_compra_aprox'] ?? asset['fechaCompraAproxYear'] ?? asset['fecha_compra_aprox_year'] ?? '';
+            const s = String(rawFecha || '').trim();
+            if (!s) {
+              Promise.resolve().then(() => setAntiguedadCalculada(''));
+            } else {
+              const maybeYear = Number(s.slice(0, 4));
+              const now = new Date();
+              let v = '';
+              if (!Number.isNaN(maybeYear) && s.length <= 4) {
+                const years = now.getFullYear() - maybeYear;
+                v = years > 0 ? `${years} año${years > 1 ? 's' : ''}` : '0 años';
+              } else {
+                const d = new Date(s);
+                if (!isNaN(d.getTime())) {
+                  let years = now.getFullYear() - d.getFullYear();
+                  let months = now.getMonth() - d.getMonth();
+                  if (months < 0) { years -= 1; months += 12; }
+                  if (years <= 0 && months <= 0) v = '0 meses';
+                  else if (years <= 0) v = `${months} mes${months > 1 ? 'es' : ''}`;
+                  else if (months <= 0) v = `${years} año${years > 1 ? 's' : ''}`;
+                  else v = `${years} año${years > 1 ? 's' : ''} ${months} mes${months > 1 ? 'es' : ''}`;
+                }
+              }
+              Promise.resolve().then(() => setAntiguedadCalculada(v));
+            }
+          } catch (err) {
+            Promise.resolve().then(() => setAntiguedadCalculada(''));
           }
 
           setPurchaseDocumentExisting(String(asset['purchaseDocumentUrl'] ?? asset['purchase_document_url'] ?? asset['purchaseDocument'] ?? asset['purchase_document'] ?? ''));
@@ -1079,7 +1155,7 @@ const RegisterAssetModal = ({
 
                 <div>
                   <label className="block text-xs text-gray-600 mt-3">Antigüedad (años)</label>
-                  <input value={antiguedadCalculada} readOnly className="w-full mt-1 p-2 border rounded bg-gray-50 text-sm" />
+                  <input type="text" value={antiguedadCalculada} readOnly className="w-full mt-1 p-2 border rounded bg-gray-50 text-sm text-slate-900" placeholder="-" />
                 </div>
               </div>
             </div>

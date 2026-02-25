@@ -300,7 +300,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b p-6">
-          <h2 className="text-xl font-semibold">Crear Nueva Empresa</h2>
+          <h2 className="text-xl font-semibold">{empresaId ? 'Edición de la empresa' : 'Crear Nueva Empresa'}</h2>
         </div>
 
         <div className="p-6">
@@ -796,7 +796,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
                 disabled={loading}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
-                {loading ? "Guardando..." : "Crear Empresa"}
+                {loading ? (empresaId ? 'Guardando...' : 'Creando...') : (empresaId ? 'Guardar cambios' : 'Crear Empresa')}
               </button>
             </div>
           </form>
