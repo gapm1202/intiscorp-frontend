@@ -103,7 +103,6 @@ const InventarioPage = () => {
   const [showTrasladarModal, setShowTrasladarModal] = useState(false);
   const [assetToTransfer, setAssetToTransfer] = useState<InventarioItem | null>(null);
   const [showSupportReportModal, setShowSupportReportModal] = useState(false);
-  const [supportReportsByAsset, setSupportReportsByAsset] = useState<Record<string, string>>({});
   const [historialData, setHistorialData] = useState<Array<{
     id: number;
     fecha: string;
@@ -117,6 +116,8 @@ const InventarioPage = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [showErrorToast, setShowErrorToast] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // NOTE: Removed localStorage persistence for support report URLs. Backend is the source of truth.
 
   const isInactiveView = Boolean(sedeId && sedeActivo === false);
 
@@ -192,6 +193,8 @@ const InventarioPage = () => {
         setLoading(false);
       }
     };
+
+    // No seeding from local mapping; backend field is authoritative.
 
     fetchData();
   }, [empresaId, sedeId]);
@@ -1014,8 +1017,76 @@ const InventarioPage = () => {
           onReportGenerated={(pdfUrl) => {
             const key = getAssetUniqueKey(viewItem);
             if (!key) return;
-            setSupportReportsByAsset(prev => ({ ...prev, [key]: pdfUrl }));
-            setViewItem(prev => prev ? ({ ...prev, informeSoporteInicialUrl: pdfUrl }) : prev);
+            // Update the viewItem immediately so the modal/button reflect new state
+            setViewItem(prev => prev ? ({ ...prev, informeSoporteInicialUrl: pdfUrl, informe_soporte_inicial_url: pdfUrl }) : prev);
+            // Also update the items list locally so the UI shows the updated backend field
+            setItems(prevItems => prevItems.map(it => {
+              try {
+                if (getAssetUniqueKey(it as any) === key) {
+                  const updated = { ...(it as any) } as any;
+                  updated.informeSoporteInicialUrl = pdfUrl;
+                  updated.informe_soporte_inicial_url = pdfUrl;
+                  return updated as InventarioItem;
+                }
+                return it;
+              } catch {
+                return it;
+              }
+            }));
+          }}
+          onStartGenerating={() => {
+            const key = getAssetUniqueKey(viewItem);
+            if (!key) return;
+            // mark as generating so button disables immediately
+            // update the items list so any UI reading the asset sees a generating flag
+            setItems(prevItems => prevItems.map(it => {
+              try {
+                if (getAssetUniqueKey(it as any) === key) {
+                  const updated = { ...(it as any) } as any;
+                  updated.informeSoporteInicialUrl = 'generating';
+                  updated.informe_soporte_inicial_url = 'generating';
+                  return updated as InventarioItem;
+                }
+                return it;
+              } catch {
+                return it;
+              }
+            }));
+            // also update the currently viewed item so the button state is based on the asset field
+            setViewItem(prev => prev ? ({ ...(prev as any), informeSoporteInicialUrl: 'generating', informe_soporte_inicial_url: 'generating' }) : prev);
+          }}
+          onReportFailed={() => {
+            const key = getAssetUniqueKey(viewItem);
+            if (!key) return;
+            // revert the 'generating' marker
+            // nothing to revert in local mapping (backend is source of truth)
+            // revert on items
+            setItems(prevItems => prevItems.map(it => {
+              try {
+                if (getAssetUniqueKey(it as any) === key) {
+                  const updated = { ...(it as any) } as any;
+                  // remove generating placeholder
+                  if (updated.informeSoporteInicialUrl === 'generating') delete updated.informeSoporteInicialUrl;
+                  if (updated.informe_soporte_inicial_url === 'generating') delete updated.informe_soporte_inicial_url;
+                  return updated as InventarioItem;
+                }
+                return it;
+              } catch {
+                return it;
+              }
+            }));
+            // revert viewItem generating placeholder too
+            setViewItem(prev => {
+              if (!prev) return prev;
+              try {
+                const copy = { ...(prev as any) } as any;
+                if (copy.informeSoporteInicialUrl === 'generating') delete copy.informeSoporteInicialUrl;
+                if (copy.informe_soporte_inicial_url === 'generating') delete copy.informe_soporte_inicial_url;
+                return copy as typeof prev;
+              } catch {
+                return prev;
+              }
+            });
           }}
           asset={viewItem}
           empresaNombre={String(empresa?.nombre ?? viewItem.empresaNombre ?? viewItem.empresa ?? '')}
@@ -1862,20 +1933,48 @@ const InventarioPage = () => {
               <div className="mt-6">
                 {(() => {
                   const assetKey = getAssetUniqueKey(viewItem);
-                  const savedUrl = assetKey ? supportReportsByAsset[assetKey] : '';
-                  // Only consider reports generated in this session (from supportReportsByAsset)
-                  // Ignore backend-provided informeSoporteInicialUrl to allow re-generation
-                  const generatedReportUrl = savedUrl;
-                  const isGenerated = Boolean(generatedReportUrl);
+                  // Considerar también la URL que pueda venir del backend dentro del asset
+                  // Fuente de verdad: el campo del asset venido del backend.
+                  const rawBackendField = (viewItem as any)?.informe_soporte_inicial_url ?? (viewItem as any)?.informeSoporteInicialUrl ?? (viewItem as any)?.informeSoporteUrl ?? (viewItem as any)?.informeUrl ?? (viewItem as any)?.informe?.url;
+                  const backendField = rawBackendField == null ? '' : String(rawBackendField).trim();
+                  const backendFieldLower = backendField.toLowerCase();
+                  // 'generating' es un estado intermedio local — se admite para deshabilitar inmediatamente.
+                  // Mientras estemos cargando el inventario, no confiar en campos locales: deshabilitar el botón.
+                  const isGeneratingState = !loading && backendFieldLower === 'generating';
+                  // Considerar generado sólo si ya terminó la carga y backend tiene una URL real (no vacío, no 'generating', no 'null')
+                  const isGenerated = !loading && backendField !== '' && backendFieldLower !== 'generating' && backendFieldLower !== 'null';
+                  const generatedReportUrl = isGenerated ? backendField : '';
+
+                  // Debug: mostrar qué valor está usando la UI para decidir el estado
+                  try {
+                    // eslint-disable-next-line no-console
+                    console.log('VIEW ITEM:', viewItem);
+                    // eslint-disable-next-line no-console
+                    console.log('URL:', (viewItem as any)?.informe_soporte_inicial_url);
+                    // eslint-disable-next-line no-console
+                    console.log('loading:', loading);
+                    // eslint-disable-next-line no-console
+                    console.log('isGenerated:', isGenerated, 'isGeneratingState:', isGeneratingState, 'generatedReportUrl:', generatedReportUrl);
+                  } catch (e) { /* noop */ }
 
                   return (
                     <div className="space-y-2">
                       <button
                         onClick={() => {
-                          if (isGenerated) return;
+                          if (isGenerated) {
+                            // Abrir el PDF existente en nueva pestaña
+                            try {
+                              window.open(generatedReportUrl, '_blank', 'noopener,noreferrer');
+                            } catch {
+                              window.location.href = generatedReportUrl;
+                            }
+                            return;
+                          }
+                          // If currently generating, avoid re-opening modal
+                          if (isGeneratingState) return;
                           setShowSupportReportModal(true);
                         }}
-                        disabled={isGenerated}
+                        disabled={isGenerated || isGeneratingState}
                         className={`flex-1 text-left flex items-center justify-center gap-3 px-4 py-3 text-white font-semibold rounded-lg shadow-md transition-colors ${
                           isGenerated
                             ? 'bg-gray-400 cursor-not-allowed'
@@ -1885,7 +1984,15 @@ const InventarioPage = () => {
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 0v4m0-4h4m-4 0H8" />
                         </svg>
-                        Generar informe de soporte inicial
+                        {isGeneratingState ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Generando...
+                          </>
+                        ) : (isGenerated ? 'Ver informe de soporte inicial' : 'Generar informe de soporte inicial')}
                       </button>
 
                       {isGenerated && (
@@ -1893,7 +2000,7 @@ const InventarioPage = () => {
                           El PDF ya ha sido generado y puede verlo
                           <a
                             href={generatedReportUrl}
-                            target="_self"
+                            target="_blank"
                             rel="noreferrer"
                             className="ml-1 font-semibold text-indigo-700 hover:text-indigo-800 underline"
                           >

@@ -10,6 +10,8 @@ type Props = {
   isOpen: boolean;
   onClose: () => void;
   onReportGenerated?: (pdfUrl: string) => void;
+  onStartGenerating?: () => void;
+  onReportFailed?: (error?: unknown) => void;
   // Minimal typed shape for the asset. The component accesses many possible
   // fields from the backend, so keep it permissive but typed to avoid `any`.
   asset?: Asset;
@@ -495,7 +497,13 @@ const InitialSupportReportModal: React.FC<Props> = ({ isOpen, onClose, onReportG
   const generatePDFFromBackend = async () => {
     // Prevenir múltiples clicks
     if (isGenerating) return;
-    
+    // Inform parent immediately that generation is starting so UI can mark it
+    try {
+      onStartGenerating?.();
+    } catch {
+      // ignore
+    }
+
     setIsGenerating(true);
     setShowToast(false);
     
@@ -577,6 +585,8 @@ ${softwareInstalled || '-'}
       }
     } catch (error: any) {
       console.error('[PDF Backend] Error:', error);
+      // Inform parent that generation failed so it can revert any intermediate state
+      try { onReportFailed?.(error); } catch {}
       
       const errorMessage = error?.response?.data?.message 
         || error?.message 
