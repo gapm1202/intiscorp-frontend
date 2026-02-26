@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useAuth } from "@/context/authHelpers"; // <-- 1. Importar el hook de autenticación
 import { useNavigate } from "react-router-dom"; // <-- 2. Importar el hook de navegación
-import { loginUser } from "@/modules/auth/services/authService"; // <-- 3. Importar servicio de login
+import { loginUser, verify2FACode } from "@/modules/auth/services/authService"; // <-- 3. Importar servicio de login y verificación 2FA
 
 // El schema de Zod (validación) con trimming de espacios
 const schema = z.object({
@@ -20,6 +20,7 @@ const Login = () => {
   const [show2FA, setShow2FA] = useState(false);
   const [codigo2FA, setCodigo2FA] = useState("");
   const [tempUserData, setTempUserData] = useState<any>(null);
+  const [tempUserId, setTempUserId] = useState<number | null>(null);
 
   const { login } = useAuth(); // <-- 3. Obtener la función 'login' del contexto
   const navigate = useNavigate(); // <-- 4. Obtener la función 'navigate' para redirigir
@@ -41,11 +42,35 @@ const Login = () => {
     try {
       // Validar credenciales y solicitar envío de código 2FA
       const responseData = await loginUser(data.email, data.password);
-      
-      // Guardar datos temporalmente y mostrar modal 2FA
-      setTempUserData(responseData);
-      setShow2FA(true);
-      setError("");
+
+      // Si el backend indica require2FA, mostrar modal y esperar verificación
+      if (responseData?.require2FA) {
+        setTempUserData(responseData);
+        // Guardar explícitamente el userId que devuelve /login
+        const uid = responseData.userId ?? responseData.usuario_id ?? responseData.user?.id ?? null;
+        setTempUserId(uid ? Number(uid) : null);
+        setShow2FA(true);
+        setError("");
+        return;
+      }
+
+      // Si el backend devolvió token directamente (sin 2FA), iniciar sesión
+      if (responseData?.token) {
+        login({ user: responseData.user, token: responseData.token });
+
+        const rawUser = responseData.user || {};
+        const u = rawUser as Record<string, unknown>;
+        const roleCandidate = u['rol'] ?? u['role'] ?? (Array.isArray(u['roles']) ? (u['roles'] as unknown[])[0] : undefined) ?? '';
+        const normalizedRole = String(roleCandidate).toLowerCase();
+
+        if (normalizedRole.includes("admin")) navigate("/admin");
+        else if (normalizedRole.includes("tec")) navigate("/tecnico");
+        else navigate("/cliente");
+        return;
+      }
+
+      // Fallback: si llega user sin token, mostrar error
+      throw new Error(responseData?.message || 'Respuesta de login inesperada');
     } catch (err: unknown) {
       console.error("Error de login:", err);
       const e = err as { message?: string };
@@ -66,17 +91,20 @@ const Login = () => {
     setLoading(true);
 
     try {
-      // TODO: Llamar endpoint de verificación 2FA
-      // const result = await verify2FACode(tempUserData.user.id, codigo2FA);
-      
-      // Por ahora, simulamos éxito (el backend debe implementar la verificación)
-      // TEMPORAL: Aceptar cualquier código de 6 dígitos
-      
-      // Guardamos el usuario y token en el contexto
-      login({ user: tempUserData.user, token: tempUserData.token });
+      // Llamar al endpoint que devuelve el JWT final
+      const userId = tempUserId ?? tempUserData?.userId ?? tempUserData?.usuario_id ?? tempUserData?.user?.id;
+      if (!userId) throw new Error('No se encontró userId para verificar 2FA');
+
+      const result = await verify2FACode(Number(userId), codigo2FA);
+
+      // Se espera { token, user }
+      if (!result?.token) throw new Error(result?.message || 'Verificación 2FA fallida');
+
+      // Guardamos token y user en el contexto (y localStorage)
+      login({ user: result.user, token: result.token });
 
       // Normalizar rol y redirigir
-      const rawUser = tempUserData.user || {};
+      const rawUser = result.user || {};
       const u = rawUser as Record<string, unknown>;
       const roleCandidate = u['rol'] ?? u['role'] ?? (Array.isArray(u['roles']) ? (u['roles'] as unknown[])[0] : undefined) ?? '';
       const normalizedRole = String(roleCandidate).toLowerCase();

@@ -39,7 +39,7 @@ axiosClient.interceptors.response.use(
     const status = error.response?.status;
     const requestUrl: string = error.config?.url ?? "";
     // Considerar también el login del portal público para evitar redirecciones automáticas
-    const isLoginRequest = requestUrl.includes("/api/auth/login") || requestUrl.includes("/api/public/empresas/login");
+    const isLoginRequest = requestUrl.includes("/api/auth/login") || requestUrl.includes("/api/auth/verify-2fa") || requestUrl.includes("/api/public/empresas/login");
 
     console.error(`[axios] ❌ ${status} ${requestUrl}`, {
       status,
