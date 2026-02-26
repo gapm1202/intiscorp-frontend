@@ -133,6 +133,21 @@ const Login = () => {
     }
   };
 
+  // Enmascara el correo electrónico dejando visibles los primeros 3 caracteres del local-part
+  const maskEmail = (email?: string | null) => {
+    if (!email) return 'tu correo';
+    const parts = String(email).split('@');
+    if (parts.length !== 2) return email;
+    const local = parts[0];
+    const domain = parts[1];
+    if (local.length <= 3) {
+      return local[0] + '*'.repeat(Math.max(3, local.length)) + '@' + domain;
+    }
+    const visible = local.slice(0, 3);
+    const masked = '*'.repeat(Math.max(1, local.length - 3));
+    return `${visible}${masked}@${domain}`;
+  };
+
   // El JSX (HTML) no necesita ningún cambio, ya está conectado con react-hook-form
   return (
     <div className="min-h-screen flex">
@@ -319,7 +334,9 @@ const Login = () => {
                 Hemos enviado un código de 6 dígitos a
                 <br />
                 <span className="font-bold text-red-600 mt-1 inline-block">
-                  {tempUserData?.user?.correoPrincipal || 'tu correo'}
+                  {maskEmail(
+                    tempUserData?.user?.correoPrincipal ?? tempUserData?.user?.email ?? tempUserData?.email ?? null
+                  )}
                 </span>
               </p>
             </div>
