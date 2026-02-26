@@ -12,6 +12,9 @@ interface SidebarProps {
 
 const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
   const { user, logout } = useAuth();
+  // Safe display name with fallbacks for legacy fields
+  const displayName = (user && (user.nombre || (user as any).name || (user as any).nombre_completo || (user as any).email || (user as any).correo || 'Usuario')) as string;
+  const displayInitial = (displayName && displayName.length > 0) ? displayName.charAt(0).toUpperCase() : 'U';
   const navGuard = useNavGuard();
   const navigate = useNavigate();
   const location = useLocation();
@@ -219,15 +222,15 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
         {/* Información del usuario en el sidebar */}
         <div className="px-3 py-3 border-b border-white/[0.06]">
           <div className="flex items-center gap-2.5">
-            <div className="relative flex-shrink-0">
+              <div className="relative flex-shrink-0">
               <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-semibold text-white">
-                {user?.nombre?.charAt(0)?.toUpperCase()}
+                {displayInitial}
               </div>
               <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-[1.5px] border-slate-900"></div>
             </div>
             {!collapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate text-white">{user?.nombre}</p>
+                <p className="text-xs font-medium truncate text-white">{displayName}</p>
                 <p className="text-[10px] text-slate-400 truncate capitalize">{user?.rol}</p>
               </div>
             )}

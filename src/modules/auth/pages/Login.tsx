@@ -101,11 +101,23 @@ const Login = () => {
       if (!result?.token) throw new Error(result?.message || 'Verificación 2FA fallida');
 
       // Guardamos token y user en el contexto (y localStorage)
-      login({ user: result.user, token: result.token });
+      // El backend puede devolver el token sin el objeto `user`.
+      // Extraer un objeto `user` robusto buscando en varias rutas posibles.
+      const candidate = result.user ?? tempUserData?.user ?? tempUserData ?? {};
+      const extractedUser = {
+        id: Number(candidate.id ?? candidate._id ?? candidate.userId ?? candidate.usuario_id ?? 0),
+        nombre: String(
+          candidate.nombre ?? candidate.name ?? candidate.nombre_completo ?? candidate.fullName ?? candidate.displayName ?? candidate.correoPrincipal ?? candidate.email ?? candidate.correo ?? ''
+        ),
+        email: String(candidate.email ?? candidate.correo ?? candidate.correoPrincipal ?? ''),
+        rol: String(candidate.rol ?? candidate.role ?? (Array.isArray(candidate.roles) ? candidate.roles[0] : '') ?? ''),
+      };
 
-      // Normalizar rol y redirigir
-      const rawUser = result.user || {};
-      const u = rawUser as Record<string, unknown>;
+      // Guardar user/token en contexto
+      login({ user: extractedUser, token: result.token });
+
+      // Normalizar rol a partir del `extractedUser` y redirigir
+      const u = extractedUser as Record<string, unknown>;
       const roleCandidate = u['rol'] ?? u['role'] ?? (Array.isArray(u['roles']) ? (u['roles'] as unknown[])[0] : undefined) ?? '';
       const normalizedRole = String(roleCandidate).toLowerCase();
 

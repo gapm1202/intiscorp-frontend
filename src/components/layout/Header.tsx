@@ -22,6 +22,8 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
   const [contratosProximos, setContratosProximos] = useState<ContratoProximoVencer[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
+  // (removed temporary debug logs)
+
   // Nota: funcionalidad de tema eliminada — el tema se gestiona fuera del header
 
   // Cargar contratos próximos a vencer
@@ -201,18 +203,24 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
 
           {/* Perfil del usuario con dropdown */}
           <div className="relative group">
-            <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-gray-50 transition-colors">
-              <div className="w-7 h-7 rounded-md bg-indigo-600 flex items-center justify-center text-white font-medium text-xs">
-                {user?.nombre.charAt(0).toUpperCase()}
-              </div>
-              <div className="text-left hidden sm:block">
-                <p className="text-[12px] font-medium text-gray-700 leading-tight">{user?.nombre}</p>
-                <p className="text-[10px] text-gray-400 capitalize">{user?.rol}</p>
-              </div>
-              <svg className="w-3.5 h-3.5 text-gray-400 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-              </svg>
-            </button>
+            {(() => {
+              const displayName = (user && (user.nombre || (user as any).name || (user as any).nombre_completo || (user as any).email || (user as any).correo || 'Usuario')) as string;
+              const initial = (displayName && displayName.length > 0) ? displayName.charAt(0).toUpperCase() : 'U';
+              return (
+                <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-gray-50 transition-colors">
+                  <div className="w-7 h-7 rounded-md bg-indigo-600 flex items-center justify-center text-white font-medium text-xs">
+                    {initial}
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[12px] font-medium text-gray-700 leading-tight">{displayName}</p>
+                    <p className="text-[10px] text-gray-400 capitalize">{user?.rol}</p>
+                  </div>
+                  <svg className="w-3.5 h-3.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                  </svg>
+                </button>
+              );
+            })()}
 
             {/* Menú dropdown */}
             <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50">
