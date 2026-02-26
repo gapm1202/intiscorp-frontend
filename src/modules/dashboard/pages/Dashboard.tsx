@@ -23,7 +23,12 @@ const Dashboard = () => {
     fetchStats();
   }, []);
 
-  const months = useMemo(() => ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"], []);
+  const months = useMemo(() => {
+    const names = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    const now = new Date();
+    const year = now.getFullYear();
+    return names.map((n, idx) => `${n} ${year}`);
+  }, []);
 
   const categoryLabels = stats?.categoryStats.map(c => c.label) || [];
   const categoryValues = stats?.categoryStats.map(c => c.value) || [];
@@ -138,11 +143,27 @@ const Dashboard = () => {
             </h3>
             <p className="text-[11px] text-gray-400 mt-0.5">Últimos 12 meses</p>
           </div>
-          <span className="text-[10px] font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">12 meses</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">12 meses</span>
+              {/* Mostrar total nuevos equipos en el período */}
+              <span className="text-[12px] font-semibold text-slate-800 bg-slate-100 px-2 py-1 rounded-md">
+                {stats ? stats.equipmentByMonth.reduce((a, b) => a + (Number(b) || 0), 0) : 0} Nuevos
+              </span>
+            </div>
         </div>
         <div className="h-64">
           {stats && stats.equipmentByMonth.length > 0 ? (
-            <Charts.AreaLineChart labels={months} data={stats.equipmentByMonth} label="Nuevos equipos" />
+            (() => {
+              const currentYear = new Date().getFullYear();
+              const keepIndices: number[] = months.map((m, idx) => ({ m, idx } as any)).filter(x => String(x.m).includes(String(currentYear))).map(x => x.idx);
+              const filteredLabels = keepIndices.map(i => months[i]);
+              const filteredData = keepIndices.map(i => Number(stats.equipmentByMonth[i]) || 0);
+              return filteredLabels.length > 0 ? (
+                <Charts.AreaLineChart labels={filteredLabels} data={filteredData} label="Nuevos equipos" />
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-400 text-xs">Sin datos disponibles</div>
+              );
+            })()
           ) : (
             <div className="h-full flex items-center justify-center text-gray-400 text-xs">Sin datos disponibles</div>
           )}
@@ -226,7 +247,7 @@ const Dashboard = () => {
               <div key={a.id} className="p-3 bg-slate-50/50 border border-slate-100 rounded-lg hover:border-slate-200 hover:bg-white transition-all">
                 <div className="flex items-start justify-between mb-1.5">
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-[13px] text-slate-700 truncate">{a.nombre}</div>
+                    <div className="font-medium text-[13px] text-slate-700 truncate">{(a as any).codigo || String(a.id) || a.nombre}</div>
                     {a.tag && (
                       <div className="text-[11px] text-indigo-500 font-mono mt-0.5">{a.tag}</div>
                     )}

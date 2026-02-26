@@ -17,6 +17,8 @@ export interface DashboardStats {
   recentAssets: Array<{
     id: string | number;
     nombre: string;
+    codigo?: string;
+    modelo?: string;
     tag?: string;
     categoria?: string;
     createdAt: string;
@@ -100,8 +102,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     // Procesar todas las empresas en paralelo para mejor rendimiento
     const inventarioPromises = empresas.map(async (empresa) => {
       try {
-        const url = `${API_BASE}/api/empresas/${empresa.id}/inventario`;
-        console.log(`  📍 [DASHBOARD] Consultando: ${url}`);
+        const empresaId = (empresa.id ?? empresa._id ?? empresa._id) as string | number;
+        const url = `${API_BASE}/api/empresas/${empresaId}/inventario`;
+        console.log(`  📍 [DASHBOARD] Consultando inventario para empresaId=${empresaId}: ${url}`);
         
         const inventarioRes = await fetch(url, {
           headers: {
@@ -140,22 +143,58 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     });
     
     console.log(`📊 [DASHBOARD] Total activos recolectados: ${allAssets.length}`, allAssets);
+    // Log resumido de campos de fecha para depuración
+    try {
+      const resumenFechas = allAssets.map(a => ({
+        id: a.id ?? a._id ?? null,
+        createdAt: a.createdAt ?? null,
+        created_at: a.created_at ?? null,
+        fecha_creacion: a.fecha_creacion ?? null,
+        created_at_iso: a.created_at_iso ?? null,
+      }));
+      console.log('🔎 [DASHBOARD] Resumen campos fecha por activo:', resumenFechas);
+    } catch (e) {
+      console.warn('⚠️ [DASHBOARD] Error creando resumen de fechas:', e);
+    }
 
     // Ordenar por fecha de creación (más recientes primero)
     const sortedAssets = [...allAssets].sort((a, b) => {
-      const dateA = new Date((a.createdAt as string) || (a.created_at as string) || 0).getTime();
-      const dateB = new Date((b.createdAt as string) || (b.created_at as string) || 0).getTime();
+      const dateA = new Date((a.createdAt as string) || (a.created_at as string) || (a.fecha_creacion as string) || 0).getTime();
+      const dateB = new Date((b.createdAt as string) || (b.created_at as string) || (b.fecha_creacion as string) || 0).getTime();
       return dateB - dateA;
     });
 
     // Tomar los 5 más recientes
-    recentAssets = sortedAssets.slice(0, 5).map(asset => ({
-      id: asset.id as string | number,
-      nombre: (asset.nombre as string) || (asset.name as string) || 'Sin nombre',
-      tag: (asset.tag as string) || (asset.codigo as string),
-      categoria: (asset.categoria as string) || (asset.tipo as string),
-      createdAt: (asset.createdAt as string) || (asset.created_at as string) || new Date().toISOString(),
-    }));
+    const pickCodigo = (asset: Record<string, any>) => {
+      return (
+        (asset.codigo as string) ||
+        (asset.codigo_activo as string) ||
+        (asset.codigoActivo as string) ||
+        (asset.assetId as string) ||
+        (asset.asset_id as string) ||
+        (asset.activo_codigo as string) ||
+        (asset.activoCodigo as string) ||
+        (asset.tag as string) ||
+        (asset.codigoActivo as string) ||
+        (asset.serial as string) ||
+        (asset.serie as string) ||
+        (asset.id ? String(asset.id) : '') ||
+        ''
+      );
+    };
+
+    recentAssets = sortedAssets.slice(0, 5).map(asset => {
+      const codigoVal = pickCodigo(asset);
+      return {
+        id: asset.id as string | number,
+        nombre: (asset.nombre as string) || (asset.name as string) || '',
+        codigo: codigoVal,
+        modelo: (asset.modelo as string) || (asset.modeloEquipo as string) || '',
+        tag: (asset.tag as string) || '',
+        categoria: (asset.categoria as string) || (asset.tipo as string),
+        createdAt: (asset.createdAt as string) || (asset.created_at as string) || new Date().toISOString(),
+      };
+    });
 
     // Estadísticas por categoría
     const categoryMap: Record<string, number> = {};
@@ -185,18 +224,34 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     
     console.log("📍 [DASHBOARD] Estadísticas por ubicación:", locationStats);
 
-    // Equipos por mes (últimos 12 meses)
+    // Equipos por mes para el año actual (Ene..Dic)
     const now = new Date();
+    const currentYear = now.getFullYear();
     const equipmentByMonth = Array(12).fill(0);
-    
+
     allAssets.forEach(asset => {
-      const createdDate = new Date((asset.createdAt as string) || (asset.created_at as string) || 0);
-      const monthDiff = (now.getFullYear() - createdDate.getFullYear()) * 12 + (now.getMonth() - createdDate.getMonth());
-      
-      if (monthDiff >= 0 && monthDiff < 12) {
-        equipmentByMonth[11 - monthDiff]++;
+      const rawDate = (asset.createdAt as string) || (asset.created_at as string) || (asset.fecha_creacion as string) || (asset.created_at_iso as string) || '';
+      if (!rawDate) {
+        console.warn(`📌 [DASHBOARD] asset id=${asset.id ?? asset._id} no tiene fecha rawDate`);
+        return;
+      }
+      const createdDate = new Date(rawDate);
+      if (isNaN(createdDate.getTime())) {
+        console.warn(`📌 [DASHBOARD] asset id=${asset.id ?? asset._id} fecha inválida:`, rawDate);
+        return;
+      }
+      const counted = createdDate.getFullYear() === currentYear;
+      console.log(`📍 [DASHBOARD] asset id=${asset.id ?? asset._id} rawDate=${rawDate} parsed=${createdDate.toISOString()} year=${createdDate.getFullYear()} counted=${counted}`);
+      if (counted) {
+        const m = createdDate.getMonth(); // 0..11
+        equipmentByMonth[m] = (equipmentByMonth[m] || 0) + 1;
       }
     });
+
+    // Asegurar que los valores para el gráfico sean números primitivos
+    for (let i = 0; i < equipmentByMonth.length; i++) {
+      equipmentByMonth[i] = Number(equipmentByMonth[i]) || 0;
+    }
 
     const result = {
       totalEquipment: allAssets.length,
@@ -206,11 +261,13 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       ticketsByStatus,
       recentAssets: recentAssets as DashboardStats['recentAssets'],
       equipmentByMonth,
+      totalNewEquipment: equipmentByMonth.reduce((a, b) => a + (Number(b) || 0), 0),
       categoryStats,
       locationStats,
     };
     
     console.log("✅ [DASHBOARD] Resultado final:", result);
+    console.log("🔢 [DASHBOARD] equipmentByMonth (detalle):", equipmentByMonth);
     
     return result;
   } catch (error) {
