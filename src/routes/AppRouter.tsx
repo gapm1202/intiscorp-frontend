@@ -23,6 +23,7 @@ import UsuariosEmpresaPage from "../modules/usuarios/pages/UsuariosEmpresaPage";
 import UsuarioDetailPage from "../modules/usuarios/pages/UsuarioDetailPage";
 import { UsuariosInternosPage } from "../modules/usuarios/pages/UsuariosInternosPage";
 import UsuariosInternosFormPage from "../modules/usuarios/pages/UsuariosInternosFormPage";
+import UsuariosInternosViewPage from "../modules/usuarios/pages/UsuariosInternosViewPage";
 import VisitasPage from "../modules/visitas/pages/VisitasPage";
 
 const AppRouter = () => {
@@ -232,6 +233,16 @@ const AppRouter = () => {
             <RoleRoute role="admin">
               <AdminLayout>
                 <UsuariosInternosFormPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/usuarios/internos/:id/ver"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <UsuariosInternosViewPage />
               </AdminLayout>
             </RoleRoute>
           }
