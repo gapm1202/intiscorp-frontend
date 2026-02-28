@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { usuariosInternosService } from '../services/usuariosInternosService';
 import { plataformasService } from '@/modules/catalogo/services/plataformasService';
 import { tiposCorreoService } from '@/modules/catalogo/services/tiposCorreoService';
@@ -10,8 +10,18 @@ import type { Plataforma, TipoCorreo, Protocolo, TipoLicencia } from '@/modules/
 
 export default function UsuariosInternosFormPage() {
   const navigate = useNavigate();
+  const params = useParams();
+  const usuarioIdParam = params.id ? parseInt(params.id) : undefined;
   const [currentTab, setCurrentTab] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [motivoEdicion, setMotivoEdicion] = useState('');
+  const location = useLocation();
+  const isResetMode = location.pathname.includes('/restablecer');
+  const [initialCorreos, setInitialCorreos] = useState<any[]>([]);
+  const [initialTelefonos, setInitialTelefonos] = useState<any[]>([]);
+  const [deletedCorreosIds, setDeletedCorreosIds] = useState<number[]>([]);
+  const [deletedTelefonosIds, setDeletedTelefonosIds] = useState<number[]>([]);
 
   // Catálogos
   const [plataformas, setPlataformas] = useState<Plataforma[]>([]);
@@ -60,6 +70,73 @@ export default function UsuariosInternosFormPage() {
     loadCatalogos();
   });
 
+  useEffect(() => {
+    if (usuarioIdParam) {
+      // Modo edición
+      setIsEdit(true);
+      const loadUsuario = async () => {
+        setLoading(true);
+        try {
+          const u = await usuariosInternosService.getById(usuarioIdParam);
+          // Mapear al formato del formulario (CrearUsuarioInternoData)
+          // Normalizar correos y teléfonos para asegurar campos esperados por el formulario
+          const correos = (u.correosAdicionales || []).map((c: any) => ({
+            id: c.id,
+            correo: c.correo || c.email || '',
+            descripcion: c.descripcion || c.description || c.descripcionUso || '',
+            plataformaId: c.plataformaId || 0,
+            tipoCorreoId: c.tipoCorreoId || 0,
+            protocoloId: c.protocoloId || 0,
+            tipoLicenciaId: c.tipoLicenciaId || 0,
+            esPrincipal: !!c.esPrincipal,
+            activo: typeof c.activo === 'boolean' ? c.activo : true
+          })).filter((c: any) => c.correo !== (u.correoPrincipal || ''));
+
+          const telefonos = (u.telefonos || []).map((t: any) => ({
+            id: t.id,
+            numero: t.numero || t.numeroTelefono || t.phone || '',
+            tipo: t.tipo || 'movil',
+            descripcion: t.descripcion || t.description || '',
+            esPrincipal: !!t.esPrincipal
+          }));
+
+          setFormData({
+            nombreCompleto: u.nombreCompleto || '',
+            nombre: u.nombreCompleto || '',
+            correoPrincipal: u.correoPrincipal || '',
+            correoPrincipalConfig: {
+              descripcionUso: u.correoPrincipalConfig?.descripcionUso || '',
+              plataformaId: u.correoPrincipalConfig?.plataformaId || 0,
+              tipoCorreoId: u.correoPrincipalConfig?.tipoCorreoId || 0,
+              protocoloId: u.correoPrincipalConfig?.protocoloId || 0,
+              tipoLicenciaId: u.correoPrincipalConfig?.tipoLicenciaId || 0
+            },
+            correosAdicionales: correos,
+            telefonos: telefonos,
+            rol: u.rol || 'tecnico',
+            usuario: u.usuario || '',
+            contrasena: '',
+            forzarCambioPassword: u.forzarCambioPassword || false,
+            activo: typeof u.activo === 'boolean' ? u.activo : true
+          });
+          setInitialCorreos(u.correosAdicionales || []);
+          setInitialTelefonos(u.telefonos || []);
+          // Si venimos de restablecer, abrir la pestaña de Acceso al Sistema (índice 0 en modo restablecer)
+          if (isResetMode) {
+            setCurrentTab(0);
+          }
+        } catch (error) {
+          console.error('Error cargando usuario para edición:', error);
+          alert('No se pudo cargar el usuario para edición');
+          navigate('/admin/usuarios/internos');
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadUsuario();
+    }
+  }, [usuarioIdParam]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -72,18 +149,75 @@ export default function UsuariosInternosFormPage() {
       alert('El correo principal es requerido');
       return;
     }
-    if (!formData.usuario.trim()) {
-      alert('El usuario es requerido');
-      return;
-    }
-    if (!formData.contrasena || formData.contrasena.length < 8) {
-      alert('La contraseña debe tener al menos 8 caracteres');
-      return;
+    // Validar campos de acceso sólo en creación o en modo restablecer
+    if (!isEdit || isResetMode) {
+      if (!formData.usuario.trim()) {
+        alert('El usuario es requerido');
+        return;
+      }
+      if (!formData.contrasena || formData.contrasena.length < 8) {
+        alert('La contraseña debe tener al menos 8 caracteres');
+        return;
+      }
     }
 
     setLoading(true);
     try {
-      // Agregar campo 'nombre' para compatibilidad con backend (TEMPORAL)
+      // En modo edición usamos el endpoint de actualización (solo algunos campos soportados por backend)
+      if (isEdit && usuarioIdParam) {
+        // Pedir motivo de edición si no está provisto
+        // Si estamos en modo restablecer, usamos el endpoint de restablecer contraseña
+        if (isResetMode) {
+          // Validar contraseña y motivo
+          if (!formData.contrasena || formData.contrasena.length < 8) {
+            alert('La contraseña debe tener al menos 8 caracteres');
+            setLoading(false);
+            return;
+          }
+          const motivo = prompt('Motivo del restablecimiento (mínimo 10 caracteres):') || '';
+          if (!motivo || motivo.trim().length < 10) {
+            alert('Por favor ingrese el motivo del restablecimiento (mínimo 10 caracteres)');
+            setLoading(false);
+            return;
+          }
+
+          await usuariosInternosService.resetPassword(usuarioIdParam, { nuevaPassword: formData.contrasena, motivoCambio: motivo });
+          alert('Contraseña restablecida correctamente');
+          navigate('/admin/usuarios/internos');
+          return;
+        }
+
+        // Edición normal: solicitar motivo y actualizar campos permitidos
+        let motivo = motivoEdicion;
+        if (!motivo || motivo.trim().length < 10) {
+          motivo = prompt('Motivo de la edición (mínimo 10 caracteres):') || '';
+        }
+        if (!motivo || motivo.trim().length < 10) {
+          alert('Por favor ingrese el motivo de la edición (mínimo 10 caracteres)');
+          setLoading(false);
+          return;
+        }
+
+        const updatePayload = {
+          nombreCompleto: formData.nombreCompleto,
+          rol: formData.rol,
+          activo: formData.activo,
+          motivoCambio: motivo,
+          correoPrincipal: formData.correoPrincipal,
+          correoPrincipalConfig: formData.correoPrincipalConfig,
+          correosAdicionales: formData.correosAdicionales || [],
+          telefonos: formData.telefonos || [],
+          deletedCorreosIds: deletedCorreosIds || [],
+          deletedTelefonosIds: deletedTelefonosIds || []
+        };
+
+        await usuariosInternosService.update(usuarioIdParam, updatePayload as any);
+        alert('Usuario actualizado correctamente');
+        navigate('/admin/usuarios/internos');
+        return;
+      }
+
+      // Creación (comportamiento existente)
       const payload = {
         ...formData,
         nombre: formData.nombreCompleto // ← Fix temporal
@@ -93,14 +227,16 @@ export default function UsuariosInternosFormPage() {
       alert('Usuario creado correctamente. Se ha enviado el correo de bienvenida.');
       navigate('/admin/usuarios/internos');
     } catch (error: any) {
-      console.error('Error creando usuario:', error);
-      alert(error.response?.data?.message || 'Error creando usuario');
+      console.error('Error creando/actualizando usuario:', error);
+      alert(error.response?.data?.message || 'Error procesando usuario');
     } finally {
       setLoading(false);
     }
   };
 
-  const tabs = ['Datos Generales', 'Correo Principal', 'Correos Adicionales', 'Teléfonos', 'Acceso al Sistema'];
+  const allTabs = ['Datos Generales', 'Correo Principal', 'Correos Adicionales', 'Teléfonos', 'Acceso al Sistema'];
+  // En modo edición normal no permitimos editar "Acceso al Sistema"; en modo restablecer solo mostramos esa pestaña
+  const tabs = isResetMode ? [allTabs[4]] : (isEdit ? allTabs.slice(0, 4) : allTabs);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-8">
@@ -117,9 +253,9 @@ export default function UsuariosInternosFormPage() {
             Volver a Usuarios Internos
           </button>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary-600 bg-clip-text text-transparent">
-            Nuevo Usuario Interno
+            {isResetMode ? 'Restablecer contraseña' : (isEdit ? 'Editar Usuario Interno' : 'Nuevo Usuario Interno')}
           </h1>
-          <p className="text-slate-600 mt-2">Se enviará un correo de bienvenida automáticamente al crear el usuario</p>
+          <p className="text-slate-600 mt-2">{isResetMode ? 'Ingrese la nueva contraseña para el acceso al sistema.' : (isEdit ? 'Modifique los campos y confirme para actualizar.' : 'Se enviará un correo de bienvenida automáticamente al crear el usuario')}</p>
         </div>
 
         {/* Tabs */}
@@ -146,7 +282,7 @@ export default function UsuariosInternosFormPage() {
 
           <form onSubmit={handleSubmit} className="p-6">
             {/* Tab 0: Datos Generales */}
-            {currentTab === 0 && (
+            {(!isResetMode && currentTab === 0) && (
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
@@ -192,8 +328,192 @@ export default function UsuariosInternosFormPage() {
               </div>
             )}
 
+            {/* Tab 2: Correos Adicionales */}
+            {(!isResetMode && currentTab === 2) && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-slate-600">Agrega correos adicionales para el usuario</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData({
+                        ...formData,
+                        correosAdicionales: [
+                          ...formData.correosAdicionales,
+                          { correo: '', descripcion: '', plataformaId: 0, tipoCorreoId: 0, protocoloId: 0, tipoLicenciaId: 0, esPrincipal: false, activo: true }
+                        ]
+                      });
+                    }}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all flex items-center gap-2 shadow-md hover:shadow-lg font-semibold text-base"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Agregar Correo
+                  </button>
+                </div>
+
+                {formData.correosAdicionales.length === 0 ? (
+                  <div className="text-center py-12 bg-slate-50 rounded-lg border-2 border-dashed border-slate-300">
+                    <svg className="w-16 h-16 mx-auto text-slate-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-slate-500 font-medium">No hay correos adicionales</p>
+                    <p className="text-sm text-slate-400 mt-1">Haz clic en "Agregar Correo" para añadir uno</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {formData.correosAdicionales.map((correo, index) => (
+                      <div key={index} className="border-2 border-slate-200 rounded-lg p-5 bg-gradient-to-br from-white to-slate-50 hover:border-primary/30 transition-all">
+                        <div className="flex justify-between items-center mb-4">
+                          <span className="font-bold text-primary flex items-center gap-2">Correo Adicional {index + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const toDelete = formData.correosAdicionales[index];
+                              const newCorreos = formData.correosAdicionales.filter((_, i) => i !== index);
+                              if (toDelete && (toDelete as any).id) {
+                                setDeletedCorreosIds(prev => [...prev, (toDelete as any).id]);
+                              }
+                              setFormData({ ...formData, correosAdicionales: newCorreos });
+                            }}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-all"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">Correo Electrónico <span className="text-red-500">*</span></label>
+                            <input
+                              type="email"
+                              value={correo.correo}
+                              onChange={(e) => {
+                                const newCorreos = [...formData.correosAdicionales];
+                                newCorreos[index].correo = e.target.value;
+                                setFormData({ ...formData, correosAdicionales: newCorreos });
+                              }}
+                              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                              placeholder="adicional@ejemplo.com"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">Descripción</label>
+                            <input
+                              type="text"
+                              value={correo.descripcion}
+                              onChange={(e) => {
+                                const newCorreos = [...formData.correosAdicionales];
+                                newCorreos[index].descripcion = e.target.value;
+                                setFormData({ ...formData, correosAdicionales: newCorreos });
+                              }}
+                              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                              placeholder="Ej: Correo personal, Correo de respaldo, etc."
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-700 mb-2">Plataforma</label>
+                              <select
+                                value={correo.plataformaId}
+                                onChange={(e) => {
+                                  const newCorreos = [...formData.correosAdicionales];
+                                  newCorreos[index].plataformaId = parseInt(e.target.value);
+                                  setFormData({ ...formData, correosAdicionales: newCorreos });
+                                }}
+                                className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
+                              >
+                                <option value={0}>Seleccione...</option>
+                                {plataformas.map(p => (
+                                  <option key={p.id} value={p.id}>{p.nombre}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-700 mb-2">Tipo de Correo</label>
+                              <select
+                                value={correo.tipoCorreoId}
+                                onChange={(e) => {
+                                  const newCorreos = [...formData.correosAdicionales];
+                                  newCorreos[index].tipoCorreoId = parseInt(e.target.value);
+                                  setFormData({ ...formData, correosAdicionales: newCorreos });
+                                }}
+                                className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
+                              >
+                                <option value={0}>Seleccione...</option>
+                                {tiposCorreo.map(t => (
+                                  <option key={t.id} value={t.id}>{t.nombre}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-700 mb-2">Protocolo</label>
+                              <select
+                                value={correo.protocoloId}
+                                onChange={(e) => {
+                                  const newCorreos = [...formData.correosAdicionales];
+                                  newCorreos[index].protocoloId = parseInt(e.target.value);
+                                  setFormData({ ...formData, correosAdicionales: newCorreos });
+                                }}
+                                className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
+                              >
+                                <option value={0}>Seleccione...</option>
+                                {protocolos.map(p => (
+                                  <option key={p.id} value={p.id}>{p.nombre}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-700 mb-2">Tipo de Licencia</label>
+                              <select
+                                value={correo.tipoLicenciaId}
+                                onChange={(e) => {
+                                  const newCorreos = [...formData.correosAdicionales];
+                                  newCorreos[index].tipoLicenciaId = parseInt(e.target.value);
+                                  setFormData({ ...formData, correosAdicionales: newCorreos });
+                                }}
+                                className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
+                              >
+                                <option value={0}>Seleccione...</option>
+                                {tiposLicencia.map(l => (
+                                  <option key={l.id} value={l.id}>{l.nombre}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="col-span-2">
+                            <label className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={correo.esPrincipal}
+                                onChange={(e) => {
+                                  const newCorreos = formData.correosAdicionales.map((c, i) => ({ ...c, esPrincipal: i === index ? e.target.checked : false }));
+                                  setFormData({ ...formData, correosAdicionales: newCorreos });
+                                }}
+                                className="w-4 h-4 text-primary focus:ring-primary"
+                              />
+                              <span className="text-sm font-medium text-slate-700">Marcar como principal</span>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Tab 1: Correo Principal */}
-            {currentTab === 1 && (
+            {(!isResetMode && currentTab === 1) && (
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
@@ -304,201 +624,10 @@ export default function UsuariosInternosFormPage() {
                 </div>
               </div>
             )}
-
-            {/* Tab 2: Correos Adicionales */}
-            {currentTab === 2 && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-slate-600">
-                    Agrega correos adicionales para el usuario
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormData({
-                        ...formData,
-                        correosAdicionales: [
-                          ...formData.correosAdicionales,
-                          {
-                            correo: '',
-                            descripcion: '',
-                            plataformaId: 0,
-                            tipoCorreoId: 0,
-                            protocoloId: 0,
-                            tipoLicenciaId: 0,
-                            esPrincipal: false
-                          }
-                        ]
-                      });
-                    }}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all flex items-center gap-2 shadow-md hover:shadow-lg font-semibold text-base"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                      Agregar Correo
-                  </button>
-                </div>
-
-                {formData.correosAdicionales.length === 0 ? (
-                  <div className="text-center py-12 bg-slate-50 rounded-lg border-2 border-dashed border-slate-300">
-                    <svg className="w-16 h-16 mx-auto text-slate-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                    <p className="text-slate-500 font-medium">No hay correos adicionales</p>
-                    <p className="text-sm text-slate-400 mt-1">Haz clic en "Agregar Correo" para añadir uno</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {formData.correosAdicionales.map((correo, index) => (
-                      <div key={index} className="border-2 border-slate-200 rounded-lg p-5 bg-gradient-to-br from-white to-slate-50 hover:border-primary/30 transition-all">
-                        <div className="flex justify-between items-center mb-4">
-                          <span className="font-bold text-primary flex items-center gap-2">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                            </svg>
-                            Correo Adicional {index + 1}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const newCorreos = formData.correosAdicionales.filter((_, i) => i !== index);
-                              setFormData({ ...formData, correosAdicionales: newCorreos });
-                            }}
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-all"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-2">
-                              Correo Electrónico <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="email"
-                              value={correo.correo}
-                              onChange={(e) => {
-                                const newCorreos = [...formData.correosAdicionales];
-                                newCorreos[index].correo = e.target.value;
-                                setFormData({ ...formData, correosAdicionales: newCorreos });
-                              }}
-                              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                              placeholder="adicional@ejemplo.com"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-2">
-                              Descripción
-                            </label>
-                            <input
-                              type="text"
-                              value={correo.descripcion}
-                              onChange={(e) => {
-                                const newCorreos = [...formData.correosAdicionales];
-                                newCorreos[index].descripcion = e.target.value;
-                                setFormData({ ...formData, correosAdicionales: newCorreos });
-                              }}
-                              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                              placeholder="Ej: Correo personal, Correo de respaldo, etc."
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                Plataforma
-                              </label>
-                              <select
-                                value={correo.plataformaId}
-                                onChange={(e) => {
-                                  const newCorreos = [...formData.correosAdicionales];
-                                  newCorreos[index].plataformaId = parseInt(e.target.value);
-                                  setFormData({ ...formData, correosAdicionales: newCorreos });
-                                }}
-                                className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
-                              >
-                                <option value={0}>Seleccione...</option>
-                                {plataformas.map(p => (
-                                  <option key={p.id} value={p.id}>{p.nombre}</option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                Tipo de Correo
-                              </label>
-                              <select
-                                value={correo.tipoCorreoId}
-                                onChange={(e) => {
-                                  const newCorreos = [...formData.correosAdicionales];
-                                  newCorreos[index].tipoCorreoId = parseInt(e.target.value);
-                                  setFormData({ ...formData, correosAdicionales: newCorreos });
-                                }}
-                                className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
-                              >
-                                <option value={0}>Seleccione...</option>
-                                {tiposCorreo.map(t => (
-                                  <option key={t.id} value={t.id}>{t.nombre}</option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                Protocolo
-                              </label>
-                              <select
-                                value={correo.protocoloId}
-                                onChange={(e) => {
-                                  const newCorreos = [...formData.correosAdicionales];
-                                  newCorreos[index].protocoloId = parseInt(e.target.value);
-                                  setFormData({ ...formData, correosAdicionales: newCorreos });
-                                }}
-                                className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
-                              >
-                                <option value={0}>Seleccione...</option>
-                                {protocolos.map(p => (
-                                  <option key={p.id} value={p.id}>{p.nombre}</option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                Tipo de Licencia
-                              </label>
-                              <select
-                                value={correo.tipoLicenciaId}
-                                onChange={(e) => {
-                                  const newCorreos = [...formData.correosAdicionales];
-                                  newCorreos[index].tipoLicenciaId = parseInt(e.target.value);
-                                  setFormData({ ...formData, correosAdicionales: newCorreos });
-                                }}
-                                className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 font-semibold text-base"
-                              >
-                                <option value={0}>Seleccione...</option>
-                                {tiposLicencia.map(l => (
-                                  <option key={l.id} value={l.id}>{l.nombre}</option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            
 
             {/* Tab 3: Teléfonos */}
-            {currentTab === 3 && (
+            {(!isResetMode && currentTab === 3) && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-slate-600">
@@ -547,7 +676,11 @@ export default function UsuariosInternosFormPage() {
                         <button
                           type="button"
                           onClick={() => {
+                            const toDelete = formData.telefonos[index];
                             const newTels = formData.telefonos.filter((_, i) => i !== index);
+                            if (toDelete && (toDelete as any).id) {
+                              setDeletedTelefonosIds(prev => [...prev, (toDelete as any).id]);
+                            }
                             setFormData({ ...formData, telefonos: newTels });
                           }}
                           className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-all"
@@ -635,7 +768,7 @@ export default function UsuariosInternosFormPage() {
             )}
 
             {/* Tab 4: Acceso al Sistema */}
-            {currentTab === 4 && (
+            {((isResetMode && currentTab === 0) || (!isResetMode && currentTab === 4)) && (
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
@@ -710,14 +843,24 @@ export default function UsuariosInternosFormPage() {
 
             {/* Botones de navegación */}
             <div className="flex justify-between mt-8 pt-6 border-t border-slate-200">
-              <button
-                type="button"
-                onClick={() => setCurrentTab(Math.max(0, currentTab - 1))}
-                disabled={currentTab === 0}
-                className="px-8 py-3 text-base font-semibold border-2 border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 hover:border-slate-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
-              >
-                ← Anterior
-              </button>
+              {isResetMode ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin/usuarios/internos')}
+                  className="px-8 py-3 text-base font-semibold border-2 border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-all shadow-sm"
+                >
+                  Cancelar
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab(Math.max(0, currentTab - 1))}
+                  disabled={currentTab === 0}
+                  className="px-8 py-3 text-base font-semibold border-2 border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 hover:border-slate-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
+                >
+                  ← Anterior
+                </button>
+              )}
 
               <div className="flex gap-3">
                 {currentTab < tabs.length - 1 ? (
@@ -734,7 +877,11 @@ export default function UsuariosInternosFormPage() {
                     disabled={loading}
                     className="px-10 py-3 text-base font-bold bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
                   >
-                    {loading ? '⏳ Creando...' : '✓ Crear Usuario'}
+                    {(() => {
+                      if (loading) return isEdit || isResetMode ? '⏳ Guardando...' : '⏳ Creando...';
+                      if (isEdit || isResetMode) return 'Guardar cambios';
+                      return '✓ Crear Usuario';
+                    })()}
                   </button>
                 )}
               </div>

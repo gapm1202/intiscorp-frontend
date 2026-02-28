@@ -226,6 +226,26 @@ const AppRouter = () => {
             </RoleRoute>
           }
         />
+        <Route
+          path="/admin/usuarios/internos/:id/editar"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <UsuariosInternosFormPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/usuarios/internos/:id/restablecer"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <UsuariosInternosFormPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
         {/* Rutas para usuarios desde empresas */}
         <Route
           path="/empresas/:empresaId/usuarios"

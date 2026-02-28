@@ -208,7 +208,7 @@ export function UsuariosInternosPage() {
                           </svg>
                         </button>
                         <button
-                          onClick={() => setResetPasswordModal({ isOpen: true, usuarioId: usuario.id, usuarioNombre: usuario.nombreCompleto })}
+                          onClick={() => navigate(`/admin/usuarios/internos/${usuario.id}/restablecer`)}
                           className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
                           title="Restablecer contraseña"
                         >
@@ -273,16 +273,7 @@ export function UsuariosInternosPage() {
       </div>
 
       {/* Modales */}
-      <RestablecerPasswordModal
-        isOpen={resetPasswordModal.isOpen}
-        onClose={() => setResetPasswordModal({ isOpen: false, usuarioId: 0, usuarioNombre: '' })}
-        onConfirm={async (nuevaPassword, motivo) => {
-          await usuariosInternosService.resetPassword(resetPasswordModal.usuarioId, { nuevaPassword, motivoCambio: motivo });
-          alert('Contraseña restablecida correctamente');
-          await cargarUsuarios();
-        }}
-        usuarioNombre={resetPasswordModal.usuarioNombre}
-      />
+      {/* Restablecimiento ahora usa la pantalla de edición (acceso) */}
 
       <HistorialInternoModal
         isOpen={historialModal.isOpen}
