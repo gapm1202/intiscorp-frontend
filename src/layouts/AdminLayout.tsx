@@ -8,7 +8,7 @@ interface Props {
 }
 
 const AdminLayout = ({ children }: Props) => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
 
   return (
     <div className="min-h-screen flex bg-slate-50">

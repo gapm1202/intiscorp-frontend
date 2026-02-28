@@ -259,6 +259,11 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
         ::-webkit-scrollbar-thumb { background: rgba(14,165,233,0.25); border-radius: 10px; }
       `}</style>
 
+      {/* Placeholder for fixed sidebar on large screens */}
+      {isLargeScreen && (
+        <div style={{ width: collapsed ? 68 : 240, flexShrink: 0 }} className="hidden lg:block" />
+      )}
+
       {/* Mobile overlay */}
       {isOpen && (
         <div
@@ -276,21 +281,23 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
       {/* Sidebar */}
       <aside
         style={{
-          position: isLargeScreen ? 'relative' : 'fixed',
-          top: 0, left: 0,
+          position: 'fixed',
+          top: 0, left: 0, bottom: 0,
           height: '100vh',
+          minHeight: '100vh',
           width: collapsed ? 68 : 240,
           background: 'linear-gradient(180deg, #020c1b 0%, #041525 60%, #051a2e 100%)',
           borderRight: '1px solid rgba(14,165,233,0.12)',
-          boxShadow: isLargeScreen ? 'none' : '4px 0 24px rgba(0,0,0,0.4)',
+          boxShadow: '4px 0 24px rgba(0,0,0,0.08)',
           display: 'flex',
           flexDirection: 'column',
+          justifyContent: 'space-between',
           zIndex: 50,
           transition: 'width 0.2s ease, transform 0.25s ease',
-          transform: isLargeScreen ? undefined : (isOpen ? 'translateX(0)' : 'translateX(-100%)'),
+          transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
           fontFamily: "'DM Sans', sans-serif",
         }}
-        className={`${isLargeScreen ? 'lg:static' : ''} ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+        className={`${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
         {/* Top accent line */}
         <div style={{
