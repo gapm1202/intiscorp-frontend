@@ -218,8 +218,13 @@ const Login = () => {
       }
       throw new Error(responseData?.message || 'Respuesta de login inesperada');
     } catch (err: unknown) {
-      const e = err as { message?: string };
-      setError(e.message || "Error de conexión con el servidor");
+      const e = err as { message?: string; status?: number; response?: { status?: number } };
+      const statusCode = e.status ?? e.response?.status ?? null;
+      if (statusCode === 403 || String(e.message || "").toLowerCase().includes("inactivo")) {
+        setError(e.message || "Usuario inactivo. Contacta al administrador.");
+      } else {
+        setError(e.message || "Error de conexión con el servidor");
+      }
     } finally {
       setLoading(false);
     }
@@ -397,7 +402,7 @@ const Login = () => {
                 Portal de acceso
               </div>
               <h2 style={{ fontSize:28, fontWeight:800, color:'#0C2340', letterSpacing:'-0.5px', margin:'0 0 8px', lineHeight:1.2 }}>
-                Bienvenido de vuelta
+                Bienvenido
               </h2>
               <p style={{ margin:0, color:'#64748B', fontSize:14, fontFamily:"'DM Sans', sans-serif" }}>
                 Ingresa tus credenciales para continuar

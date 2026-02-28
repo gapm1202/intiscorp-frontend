@@ -4,6 +4,8 @@ import { usuariosInternosService } from '../services/usuariosInternosService';
 import type { UsuarioInterno } from '../types/usuariosInternos.types';
 import RestablecerPasswordModal from '../components/RestablecerPasswordModal';
 import HistorialInternoModal from '../components/HistorialInternoModal';
+import ConfirmActionModal from '../components/ConfirmActionModal';
+import Toast from '@/components/ui/Toast';
 
 export function UsuariosInternosPage() {
   const navigate = useNavigate();
@@ -23,6 +25,8 @@ export function UsuariosInternosPage() {
     usuarioId: 0,
     usuarioNombre: ''
   });
+  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; usuarioId: number; usuarioNombre: string; willActivate: boolean }>({ isOpen: false, usuarioId: 0, usuarioNombre: '', willActivate: false });
+  const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' | 'info' } | null>(null);
 
   useEffect(() => {
     cargarUsuarios();
@@ -236,24 +240,7 @@ export function UsuariosInternosPage() {
                           </svg>
                         </button>
                         <button
-                          onClick={async () => {
-                            if (confirm(`¿Estás seguro de ${usuario.activo ? 'desactivar' : 'activar'} a ${usuario.nombreCompleto}?`)) {
-                              const motivo = prompt('Motivo:');
-                              if (motivo) {
-                                try {
-                                  if (usuario.activo) {
-                                    await usuariosInternosService.desactivar(usuario.id, motivo);
-                                  } else {
-                                    await usuariosInternosService.activar(usuario.id, motivo);
-                                  }
-                                  await cargarUsuarios();
-                                } catch (error) {
-                                  console.error('Error:', error);
-                                  alert('Error al cambiar el estado del usuario');
-                                }
-                              }
-                            }
-                          }}
+                          onClick={() => setConfirmModal({ isOpen: true, usuarioId: usuario.id, usuarioNombre: usuario.nombreCompleto, willActivate: !usuario.activo })}
                           className={`p-2 ${usuario.activo ? 'text-red-600 hover:bg-red-50' : 'text-green-600 hover:bg-green-50'} rounded-lg transition-colors`}
                           title={usuario.activo ? 'Desactivar' : 'Activar'}
                         >
@@ -291,6 +278,33 @@ export function UsuariosInternosPage() {
         usuarioId={historialModal.usuarioId}
         usuarioNombre={historialModal.usuarioNombre}
       />
+
+      <ConfirmActionModal
+        isOpen={confirmModal.isOpen}
+        usuarioNombre={confirmModal.usuarioNombre}
+        willActivate={confirmModal.willActivate}
+        onClose={() => setConfirmModal({ isOpen: false, usuarioId: 0, usuarioNombre: '', willActivate: false })}
+        onConfirm={async (motivo: string) => {
+          try {
+            if (confirmModal.willActivate) {
+              await usuariosInternosService.activar(confirmModal.usuarioId, motivo);
+              setToast({ message: 'Usuario activado correctamente', type: 'success' });
+            } else {
+              await usuariosInternosService.desactivar(confirmModal.usuarioId, motivo);
+              setToast({ message: 'Usuario desactivado correctamente', type: 'success' });
+            }
+            await cargarUsuarios();
+          } catch (error: any) {
+            console.error('Error:', error);
+            setToast({ message: error?.message || 'Error al cambiar el estado del usuario', type: 'error' });
+            throw error;
+          }
+        }}
+      />
+
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
     </div>
   );
 }

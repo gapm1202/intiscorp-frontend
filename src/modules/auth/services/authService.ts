@@ -18,9 +18,11 @@ export const loginUser = async (email: string, password: string): Promise<any> =
     });
     return response.data;
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { message?: string } }; message?: string };
+    const err = error as { response?: { data?: { message?: string }; status?: number }; message?: string };
     const message = err.response?.data?.message || err.message || 'Error al iniciar sesión';
-    throw new Error(message);
+    const ex = new Error(message);
+    (ex as any).status = err.response?.status;
+    throw ex;
   }
 };
 
@@ -37,8 +39,10 @@ export const verify2FACode = async (userId: number | string, code: string): Prom
     });
     return response.data;
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { message?: string } }; message?: string };
+    const err = error as { response?: { data?: { message?: string }; status?: number }; message?: string };
     const message = err.response?.data?.message || err.message || 'Error verificando código 2FA';
-    throw new Error(message);
+    const ex = new Error(message);
+    (ex as any).status = err.response?.status;
+    throw ex;
   }
 };
