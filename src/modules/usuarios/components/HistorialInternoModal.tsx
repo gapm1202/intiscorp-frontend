@@ -68,16 +68,16 @@ export default function HistorialInternoModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-primary to-primary-600 text-white px-6 py-4 rounded-t-xl">
+        <div style={{ background: 'linear-gradient(90deg,#0ea5e9,#0284c7)', color: '#fff' }} className="text-white px-6 py-4 rounded-t-xl">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-xl font-bold flex items-center gap-2">
+              <h3 className="text-xl font-bold flex items-center gap-2 text-white">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 Historial de Cambios
               </h3>
-              <p className="text-sm opacity-90 mt-1">Usuario: {usuarioNombre}</p>
+              <p className="text-sm text-white opacity-95 mt-1">Usuario: {usuarioNombre}</p>
             </div>
             <button
               onClick={onClose}
@@ -189,9 +189,9 @@ export default function HistorialInternoModal({
           </p>
           <button
             onClick={onClose}
-            className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-600 font-semibold"
+            className="px-8 py-3 text-base font-semibold border-2 border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-all shadow-sm"
           >
-            Cerrar
+            Cancelar
           </button>
         </div>
       </div>

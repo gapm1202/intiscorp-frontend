@@ -337,17 +337,17 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
                 overflow: 'hidden',
               }}>
                 <div style={{ padding: '6px' }}>
-                  <a href="#" className="hdr-dd-item" style={{
+                  <button onClick={() => { if (user?.id) navigate(`/admin/usuarios/internos/${user.id}/ver`); }} className="hdr-dd-item" style={{
                     display: 'flex', alignItems: 'center', gap: 8,
                     padding: '8px 10px', borderRadius: 8, textDecoration: 'none',
                     color: '#0369a1', fontSize: 12, fontWeight: 500,
-                    transition: 'all 0.12s',
+                    transition: 'all 0.12s', border: 'none', background: 'transparent', cursor: 'pointer'
                   }}>
                     <svg style={{ width: 14, height: 14, flexShrink: 0, color: '#7dd3fc' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                     Mi Perfil
-                  </a>
+                  </button>
                   <a href="#" className="hdr-dd-item" style={{
                     display: 'flex', alignItems: 'center', gap: 8,
                     padding: '8px 10px', borderRadius: 8, textDecoration: 'none',
