@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { getInventarioByEmpresa, getInventarioBySede } from "@/modules/inventario/services/inventarioService";
 import { getEmpresaById } from "@/modules/empresas/services/empresasService";
 import { getSedesByEmpresa } from "@/modules/empresas/services/sedesService";
@@ -75,6 +75,7 @@ const InventarioPage = () => {
   // Initial Support Report modal removed temporarily to restore UI
   const { empresaId, sedeId } = useParams<{ empresaId: string; sedeId?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [items, setItems] = useState<InventarioItem[]>([]);
   const [viewItem, setViewItem] = useState<InventarioItem | null>(null);
   // removed unused local modal state (view handled via `currentView` + `viewItem`)
@@ -120,6 +121,17 @@ const InventarioPage = () => {
   // NOTE: Removed localStorage persistence for support report URLs. Backend is the source of truth.
 
   const isInactiveView = Boolean(sedeId && sedeActivo === false);
+
+  useEffect(() => {
+    // If URL contains ?view=categories we open the categories view automatically
+    try {
+      const params = new URLSearchParams(location.search);
+      const view = params.get('view');
+      if (view === 'categories') setCurrentView('categories');
+    } catch (e) {
+      /* noop */
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (!empresaId) return;

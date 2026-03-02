@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from 'react-router-dom';
 import { getWarrantyInfo } from "@/modules/inventario/utils/warranty";
 import { formatAssetCode, getCompanyPrefix, getCategoryPrefix } from "@/utils/helpers";
 import type { Category, FieldOption, SubField } from "@/modules/inventario/services/categoriasService";
@@ -45,6 +46,7 @@ const RegisterAssetModal = ({
   categories = [],
   editingAsset = null,
 }: Props) => {
+  const navigate = useNavigate();
   // Props monitoring disabled to reduce console noise
   
   // Basic fields
@@ -990,10 +992,30 @@ const RegisterAssetModal = ({
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600">Categoría *</label>
-              <select value={categoria} onChange={e => { const newCategory = e.target.value; setCategoria(newCategory); setDynamicFields({}); setAssetId(''); setFabricante(''); }} className="w-full mt-1 p-2 border rounded text-sm" required disabled={!!editingAsset} style={editingAsset ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}>
+              <select
+                value={categoria}
+                onChange={e => { const newCategory = e.target.value; setCategoria(newCategory); setDynamicFields({}); setAssetId(''); setFabricante(''); }}
+                className="w-full mt-1 p-2 border rounded text-sm"
+                required
+                disabled={!!editingAsset || categories.length === 0}
+                style={editingAsset || categories.length === 0 ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
+              >
                 <option value="">-- Seleccionar --</option>
-                {categories.length > 0 ? categories.map((cat, idx) => (<option key={cat.nombre ?? idx} value={cat.nombre}>{cat.nombre}</option>)) : (<><option>Laptop</option><option>PC</option><option>Servidor</option></>)}
+                {categories.length > 0 ? (
+                  categories.map((cat, idx) => (<option key={cat.nombre ?? idx} value={cat.nombre}>{cat.nombre}</option>))
+                ) : (
+                  <option disabled>No hay categorías registradas</option>
+                )}
               </select>
+              {categories.length === 0 && (
+                <div className="mt-2 text-xs text-gray-500">
+                  No hay categorías. {empresaId ? (
+                    <button type="button" onClick={() => { onClose(); navigate(`/admin/empresas/${empresaId}/inventario?view=categories`); }} className="text-indigo-600 font-semibold underline">Crear categoría</button>
+                  ) : (
+                    <button type="button" onClick={() => { onClose(); navigate('/admin/empresas'); }} className="text-indigo-600 font-semibold underline">Crear categoría</button>
+                  )}
+                </div>
+              )}
               {editingAsset && <p className="text-xs text-gray-500 mt-1">La categoría no puede modificarse</p>}
             </div>
           </div>
