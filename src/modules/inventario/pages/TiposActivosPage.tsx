@@ -365,9 +365,12 @@ const TiposActivosPage = () => {
                         </td>
                         <td><span className="ta-badge ta-badge-blue">{c.codigo}</span></td>
                         <td>
-                          {(c as any).grupoId
-                            ? <span className="ta-badge ta-badge-gray">{(c as any).grupoId}</span>
-                            : <span style={{ color: '#b0c8e0' }}>—</span>}
+                          {(() => {
+                            const gid = String((c as any).grupoId ?? (c as any).grupo_id ?? (c as any).groupId ?? (c as any).grupo ?? '').trim();
+                            if (!gid) return <span style={{ color: '#b0c8e0' }}>—</span>;
+                            const g = groups.find(x => String(x.id) === gid);
+                            return g ? <span className="ta-badge ta-badge-gray">{g.nombre}</span> : <span className="ta-badge ta-badge-gray">{gid}</span>;
+                          })()}
                         </td>
                         <td>
                           <button onClick={() => openEdit(c)} className="ta-btn-ghost">
