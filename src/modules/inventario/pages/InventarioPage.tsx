@@ -2769,17 +2769,31 @@ const InventarioPage = () => {
 
       {/* Add Category Modal */}
       {showCategoryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-y-auto">
-          <div className="bg-white rounded-xl w-full max-w-3xl p-0 my-8 max-h-[90vh] overflow-hidden shadow-2xl border border-gray-200">
-            <div className="px-6 py-5 border-b border-gray-200 bg-linear-to-r from-purple-50 to-pink-50">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">{editingCategoryId ? 'Editar categoría' : 'Añadir categoría'}</h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {editingCategoryId
-                      ? 'Actualiza subcategorías y campos personalizados para mejorar el registro de activos.'
-                      : 'Define la categoría y sus campos para que el formulario sea claro para el usuario final.'}
-                  </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm overflow-y-auto p-4">
+          <div className="bg-white rounded-2xl w-full max-w-3xl my-8 shadow-2xl border border-slate-200 overflow-hidden">
+
+            {/* Header */}
+            <div className="px-8 py-6 bg-gradient-to-r from-blue-600 to-sky-500 relative overflow-hidden">
+              {/* decorative circles */}
+              <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/10" />
+              <div className="absolute -bottom-8 -left-4 w-24 h-24 rounded-full bg-white/5" />
+              <div className="relative flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2.5 rounded-xl">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white leading-tight">
+                      {editingCategoryId ? 'Editar categoría' : 'Nueva categoría'}
+                    </h3>
+                    <p className="text-sky-100 text-sm mt-0.5">
+                      {editingCategoryId
+                        ? 'Actualiza subcategorías y campos personalizados.'
+                        : 'Define la categoría y sus campos para el formulario.'}
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -2792,351 +2806,412 @@ const InventarioPage = () => {
                     setCategoryNameInput('');
                     setSubcategoriesInput('');
                   }}
-                  className="text-gray-500 hover:text-gray-700 transition-colors"
+                  className="text-white/70 hover:text-white hover:bg-white/20 transition-all p-1.5 rounded-lg"
                   aria-label="Cerrar modal"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
             </div>
-            <div className="px-6 py-5 overflow-y-auto max-h-[calc(90vh-88px)]">
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const cat = String(categoryNameInput || '').trim();
-              const subs = String(subcategoriesInput || '').split(',').map(s => s.trim()).filter(Boolean);
-              if (!cat) {
-                setErrorMessage('El nombre de la categoría es obligatorio');
-                setShowErrorToast(true);
-                setTimeout(() => setShowErrorToast(false), 3000);
-                return;
-              }
-              // Normalize fields for preview to the flat schema (no subcampos)
-              const cleanedCampos: CategoryField[] = (newCategoryFields || []).map((f) => {
-                const rawOpts = (f as any).opciones || (f as any).options || [];
-                const opciones: string[] = Array.isArray(rawOpts)
-                  ? rawOpts.map((o: any) => (typeof o === 'string' ? o : String(o?.value ?? ''))).map((s: string) => s.trim()).filter(Boolean)
-                  : (typeof rawOpts === 'string' ? rawOpts.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
 
-                return {
-                  nombre: String(f.nombre || '').trim(),
-                  tipo: f.tipo || 'text',
-                  requerido: Boolean(f.requerido),
-                  opciones: opciones
-                } as CategoryField;
-              });
-              // show preview with timestamp (include linked grupoId)
-              setCategoryPreview({ nombre: String(cat).trim(), grupoId: categoryGroupId || undefined, subcategorias: subs, campos: cleanedCampos, createdAt: new Date().toLocaleString() });
-              setShowPreview(true);
-            }}>
-              <div className="space-y-4">
-                <div className="rounded-lg border border-purple-100 bg-purple-50/60 px-4 py-3 text-sm text-purple-900">
-                  <strong className="font-semibold">Recomendación:</strong> usa un nombre claro y agrega marcas sólo si realmente ayudan al usuario a elegir mejor.
-                </div>
+            {/* Body */}
+            <div className="px-8 py-6 overflow-y-auto max-h-[calc(90vh-88px)]">
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const cat = String(categoryNameInput || '').trim();
+                const subs = String(subcategoriesInput || '').split(',').map(s => s.trim()).filter(Boolean);
+                if (!cat) {
+                  setErrorMessage('El nombre de la categoría es obligatorio');
+                  setShowErrorToast(true);
+                  setTimeout(() => setShowErrorToast(false), 3000);
+                  return;
+                }
+                const cleanedCampos: CategoryField[] = (newCategoryFields || []).map((f) => {
+                  const rawOpts = (f as any).opciones || (f as any).options || [];
+                  const opciones: string[] = Array.isArray(rawOpts)
+                    ? rawOpts.map((o: any) => (typeof o === 'string' ? o : String(o?.value ?? ''))).map((s: string) => s.trim()).filter(Boolean)
+                    : (typeof rawOpts === 'string' ? rawOpts.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
+                  return {
+                    nombre: String(f.nombre || '').trim(),
+                    tipo: f.tipo || 'text',
+                    requerido: Boolean(f.requerido),
+                    opciones: opciones
+                  } as CategoryField;
+                });
+                setCategoryPreview({ nombre: String(cat).trim(), grupoId: categoryGroupId || undefined, subcategorias: subs, campos: cleanedCampos, createdAt: new Date().toLocaleString() });
+                setShowPreview(true);
+              }}>
+                <div className="space-y-6">
 
-                <div className="mb-3">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Grupo de Activo *</label>
-                  <select value={categoryGroupId} onChange={(e) => setCategoryGroupId(e.target.value)} className="w-full p-2.5 border rounded">
-                    <option value="">-- Seleccionar grupo --</option>
-                    {groups.map(g => (<option key={g.id} value={g.id}>{g.nombre}</option>))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de categoría *</label>
-                      <input 
-                        name="categoria"
-                        value={categoryNameInput}
-                        onChange={(e) => setCategoryNameInput(e.target.value)}
-                        className="w-full p-2.5 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-purple-500 focus:border-purple-500" 
-                        placeholder="ej: Laptop" 
-                        readOnly={!!editingCategoryId}
-                        style={editingCategoryId ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
-                        required 
-                      />
-                      {editingCategoryId && <p className="text-xs text-gray-500 mt-1">El nombre no se edita para mantener consistencia en los activos registrados.</p>}
-                      </div>
-                      <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Código *</label>
-                      <input
-                        name="codigo"
-                        value={categoryCodeInput}
-                        onChange={(e) => setCategoryCodeInput(e.target.value)}
-                        className="w-full p-2.5 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        placeholder="ej: LAP-001"
-                        required
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Código único corto para la categoría (p. ej. LAP-001).</p>
-                      </div>
-                    </div>
-                
-                <div className="border-t pt-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Campos personalizados para el formulario</label>
-                      <p className="text-xs text-gray-500">Estos campos aparecerán cuando se registre un activo de esta categoría.</p>
-                    </div>
-                    <button 
-                      type="button"
-                      onClick={() => setNewCategoryFields([...newCategoryFields, { nombre: '', tipo: 'text', requerido: false }])}
-                      className="text-sm bg-green-50 text-green-700 px-3 py-1 rounded hover:bg-green-100"
-                    >
-                      + Agregar campo
-                    </button>
+                  {/* Info tip */}
+                  <div className="flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                    <svg className="w-4 h-4 mt-0.5 shrink-0 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span><strong className="font-semibold">Recomendación:</strong> usa un nombre claro y agrega marcas sólo si realmente ayudan al usuario a elegir mejor.</span>
                   </div>
 
-                  {/* Brands section */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700">Marcas</label>
-                    <div className="flex gap-2 mt-2">
-                      <input value={brandInput} onChange={(e) => setBrandInput(e.target.value)} className="flex-1 p-2 border rounded" placeholder="Escribe una marca y pulsa Agregar" />
-                      <button type="button" onClick={() => { const v = String(brandInput||'').trim(); if (v && !marcas.includes(v)) { setMarcas(prev => [...prev, v]); setBrandInput(''); } }} className="px-4 py-2 bg-indigo-600 text-white rounded">Agregar</button>
+                  {/* Section: Información básica */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">1</span>
+                      <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Información básica</h4>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {marcas.length === 0 ? <span className="text-xs text-gray-500 italic">No hay marcas agregadas</span> : marcas.map((m, i) => (
-                        <span key={i} className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 text-sm">
+
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Grupo de Activo</label>
+                      <select
+                        value={categoryGroupId}
+                        onChange={(e) => setCategoryGroupId(e.target.value)}
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-800"
+                      >
+                        <option value="">— Seleccionar grupo —</option>
+                        {groups.map(g => (<option key={g.id} value={g.id}>{g.nombre}</option>))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                          Nombre de categoría <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          name="categoria"
+                          value={categoryNameInput}
+                          onChange={(e) => setCategoryNameInput(e.target.value)}
+                          className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="ej: Laptop"
+                          readOnly={!!editingCategoryId}
+                          style={editingCategoryId ? { backgroundColor: '#f8fafc', cursor: 'not-allowed', color: '#94a3b8' } : {}}
+                          required
+                        />
+                        {editingCategoryId && (
+                          <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                            El nombre no se edita para mantener consistencia.
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                          Código <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          name="codigo"
+                          value={categoryCodeInput}
+                          onChange={(e) => setCategoryCodeInput(e.target.value)}
+                          className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="ej: LAP-001"
+                          required
+                        />
+                        <p className="text-xs text-slate-400 mt-1.5">Código único corto para la categoría.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-slate-100" />
+
+                  {/* Section: Marcas */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">2</span>
+                      <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Marcas</h4>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <input
+                        value={brandInput}
+                        onChange={(e) => setBrandInput(e.target.value)}
+                        className="flex-1 px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Escribe una marca y pulsa Agregar"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => { const v = String(brandInput || '').trim(); if (v && !marcas.includes(v)) { setMarcas(prev => [...prev, v]); setBrandInput(''); } }}
+                        className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors"
+                      >
+                        Agregar
+                      </button>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2 min-h-[32px]">
+                      {marcas.length === 0 ? (
+                        <span className="text-xs text-slate-400 italic self-center">No hay marcas agregadas</span>
+                      ) : marcas.map((m, i) => (
+                        <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-sm font-medium">
                           {m}
-                          <button type="button" onClick={() => setMarcas(prev => prev.filter(x => x !== m))} className="text-red-500">✕</button>
+                          <button type="button" onClick={() => setMarcas(prev => prev.filter(x => x !== m))} className="text-blue-400 hover:text-red-500 transition-colors leading-none">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
                         </span>
                       ))}
                     </div>
                   </div>
-                  
-                  {/* Tabla simple editable para Campos Personalizados (esquema plano) */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-gray-50 border-b">
-                          <th className="text-left px-4 py-2">Nombre</th>
-                          <th className="text-left px-4 py-2">Tipo</th>
-                          <th className="text-left px-4 py-2">Requerido</th>
-                          <th className="text-left px-4 py-2">Opciones (coma separadas)</th>
-                          <th className="text-left px-4 py-2">Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {newCategoryFields.map((field, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50">
-                            <td className="px-4 py-2">
-                              <input
-                                type="text"
-                                value={field.nombre}
-                                onChange={(e) => {
-                                  const updated = [...newCategoryFields];
-                                  updated[idx] = { ...updated[idx], nombre: e.target.value };
-                                  setNewCategoryFields(updated);
-                                }}
-                                className="w-full p-2 border rounded"
-                                placeholder="Ej: Procesador"
-                              />
-                            </td>
-                            <td className="px-4 py-2">
-                              <select
-                                value={field.tipo}
-                                onChange={(e) => {
-                                  const updated = [...newCategoryFields];
-                                  updated[idx] = { ...updated[idx], tipo: e.target.value as CategoryField['tipo'] };
-                                  // Clear opciones if type changes away from select
-                                  if (e.target.value !== 'select') updated[idx].opciones = [];
-                                  setNewCategoryFields(updated);
-                                }}
-                                className="w-full p-2 border rounded"
-                              >
-                                <option value="text">Texto</option>
-                                <option value="number">Número</option>
-                                <option value="select">Selección</option>
-                                <option value="textarea">Texto largo</option>
-                              </select>
-                            </td>
-                            <td className="px-4 py-2">
-                              <label className="inline-flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(field.requerido)}
-                                  onChange={(e) => {
-                                    const updated = [...newCategoryFields];
-                                    updated[idx] = { ...updated[idx], requerido: e.target.checked };
-                                    setNewCategoryFields(updated);
-                                  }}
-                                  className="form-checkbox h-4 w-4"
-                                />
-                              </label>
-                            </td>
-                            <td className="px-4 py-2">
-                              {field.tipo === 'select' ? (
+
+                  {/* Divider */}
+                  <div className="border-t border-slate-100" />
+
+                  {/* Section: Campos personalizados */}
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">3</span>
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Campos personalizados</h4>
+                          <p className="text-xs text-slate-400 mt-0.5">Aparecerán al registrar un activo de esta categoría.</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setNewCategoryFields([...newCategoryFields, { nombre: '', tipo: 'text', requerido: false }])}
+                        className="flex items-center gap-1.5 text-sm bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-xl hover:bg-blue-100 transition-colors font-medium"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                        Agregar campo
+                      </button>
+                    </div>
+
+                    {/* Table */}
+                    <div className="overflow-x-auto rounded-xl border border-slate-200">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wide">Nombre</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wide">Tipo</th>
+                            <th className="text-center px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wide">Req.</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wide">Opciones</th>
+                            <th className="px-4 py-3" />
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {newCategoryFields.map((field, idx) => (
+                            <tr key={idx} className="hover:bg-sky-50/50 transition-colors">
+                              <td className="px-4 py-3">
                                 <input
                                   type="text"
-                                  value={(field.opciones || []).join(', ')}
+                                  value={field.nombre}
                                   onChange={(e) => {
                                     const updated = [...newCategoryFields];
-                                    updated[idx] = { ...updated[idx], opciones: e.target.value.split(',').map(s => s.trim()).filter(Boolean) };
+                                    updated[idx] = { ...updated[idx], nombre: e.target.value };
                                     setNewCategoryFields(updated);
                                   }}
-                                  className="w-full p-2 border rounded"
-                                  placeholder="Ej: Intel, AMD"
+                                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  placeholder="Ej: Procesador"
                                 />
-                              ) : (
-                                <span className="text-sm text-gray-500 italic">—</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-2">
-                              <button
-                                type="button"
-                                onClick={() => setNewCategoryFields(newCategoryFields.filter((_, i) => i !== idx))}
-                                className="px-3 py-1 rounded bg-red-50 text-red-700 border border-red-100"
-                              >Eliminar</button>
-                            </td>
-                          </tr>
-                        ))}
-                        {newCategoryFields.length === 0 && (
-                          <tr>
-                            <td colSpan={5} className="px-4 py-6 text-sm text-gray-500 italic">No hay campos personalizados. Agrega uno con "+ Agregar campo".</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                              </td>
+                              <td className="px-4 py-3">
+                                <select
+                                  value={field.tipo}
+                                  onChange={(e) => {
+                                    const updated = [...newCategoryFields];
+                                    updated[idx] = { ...updated[idx], tipo: e.target.value as CategoryField['tipo'] };
+                                    if (e.target.value !== 'select') updated[idx].opciones = [];
+                                    setNewCategoryFields(updated);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                >
+                                  <option value="text">Texto</option>
+                                  <option value="number">Número</option>
+                                  <option value="select">Selección</option>
+                                  <option value="textarea">Texto largo</option>
+                                </select>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <label className="inline-flex items-center justify-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(field.requerido)}
+                                    onChange={(e) => {
+                                      const updated = [...newCategoryFields];
+                                      updated[idx] = { ...updated[idx], requerido: e.target.checked };
+                                      setNewCategoryFields(updated);
+                                    }}
+                                    className="w-4 h-4 rounded accent-blue-600"
+                                  />
+                                </label>
+                              </td>
+                              <td className="px-4 py-3">
+                                {field.tipo === 'select' ? (
+                                  <input
+                                    type="text"
+                                    value={(field.opciones || []).join(', ')}
+                                    onChange={(e) => {
+                                      const updated = [...newCategoryFields];
+                                      updated[idx] = { ...updated[idx], opciones: e.target.value.split(',').map(s => s.trim()).filter(Boolean) };
+                                      setNewCategoryFields(updated);
+                                    }}
+                                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Ej: Intel, AMD"
+                                  />
+                                ) : (
+                                  <span className="text-slate-300 text-sm">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setNewCategoryFields(newCategoryFields.filter((_, i) => i !== idx))}
+                                  className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                                  title="Eliminar campo"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                          {newCategoryFields.length === 0 && (
+                            <tr>
+                              <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400 italic">
+                                No hay campos personalizados. Pulsa "+ Agregar campo" para comenzar.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
 
-                    {/* Vista previa del formulario (inline) */}
-                    <div className="mt-6">
-                      <h4 className="text-sm font-semibold mb-3">Vista previa del formulario</h4>
-                      <div className="space-y-3 bg-white border border-gray-200 rounded p-4">
-                        {newCategoryFields.length === 0 ? (
-                          <p className="text-sm text-gray-400 italic">No hay campos para previsualizar.</p>
-                        ) : (
-                          newCategoryFields.map((f, i) => (
-                            <div key={i} className="">
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                {f.nombre || `Campo ${i + 1}`}{f.requerido && <span className="text-red-600"> *</span>}
+                    {/* Preview inline */}
+                    {newCategoryFields.length > 0 && (
+                      <div className="mt-5">
+                        <div className="flex items-center gap-2 mb-3">
+                          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                          <h4 className="text-sm font-medium text-slate-600">Vista previa del formulario</h4>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-5 space-y-4">
+                          {newCategoryFields.map((f, i) => (
+                            <div key={i}>
+                              <label className="block text-sm font-medium text-slate-700 mb-1">
+                                {f.nombre || `Campo ${i + 1}`}
+                                {f.requerido && <span className="text-red-500 ml-0.5">*</span>}
                               </label>
-                              {f.tipo === 'text' && <input className="w-full p-2 border rounded" placeholder={f.nombre} />}
-                              {f.tipo === 'number' && <input type="number" className="w-full p-2 border rounded" placeholder={f.nombre} />}
-                              {f.tipo === 'textarea' && <textarea className="w-full p-2 border rounded" placeholder={f.nombre} />}
+                              {f.tipo === 'text' && <input className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white" placeholder={f.nombre} readOnly />}
+                              {f.tipo === 'number' && <input type="number" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white" placeholder={f.nombre} readOnly />}
+                              {f.tipo === 'textarea' && <textarea className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white resize-none" placeholder={f.nombre} rows={2} readOnly />}
                               {f.tipo === 'select' && (
-                                <select className="w-full p-2 border rounded">
+                                <select className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
                                   <option>Seleccione...</option>
-                                  {(f.opciones || []).map((opt, oi) => (
-                                    <option key={oi} value={opt}>{opt}</option>
-                                  ))}
+                                  {(f.opciones || []).map((opt, oi) => <option key={oi} value={opt}>{opt}</option>)}
                                 </select>
                               )}
                             </div>
-                          ))
-                        )}
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer buttons */}
+                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCategoryModal(false);
+                        setNewCategoryFields([]);
+                        setCategoryPreview(null);
+                        setShowPreview(false);
+                        setEditingCategoryId(null);
+                        setCategoryNameInput('');
+                        setSubcategoriesInput('');
+                      }}
+                      className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-sm hover:shadow-md transition-all flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                      Previsualizar
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            {/* Preview modal */}
+            {showPreview && categoryPreview && (
+              <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl max-h-[85vh] overflow-hidden flex flex-col border border-slate-200">
+
+                  {/* Preview header */}
+                  <div className="bg-gradient-to-r from-blue-600 to-sky-500 px-7 py-5 relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 w-24 h-24 rounded-full bg-white/10" />
+                    <div className="relative flex items-center gap-3">
+                      <div className="bg-white/20 p-2.5 rounded-xl">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-white">Vista previa</h3>
+                        <p className="text-sky-100 text-sm">Revise la información antes de confirmar</p>
                       </div>
                     </div>
                   </div>
-                </div>
-                
-                <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
-                  <button type="button" onClick={() => { 
-                    setShowCategoryModal(false); 
-                    setNewCategoryFields([]); 
-                    setCategoryPreview(null); 
-                    setShowPreview(false);
-                    setEditingCategoryId(null);
-                    setCategoryNameInput('');
-                    setSubcategoriesInput('');
-                  }} className="px-4 py-2 rounded border hover:bg-gray-50">Cancelar</button>
-                  <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Previsualizar</button>
-                </div>
-              </div>
-            </form>
-            </div>
 
-            {showPreview && categoryPreview && (
-              <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4">
-                <div className="bg-white rounded-xl w-full max-w-2xl shadow-2xl max-h-[85vh] overflow-hidden flex flex-col">
-                  {/* Header con gradiente */}
-                  <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5">
-                    <h3 className="text-2xl font-bold text-white flex items-center gap-3">
-                      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      Previsualizar Categoría
-                    </h3>
-                    <p className="text-blue-100 text-sm mt-1">Revise la información antes de confirmar</p>
-                  </div>
+                  {/* Preview body */}
+                  <div className="flex-1 overflow-y-auto px-7 py-6 space-y-5">
 
-                  {/* Contenido scrolleable */}
-                  <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
-                    {/* Nombre de la categoría */}
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border-l-4 border-blue-500">
-                      <label className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1 block">Nombre</label>
-                      <p className="text-2xl font-bold text-gray-900">{categoryPreview.nombre}</p>
+                    {/* Nombre */}
+                    <div className="rounded-xl bg-gradient-to-r from-blue-50 to-sky-50 border border-blue-100 px-5 py-4">
+                      <p className="text-xs font-semibold text-blue-500 uppercase tracking-wide mb-1">Nombre de categoría</p>
+                      <p className="text-2xl font-bold text-slate-900">{categoryPreview.nombre}</p>
                     </div>
 
-                    {/* Grid de 2 columnas para Subcategorías y Fecha */}
+                    {/* Grid: subcategorías + fecha */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Subcategorías */}
-                      <div className="bg-white rounded-lg border-2 border-gray-200 p-4 hover:border-blue-300 transition-colors">
-                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
-                          <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                          </svg>
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
                           Subcategorías
-                        </label>
-                        <div className="flex flex-wrap gap-2">
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
                           {categoryPreview.subcategorias && categoryPreview.subcategorias.length > 0 ? (
                             categoryPreview.subcategorias.map((sub, idx) => (
-                              <span key={idx} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                                {sub}
-                              </span>
+                              <span key={idx} className="px-2.5 py-1 rounded-full text-xs font-medium bg-sky-100 text-sky-800 border border-sky-200">{sub}</span>
                             ))
                           ) : (
-                            <span className="text-sm text-gray-400 italic">Sin subcategorías</span>
+                            <span className="text-sm text-slate-400 italic">Sin subcategorías</span>
                           )}
                         </div>
                       </div>
-
-                      {/* Fecha/Hora */}
-                      <div className="bg-white rounded-lg border-2 border-gray-200 p-4">
-                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
-                          <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                           Fecha / Hora
-                        </label>
-                        <p className="text-base font-semibold text-gray-900">{categoryPreview.createdAt}</p>
+                        </p>
+                        <p className="text-sm font-semibold text-slate-800">{categoryPreview.createdAt}</p>
                       </div>
                     </div>
 
-                    {/* Campos personalizados */}
+                    {/* Campos */}
                     {categoryPreview.campos.length > 0 && (
-                      <div className="bg-white rounded-lg border-2 border-gray-200 p-5">
-                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
-                          <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                          </svg>
+                      <div className="rounded-xl border border-slate-200 bg-white p-5">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                           Campos Personalizados
-                          <span className="ml-auto bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs font-bold">
-                            {categoryPreview.campos.length}
-                          </span>
-                        </label>
+                          <span className="ml-auto bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-xs font-bold">{categoryPreview.campos.length}</span>
+                        </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {categoryPreview.campos.map((campo, idx) => (
-                            <div key={idx} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-3 border border-gray-200 hover:shadow-md transition-shadow">
+                            <div key={idx} className="bg-slate-50 rounded-xl p-3.5 border border-slate-200">
                               <div className="flex items-start justify-between mb-2">
-                                <span className="font-semibold text-gray-900 text-sm">{campo.nombre}</span>
+                                <span className="font-semibold text-slate-800 text-sm">{campo.nombre}</span>
                                 {campo.requerido && (
-                                  <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded">
-                                    Requerido
-                                  </span>
+                                  <span className="bg-red-50 text-red-600 text-xs font-bold px-2 py-0.5 rounded-lg border border-red-100">Req.</span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2 text-xs text-gray-600">
-                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                                </svg>
-                                <span className="font-medium capitalize">{campo.tipo}</span>
-                              </div>
+                              <span className="inline-flex items-center gap-1 text-xs text-slate-500 bg-white px-2 py-0.5 rounded-lg border border-slate-200 capitalize">{campo.tipo}</span>
                               {campo.opciones && campo.opciones.length > 0 && (
-                                <div className="mt-2 pt-2 border-t border-gray-300">
-                                  <p className="text-xs text-gray-500 mb-1">Opciones:</p>
+                                <div className="mt-2.5 pt-2.5 border-t border-slate-200">
+                                  <p className="text-xs text-slate-400 mb-1.5">Opciones:</p>
                                   <div className="flex flex-wrap gap-1">
                                     {campo.opciones.map((opt, oidx) => (
-                                      <span key={oidx} className="inline-block bg-white px-2 py-0.5 rounded text-xs text-gray-700 border border-gray-300">
+                                      <span key={oidx} className="px-2 py-0.5 rounded-lg text-xs text-slate-700 bg-white border border-slate-300">
                                         {typeof opt === 'string' ? opt : opt.value}
                                       </span>
                                     ))}
@@ -3150,104 +3225,78 @@ const InventarioPage = () => {
                     )}
                   </div>
 
-                  {/* Footer con botones */}
-                  <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-between items-center">
-                    <button 
-                      className="px-6 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-semibold transition-colors flex items-center gap-2" 
+                  {/* Preview footer */}
+                  <div className="bg-slate-50 border-t border-slate-200 px-7 py-4 flex justify-between items-center gap-3">
+                    <button
+                      className="px-5 py-2.5 border border-slate-300 text-slate-600 rounded-xl hover:bg-slate-100 text-sm font-medium transition-colors flex items-center gap-2"
                       onClick={() => { setCategoryPreview(null); setShowPreview(false); }}
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      Cancelar
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                      Volver
                     </button>
-                    <button 
-                      className="px-6 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2" 
+                    <button
+                      className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-700 hover:to-sky-600 text-white rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
                       onClick={async () => {
-                      try {
-                        
-                        if (editingCategoryId) {
-                          // EDITAR categoría existente
-                          // Ensure final normalization before sending
-                          const finalCampos: CategoryField[] = (categoryPreview.campos || []).map((f: any) => {
-                            const raw = f.opciones || f.options || [];
-                            const opciones: string[] = Array.isArray(raw)
-                              ? raw.map((o: any) => (typeof o === 'string' ? o : String(o?.value ?? ''))).map((s: string) => s.trim()).filter(Boolean)
-                              : (typeof raw === 'string' ? raw.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
-
-                            return {
-                              nombre: String(f.nombre || '').trim(),
-                              tipo: f.tipo || 'text',
-                              requerido: Boolean(f.requerido),
-                              opciones: opciones
-                            } as CategoryField;
-                          });
-                          const updated = await updateCategoria(editingCategoryId, {
-                            ...(categoryPreview.grupoId ? { grupoId: categoryPreview.grupoId } : {}),
-                            subcategorias: categoryPreview.subcategorias,
-                            campos: finalCampos
-                          });
-                          setCategories(prev => prev.map(c => c.id === editingCategoryId ? updated : c));
-                          setSuccessMessage('Categoría actualizada exitosamente');
-                          setShowSuccessToast(true);
-                          setTimeout(() => setShowSuccessToast(false), 3000);
-                        } else {
-                          // CREAR nueva categoría
-                          
-                          // Validar nombre
-                          if (!categoryPreview.nombre || !categoryPreview.nombre.trim()) {
-                            throw new Error('El nombre de la categoría es obligatorio');
-                          }
-                          
-                          const finalCampos: CategoryField[] = (categoryPreview.campos || [])
-                            .filter((f: any) => f.nombre && String(f.nombre).trim().length > 0)
-                            .map((f: any) => {
+                        try {
+                          if (editingCategoryId) {
+                            const finalCampos: CategoryField[] = (categoryPreview.campos || []).map((f: any) => {
                               const raw = f.opciones || f.options || [];
                               const opciones: string[] = Array.isArray(raw)
                                 ? raw.map((o: any) => (typeof o === 'string' ? o : String(o?.value ?? ''))).map((s: string) => s.trim()).filter(Boolean)
                                 : (typeof raw === 'string' ? raw.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
-
-                              return {
-                                nombre: String(f.nombre || '').trim(),
-                                tipo: f.tipo || 'text',
-                                requerido: Boolean(f.requerido),
-                                opciones: opciones
-                              } as CategoryField;
+                              return { nombre: String(f.nombre || '').trim(), tipo: f.tipo || 'text', requerido: Boolean(f.requerido), opciones: opciones } as CategoryField;
                             });
-                          
-                          const payload = {
-                            nombre: categoryPreview.nombre.trim(),
-                            ...(categoryPreview.grupoId ? { grupoId: categoryPreview.grupoId } : {}),
-                            ...(categoryPreview.subcategorias && categoryPreview.subcategorias.length > 0 && { subcategorias: categoryPreview.subcategorias }),
-                            ...(finalCampos.length > 0 && { campos: finalCampos })
-                          };
-                          
-                          const created = await createCategoria(payload as any);
-                          setCategories(prev => [created, ...prev]);
-                          setSuccessMessage('Categoría creada exitosamente');
-                          setShowSuccessToast(true);
-                          setTimeout(() => setShowSuccessToast(false), 3000);
+                            const updated = await updateCategoria(editingCategoryId, {
+                              ...(categoryPreview.grupoId ? { grupoId: categoryPreview.grupoId } : {}),
+                              subcategorias: categoryPreview.subcategorias,
+                              campos: finalCampos
+                            });
+                            setCategories(prev => prev.map(c => c.id === editingCategoryId ? updated : c));
+                            setSuccessMessage('Categoría actualizada exitosamente');
+                            setShowSuccessToast(true);
+                            setTimeout(() => setShowSuccessToast(false), 3000);
+                          } else {
+                            if (!categoryPreview.nombre || !categoryPreview.nombre.trim()) {
+                              throw new Error('El nombre de la categoría es obligatorio');
+                            }
+                            const finalCampos: CategoryField[] = (categoryPreview.campos || [])
+                              .filter((f: any) => f.nombre && String(f.nombre).trim().length > 0)
+                              .map((f: any) => {
+                                const raw = f.opciones || f.options || [];
+                                const opciones: string[] = Array.isArray(raw)
+                                  ? raw.map((o: any) => (typeof o === 'string' ? o : String(o?.value ?? ''))).map((s: string) => s.trim()).filter(Boolean)
+                                  : (typeof raw === 'string' ? raw.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
+                                return { nombre: String(f.nombre || '').trim(), tipo: f.tipo || 'text', requerido: Boolean(f.requerido), opciones: opciones } as CategoryField;
+                              });
+                            const payload = {
+                              nombre: categoryPreview.nombre.trim(),
+                              ...(categoryPreview.grupoId ? { grupoId: categoryPreview.grupoId } : {}),
+                              ...(categoryPreview.subcategorias && categoryPreview.subcategorias.length > 0 && { subcategorias: categoryPreview.subcategorias }),
+                              ...(finalCampos.length > 0 && { campos: finalCampos })
+                            };
+                            const created = await createCategoria(payload as any);
+                            setCategories(prev => [created, ...prev]);
+                            setSuccessMessage('Categoría creada exitosamente');
+                            setShowSuccessToast(true);
+                            setTimeout(() => setShowSuccessToast(false), 3000);
+                          }
+                          setCategoryPreview(null);
+                          setShowPreview(false);
+                          setShowCategoryModal(false);
+                          setNewCategoryFields([]);
+                          setEditingCategoryId(null);
+                          setCategoryNameInput('');
+                          setSubcategoriesInput('');
+                        } catch (err) {
+                          console.error('❌ Error:', err);
+                          const errorMsg = err instanceof Error ? err.message : 'Error al guardar la categoría';
+                          setErrorMessage(errorMsg);
+                          setShowErrorToast(true);
+                          setTimeout(() => setShowErrorToast(false), 4000);
                         }
-                        
-                        setCategoryPreview(null);
-                        setShowPreview(false);
-                        setShowCategoryModal(false);
-                        setNewCategoryFields([]);
-                        setEditingCategoryId(null);
-                        setCategoryNameInput('');
-                        setSubcategoriesInput('');
-                      } catch (err) {
-                        console.error('❌ Error:', err);
-                        const errorMsg = err instanceof Error ? err.message : 'Error al guardar la categoría';
-                        setErrorMessage(errorMsg);
-                        setShowErrorToast(true);
-                        setTimeout(() => setShowErrorToast(false), 4000);
-                      }
-                    }}
+                      }}
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                       {editingCategoryId ? 'Actualizar Categoría' : 'Confirmar y Crear'}
                     </button>
                   </div>
