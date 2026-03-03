@@ -53,8 +53,7 @@ const TiposActivosPage = () => {
   const [categoryCodeInput, setCategoryCodeInput] = useState('');
   const [categoryGroupId, setCategoryGroupId] = useState('');
   const [groups, setGroups] = useState<Array<{ id: string; nombre: string }>>([]);
-  const [brandInput, setBrandInput] = useState('');
-  const [marcas, setMarcas] = useState<string[]>([]);
+  
   const [subcategoriesInput, setSubcategoriesInput] = useState('');
   const [newCategoryFields, setNewCategoryFields] = useState<CategoryField[] & any[]>([]);
   const [copyFromCategoryId, setCopyFromCategoryId] = useState('');
@@ -72,6 +71,7 @@ const TiposActivosPage = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [showErrorToast, setShowErrorToast] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [previewValues, setPreviewValues] = useState<Record<number, string>>({});
 
   const fetchCategorias = async () => {
     setLoading(true);
@@ -452,35 +452,12 @@ const TiposActivosPage = () => {
 
                 <hr className="ta-divider" />
 
-                {/* Section 2 - Marcas */}
-                <div className="ta-section-label">
-                  <span className="ta-section-num">2</span>
-                  <span className="ta-section-title">Marcas</span>
-                </div>
-
-                <div style={{ display: 'flex', gap: '.6rem', marginBottom: '.75rem' }}>
-                  <input value={brandInput} onChange={(e) => setBrandInput(e.target.value)} className="ta-input" placeholder="Escribe una marca y pulsa Agregar" style={{ flex: 1 }} />
-                  <button type="button" onClick={() => { const v = String(brandInput || '').trim(); if (v && !marcas.includes(v)) { setMarcas(p => [...p, v]); setBrandInput(''); } }} className="ta-btn-primary" style={{ flexShrink: 0 }}>
-                    Agregar
-                  </button>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.5rem', minHeight: '32px', marginBottom: '.5rem' }}>
-                  {marcas.length === 0
-                    ? <span style={{ fontSize: '.8rem', color: '#9bbcd4', fontStyle: 'italic', alignSelf: 'center' }}>No hay marcas agregadas</span>
-                    : marcas.map((m, i) => (
-                      <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '.45rem', padding: '.25rem .75rem', borderRadius: '99px', background: '#ddeeff', border: '1.5px solid #b8d4f8', color: '#1458b8', fontSize: '.82rem', fontWeight: 500 }}>
-                        {m}
-                        <button type="button" onClick={() => setMarcas(p => p.filter(x => x !== m))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7da0c4', padding: 0, display: 'flex', fontSize: '.85rem' }} onMouseOver={e => (e.currentTarget.style.color = '#e53e3e')} onMouseOut={e => (e.currentTarget.style.color = '#7da0c4')}>✕</button>
-                      </span>
-                    ))}
-                </div>
-
                 <hr className="ta-divider" />
 
                 {/* Section 3 - Campos */}
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
                   <div className="ta-section-label" style={{ marginBottom: 0 }}>
-                    <span className="ta-section-num">3</span>
+                    <span className="ta-section-num">2</span>
                     <div>
                       <span className="ta-section-title" style={{ display: 'block' }}>Campos personalizados</span>
                       <span style={{ fontSize: '.73rem', color: '#7da0c4', marginTop: '.1rem', display: 'block' }}>Aparecerán al registrar un activo de este tipo.</span>
@@ -553,6 +530,65 @@ const TiposActivosPage = () => {
                       )}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Section 3 - Vista previa interactiva de campos */}
+                <div className="ta-section-label" style={{ marginTop: '1rem' }}>
+                  <span className="ta-section-num">3</span>
+                  <span className="ta-section-title">Vista previa de campos</span>
+                </div>
+
+                <div style={{ background: '#fff', border: '1.5px solid #d4e5f9', borderRadius: '12px', padding: '1rem', marginBottom: '1rem' }}>
+                  {newCategoryFields.length === 0 ? (
+                    <p style={{ color: '#9bbcd4', fontStyle: 'italic', margin: 0 }}>No hay campos para previsualizar</p>
+                  ) : (
+                    <form style={{ display: 'grid', gap: '.85rem' }} onSubmit={(e) => e.preventDefault()}>
+                      {newCategoryFields.map((campo: any, idx: number) => {
+                        const opcionesArr: string[] = Array.isArray(campo.opciones)
+                          ? campo.opciones.map((o: any) => (typeof o === 'string' ? o : String(o?.value ?? '')))
+                          : (campo.opcionesRaw ? String(campo.opcionesRaw).split(',').map((s: string) => s.trim()).filter(Boolean) : []);
+                        return (
+                          <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '.35rem' }}>
+                            <label style={{ fontSize: '.85rem', fontWeight: 700, color: '#0d2d5e' }}>
+                              {campo.nombre || 'Campo sin nombre'} {campo.requerido && <span style={{ color: '#e53e3e' }}>*</span>}
+                            </label>
+                            {campo.tipo === 'text' && (
+                              <input className="ta-input" type="text" placeholder={campo.nombre ? `Ej: ${campo.nombre}` : 'Campo de texto'} disabled />
+                            )}
+                            {campo.tipo === 'number' && (
+                              <input className="ta-input" type="number" placeholder="0" disabled />
+                            )}
+                            {campo.tipo === 'select' && (
+                              <>
+                                <select
+                                  className="ta-input ta-select"
+                                  value={previewValues[idx] ?? ''}
+                                  onChange={(e) => setPreviewValues(p => ({ ...p, [idx]: e.target.value }))}
+                                >
+                                  <option value="">— Seleccionar —</option>
+                                  {opcionesArr.map((opt, oidx) => (<option key={oidx} value={opt}>{opt}</option>))}
+                                </select>
+                                {opcionesArr.length > 0 && (
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.35rem', marginTop: '.5rem' }}>
+                                    {opcionesArr.map((opt: string, oidx: number) => (
+                                      <span key={oidx} style={{ padding: '.15rem .55rem', borderRadius: '6px', fontSize: '.72rem', color: '#0d2d5e', background: '#f0f6ff', border: '1.5px solid #d4e5f9', fontFamily: "'DM Mono', monospace" }}>{opt}</span>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                            {campo.tipo === 'textarea' && (
+                              <textarea className="ta-input" rows={3} placeholder={campo.nombre ? `Describe ${campo.nombre}` : ''} disabled />
+                            )}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem' }}>
+                              <small style={{ color: '#7da0c4' }}>{tipoLabel[campo.tipo] || campo.tipo}</small>
+                              {campo.tipo === 'select' && opcionesArr.length > 0 && <small style={{ color: '#7da0c4' }}>{opcionesArr.length} opciones</small>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </form>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.75rem', paddingTop: '1.25rem', marginTop: '1.25rem', borderTop: '1.5px solid #e8f1fb' }}>
