@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { getCategorias, createCategoria, updateCategoria, getCategoriaById } from '@/modules/inventario/services/categoriasService';
 import axiosClient from '@/api/axiosClient';
 import type { Category, CategoryField } from '@/modules/inventario/services/categoriasService';
@@ -95,6 +96,24 @@ const TiposActivosPage = () => {
 
   useEffect(() => { fetchCategorias(); fetchGroups(); }, []);
 
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // If navigated from creating a group, auto-open the "new category" modal and preselect group
+    try {
+      if ((location as any)?.state?.autoOpenNew) {
+        const gid = String((location as any).state.groupId || '');
+        setCategoryGroupId(gid);
+        setShowModal(true);
+        // clear state to avoid reopening
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
   const openNew = () => {
     setEditingCategoryId(null); setCategoryNameInput(''); setCategoryCodeInput('');
     setCategoryGroupId(''); setNewCategoryFields([]); setShowModal(true);
@@ -117,6 +136,7 @@ const TiposActivosPage = () => {
     e.preventDefault();
     const cat = String(categoryNameInput || '').trim();
     if (!cat) { setErrorMessage('El nombre de la categoría es obligatorio'); setShowErrorToast(true); setTimeout(() => setShowErrorToast(false), 3000); return; }
+    if (!categoryGroupId) { setErrorMessage('Selecciona un Grupo de Activo'); setShowErrorToast(true); setTimeout(() => setShowErrorToast(false), 3000); return; }
     const cleanedCampos: CategoryField[] = (newCategoryFields || []).map((f) => {
       const rawOpts = (f as any).opciones || (f as any).options || (f as any).opcionesRaw || [];
       const opciones: string[] = Array.isArray(rawOpts)
@@ -129,6 +149,9 @@ const TiposActivosPage = () => {
       createdAt: new Date().toLocaleString(),
       subcategorias: subcategoriesInput.split(',').map(s => s.trim()).filter(Boolean)
     });
+    // require at least one valid custom field
+    const hasValidField = cleanedCampos.some(f => String(f.nombre || '').trim().length > 0);
+    if (!hasValidField) { setErrorMessage('Agrega al menos un campo personalizado'); setShowErrorToast(true); setTimeout(() => setShowErrorToast(false), 3000); return; }
     setShowPreview(true);
   };
 
@@ -136,15 +159,28 @@ const TiposActivosPage = () => {
     try {
       if (editingCategoryId) {
         const finalCampos: CategoryField[] = (categoryPreview.campos || []).map((f: any) => ({ nombre: String(f.nombre || '').trim(), tipo: f.tipo || 'text', requerido: Boolean(f.requerido), opciones: Array.isArray(f.opciones) ? f.opciones.map((o: any) => String(o).trim()) : (typeof f.opciones === 'string' ? f.opciones.split(',').map((s: string) => s.trim()) : []) }));
+        if (!categoryPreview.grupoId) throw new Error('Selecciona un Grupo de Activo');
+        if (!finalCampos || finalCampos.filter(f => String(f.nombre || '').trim().length > 0).length === 0) throw new Error('Agrega al menos un campo personalizado');
         const updated = await updateCategoria(editingCategoryId, { ...(categoryPreview.grupoId ? { grupo_id: categoryPreview.grupoId } : {}), campos: finalCampos });
         setCategorias(prev => prev.map(c => c.id === editingCategoryId ? updated : c));
         setSuccessMessage('Categoría actualizada exitosamente'); setShowSuccessToast(true); setTimeout(() => setShowSuccessToast(false), 3000);
       } else {
         const finalCampos: CategoryField[] = (categoryPreview.campos || []).filter((f: any) => f.nombre && String(f.nombre).trim().length > 0).map((f: any) => ({ nombre: String(f.nombre || '').trim(), tipo: f.tipo || 'text', requerido: Boolean(f.requerido), opciones: Array.isArray(f.opciones) ? f.opciones.map((o: any) => String(o).trim()) : (typeof f.opciones === 'string' ? f.opciones.split(',').map((s: string) => s.trim()) : []) }));
+        if (!categoryPreview.grupoId) throw new Error('Selecciona un Grupo de Activo');
+        if (!finalCampos || finalCampos.length === 0) throw new Error('Agrega al menos un campo personalizado');
         const payload: any = { nombre: categoryPreview.nombre.trim(), ...(categoryPreview.grupoId ? { grupo_id: categoryPreview.grupoId } : {}), ...(finalCampos.length > 0 && { campos: finalCampos }) };
         const created = await createCategoria(payload);
         setCategorias(prev => [created, ...prev]);
         setSuccessMessage('Categoría creada exitosamente'); setShowSuccessToast(true); setTimeout(() => setShowSuccessToast(false), 3000);
+        // If this flow was triggered from creating a group, navigate to Marcas and request opening the new marca modal
+        try {
+          if ((location as any)?.state?.autoOpenNew) {
+            const catId = String(created.id ?? created._id ?? created);
+            navigate('/admin/grupos-activos/marcas', { state: { autoOpenNewMarca: true, categoriaId: catId } });
+          }
+        } catch (e) {
+          // ignore
+        }
       }
       setCategoryPreview(null); setShowPreview(false); setShowModal(false);
       setNewCategoryFields([]); setEditingCategoryId(null); setCategoryNameInput(''); setSubcategoriesInput('');
@@ -440,12 +476,12 @@ const TiposActivosPage = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.1rem' }}>
                   <div>
                     <label className="ta-form-label">Nombre de categoría <span style={{ color: '#e53e3e' }}>*</span></label>
-                    <input name="categoria" value={categoryNameInput} onChange={(e) => setCategoryNameInput(e.target.value)} className="ta-input" placeholder="ej: Laptop" readOnly={!!editingCategoryId} required />
+                    <input name="categoria" value={categoryNameInput} onChange={(e) => { const v = e.target.value; setCategoryNameInput(v); if (!editingCategoryId) setCategoryCodeInput(generateCategoryCode(v)); }} className="ta-input" placeholder="ej: Laptop" readOnly={!!editingCategoryId} required />
                     {editingCategoryId && <p className="ta-form-hint">El nombre no se edita para mantener consistencia.</p>}
                   </div>
                   <div>
                     <label className="ta-form-label">Código <span style={{ color: '#e53e3e' }}>*</span></label>
-                    <input name="codigo" value={categoryCodeInput} onChange={(e) => setCategoryCodeInput(e.target.value)} className="ta-input" placeholder="ej: LAP-001" required style={{ fontFamily: "'DM Mono', monospace" }} />
+                    <input name="codigo" value={categoryCodeInput} readOnly className="ta-input" placeholder="ej: LAP-001" required style={{ fontFamily: "'DM Mono', monospace" }} />
                     <p className="ta-form-hint">Código único corto para la categoría.</p>
                   </div>
                 </div>

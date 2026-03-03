@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axiosClient from '@/api/axiosClient';
 
 interface Grupo {
@@ -42,6 +43,7 @@ const GruposPage = () => {
   const [descripcion, setDescripcion] = useState('');
   const [activo, setActivo] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const fetchGrupos = async () => {
     setLoading(true);
@@ -94,6 +96,12 @@ const GruposPage = () => {
         const res = await axiosClient.post('/api/gestion-grupos-categorias', payload);
         const created = res.data && res.data.data ? res.data.data : res.data;
         setGrupos(prev => [created, ...prev]);
+        // After creating a group, navigate to Tipos page and request opening the "add tipo" modal
+        try {
+          navigate('/admin/grupos-activos/tipos', { state: { autoOpenNew: true, groupId: String(created.id ?? created._id ?? '') } });
+        } catch (e) {
+          console.warn('Navigation to Tipos failed:', e);
+        }
       }
       setShowModal(false);
     } catch (err: any) {

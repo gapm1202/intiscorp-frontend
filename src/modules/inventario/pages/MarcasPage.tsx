@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { getCategorias } from '@/modules/inventario/services/categoriasService';
 import { getMarcas, createMarca, updateMarca, syncCategorias } from '@/modules/inventario/services/marcasService';
 
@@ -35,10 +36,28 @@ const MarcasPage = () => {
     return list.filter(m => (m.nombre || '').toLowerCase().includes(q));
   }, [marcas, query, selectedTipoFilter, categorias]);
 
-  const openNew = () => {
+  const openNew = (preselectCategoriaId?: string) => {
     setEditingId(null); setNombre(''); setActivo(true); setError(null);
-    setSelectedCategorias([]); setCatQuery(''); setShowModal(true);
+    setSelectedCategorias(preselectCategoriaId ? [String(preselectCategoriaId)] : []);
+    setCatQuery(''); setShowModal(true);
   };
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    try {
+      const state: any = (location && (location as any).state) || {};
+      if (state && state.autoOpenNewMarca) {
+        const catId = state.categoriaId ? String(state.categoriaId) : undefined;
+        openNew(catId);
+        // clear the navigation state so modal doesn't reopen on refresh/back
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [location, navigate]);
 
   const openEdit = (m: MarcaItem) => {
     setEditingId(m.id); setNombre(m.nombre || ''); setActivo(Boolean(m.activo));
