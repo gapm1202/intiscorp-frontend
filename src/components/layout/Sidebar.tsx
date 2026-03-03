@@ -523,6 +523,11 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                       Grupos
                     </button>
                   </li>
+                  <li>
+                    <button className="sb-sub-btn" onClick={() => guardedNavigate('/admin/grupos-activos/marcas')} style={subItemStyle(includesPath('/grupos-activos/marcas') || isActive('/admin/grupos-activos/marcas'))}>
+                      Marcas
+                    </button>
+                  </li>
                 </ul>
               )}
             </li>
