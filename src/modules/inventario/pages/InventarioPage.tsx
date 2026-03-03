@@ -3332,7 +3332,7 @@ const InventarioPage = () => {
                               return { nombre: String(f.nombre || '').trim(), tipo: f.tipo || 'text', requerido: Boolean(f.requerido), opciones: opciones } as CategoryField;
                             });
                             const updated = await updateCategoria(editingCategoryId, {
-                              ...(categoryPreview.grupoId ? { grupoId: categoryPreview.grupoId } : {}),
+                              ...(categoryPreview.grupoId ? { grupo_id: categoryPreview.grupoId } : {}),
                               subcategorias: categoryPreview.subcategorias,
                               campos: finalCampos
                             });
@@ -3355,7 +3355,7 @@ const InventarioPage = () => {
                               });
                             const payload = {
                               nombre: categoryPreview.nombre.trim(),
-                              ...(categoryPreview.grupoId ? { grupoId: categoryPreview.grupoId } : {}),
+                              ...(categoryPreview.grupoId ? { grupo_id: categoryPreview.grupoId } : {}),
                               ...(categoryPreview.subcategorias && categoryPreview.subcategorias.length > 0 && { subcategorias: categoryPreview.subcategorias }),
                               ...(finalCampos.length > 0 && { campos: finalCampos })
                             };

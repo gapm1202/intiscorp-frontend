@@ -104,7 +104,7 @@ const TiposActivosPage = () => {
     setEditingCategoryId(cat.id ?? null);
     setCategoryNameInput(cat.nombre || '');
     setCategoryCodeInput(cat.codigo || generateCategoryCode(cat.nombre || ''));
-    setCategoryGroupId((cat as any).grupoId || '');
+    setCategoryGroupId((cat as any).grupoId || (cat as any).grupo_id || '');
     const mapped = normalizeCampos((cat as any).campos || []).map(f => ({
       ...f,
       opcionesRaw: Array.isArray(f.opciones) ? f.opciones.join(', ') : (typeof f.opciones === 'string' ? f.opciones : '')
@@ -136,12 +136,12 @@ const TiposActivosPage = () => {
     try {
       if (editingCategoryId) {
         const finalCampos: CategoryField[] = (categoryPreview.campos || []).map((f: any) => ({ nombre: String(f.nombre || '').trim(), tipo: f.tipo || 'text', requerido: Boolean(f.requerido), opciones: Array.isArray(f.opciones) ? f.opciones.map((o: any) => String(o).trim()) : (typeof f.opciones === 'string' ? f.opciones.split(',').map((s: string) => s.trim()) : []) }));
-        const updated = await updateCategoria(editingCategoryId, { ...(categoryPreview.grupoId ? { grupoId: categoryPreview.grupoId } : {}), campos: finalCampos });
+        const updated = await updateCategoria(editingCategoryId, { ...(categoryPreview.grupoId ? { grupo_id: categoryPreview.grupoId } : {}), campos: finalCampos });
         setCategorias(prev => prev.map(c => c.id === editingCategoryId ? updated : c));
         setSuccessMessage('Categoría actualizada exitosamente'); setShowSuccessToast(true); setTimeout(() => setShowSuccessToast(false), 3000);
       } else {
         const finalCampos: CategoryField[] = (categoryPreview.campos || []).filter((f: any) => f.nombre && String(f.nombre).trim().length > 0).map((f: any) => ({ nombre: String(f.nombre || '').trim(), tipo: f.tipo || 'text', requerido: Boolean(f.requerido), opciones: Array.isArray(f.opciones) ? f.opciones.map((o: any) => String(o).trim()) : (typeof f.opciones === 'string' ? f.opciones.split(',').map((s: string) => s.trim()) : []) }));
-        const payload: any = { nombre: categoryPreview.nombre.trim(), ...(categoryPreview.grupoId ? { grupoId: categoryPreview.grupoId } : {}), ...(finalCampos.length > 0 && { campos: finalCampos }) };
+        const payload: any = { nombre: categoryPreview.nombre.trim(), ...(categoryPreview.grupoId ? { grupo_id: categoryPreview.grupoId } : {}), ...(finalCampos.length > 0 && { campos: finalCampos }) };
         const created = await createCategoria(payload);
         setCategorias(prev => [created, ...prev]);
         setSuccessMessage('Categoría creada exitosamente'); setShowSuccessToast(true); setTimeout(() => setShowSuccessToast(false), 3000);
