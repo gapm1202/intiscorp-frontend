@@ -51,6 +51,19 @@ export const getCategorias = async (): Promise<Category[]> => {
   }
 };
 
+// Obtener una categoría por ID
+export const getCategoriaById = async (id: string): Promise<Category | null> => {
+  try {
+    const response = await axiosClient.get(`/api/categorias/${id}`);
+    const data = response.data;
+    if (data && typeof data === 'object' && 'data' in data) return data.data;
+    return data;
+  } catch (error) {
+    console.error('[categoriasService] Error fetching category by id:', error);
+    return null;
+  }
+};
+
 // Crear una nueva categoría
 export const createCategoria = async (categoria: Omit<Category, 'id'>): Promise<Category> => {
   try {

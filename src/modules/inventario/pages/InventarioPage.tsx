@@ -4,7 +4,7 @@ import { getInventarioByEmpresa, getInventarioBySede } from "@/modules/inventari
 import { getEmpresaById } from "@/modules/empresas/services/empresasService";
 import { getSedesByEmpresa } from "@/modules/empresas/services/sedesService";
 import { getAreasByEmpresa } from "@/modules/inventario/services/areasService";
-import { getCategorias, createCategoria, updateCategoria } from "@/modules/inventario/services/categoriasService";
+import { getCategorias, createCategoria, updateCategoria, getCategoriaById } from "@/modules/inventario/services/categoriasService";
 import type { Category, CategoryField, FieldOption } from "@/modules/inventario/services/categoriasService";
 import RegisterAssetModal from "../components/RegisterAssetModal";
 import axiosClient from '@/api/axiosClient';
@@ -104,6 +104,7 @@ const InventarioPage = () => {
   const [brandInput, setBrandInput] = useState('');
   const [marcas, setMarcas] = useState<string[]>([]);
   const [subcategoriesInput, setSubcategoriesInput] = useState('');
+  const [copyFromCategoryId, setCopyFromCategoryId] = useState('');
   const [currentView, setCurrentView] = useState<'main' | 'areas' | 'categories' | 'viewAsset' | 'historialAsset' | 'generalView'>('main');
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [groupNameInput, setGroupNameInput] = useState('');
@@ -171,6 +172,21 @@ const InventarioPage = () => {
       }
     }
     return part2 ? `${part1}-${part2}` : part1;
+  };
+
+  // Generate category code per rule: first word full + first 4 letters of second word, uppercase, joined by '-'
+  const generateCategoryCode = (rawName: string): string => {
+    if (!rawName) return '';
+    const withoutAccents = rawName.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+    const cleaned = withoutAccents.replace(/[^\p{L}\p{N}\s]/gu, ' ').trim();
+    const words = cleaned.split(/\s+/).map(w => w.trim()).filter(Boolean);
+    if (words.length === 0) return '';
+    const first = words[0].toUpperCase();
+    let second = '';
+    if (words.length >= 2) {
+      second = words[1].substring(0, Math.min(4, words[1].length)).toUpperCase();
+    }
+    return second ? `${first}-${second}` : first;
   };
 
   const fetchGroups = async () => {
@@ -662,7 +678,7 @@ const InventarioPage = () => {
                                   setCategoryNameInput(c.nombre || '');
                                   setCategoryCodeInput(c.codigo || '');
                                   setMarcas(Array.isArray(c.marcas) ? c.marcas : []);
-                                  setNewCategoryFields(normalizeCampos(c.campos || []));
+                                  setNewCategoryFields((normalizeCampos(c.campos || []) as any[]).map(f => ({ ...f, opcionesRaw: (Array.isArray(f.opciones) ? f.opciones.join(', ') : (typeof f.opciones === 'string' ? f.opciones : '')) })));
                                   setCategoryPreview(null);
                                   setShowPreview(false);
                                   setShowCategoryModal(true);
@@ -1590,6 +1606,7 @@ const InventarioPage = () => {
 
                       {/* Documento de compra */}
                       {String(viewItem.purchaseDocumentUrl ?? viewItem.purchase_document_url ?? viewItem.purchaseDocument ?? viewItem.purchase_document ?? '') !== '' && (
+                        <>
                         <div className="bg-linear-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Documento de compra</p>
                           <p className="font-bold text-gray-900">{String(viewItem.purchaseDocumentName ?? viewItem.purchase_document_name ?? viewItem.purchaseDocument ?? viewItem.purchase_document ?? '').split('/').pop()}</p>
@@ -1600,6 +1617,44 @@ const InventarioPage = () => {
                             )}
                           </div>
                         </div>
+
+                          <div className="mb-3">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Copiar campos desde categoría existente (opcional)</label>
+                            <select
+                              value={copyFromCategoryId}
+                              onChange={(e) => {
+                                const id = e.target.value;
+                                setCopyFromCategoryId(id);
+                                if (!id) return;
+
+                                (async () => {
+                                  try {
+                                    // Try fetching fresh category from backend
+                                    const cat = await getCategoriaById(id);
+                                    const source = cat ?? (categories || []).find(c => String(c.id ?? c._id ?? '') === String(id));
+                                    if (!source) return;
+                                    // Normalize backend campos and map to editor shape with opcionesRaw preserved
+                                    const mapped = (normalizeCampos((source as any).campos || []) as any[]).map(f => ({ ...f, opcionesRaw: Array.isArray(f.opciones) ? f.opciones.join(', ') : (typeof f.opciones === 'string' ? f.opciones : '') }));
+                                    setNewCategoryFields(mapped as any);
+                                  } catch (err) {
+                                    console.error('Error fetching category for copy:', err);
+                                    // Fallback to local copy
+                                    const catLocal = (categories || []).find(c => String(c.id ?? c._id ?? '') === String(id));
+                                    if (!catLocal) return;
+                                    const mapped = (normalizeCampos(catLocal.campos || []) as any[]).map(f => ({ ...f, opcionesRaw: Array.isArray(f.opciones) ? f.opciones.join(', ') : (typeof f.opciones === 'string' ? f.opciones : '') }));
+                                    setNewCategoryFields(mapped as any);
+                                  }
+                                })();
+                              }}
+                              className="w-full p-2.5 border rounded"
+                            >
+                              <option value="">-- No copiar --</option>
+                              {(categories || []).map(c => (
+                                <option key={String(c.id ?? c._id ?? '')} value={String(c.id ?? c._id ?? '')}>{c.nombre}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </>
                       )}
                     {String(viewItem.garantiaDuracion ?? viewItem.garantia_duracion ?? viewItem.garantia ?? '') !== '' && (
                             <div className="bg-linear-to-br from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
@@ -2829,7 +2884,7 @@ const InventarioPage = () => {
                   return;
                 }
                 const cleanedCampos: CategoryField[] = (newCategoryFields || []).map((f) => {
-                  const rawOpts = (f as any).opciones || (f as any).options || [];
+                  const rawOpts = (f as any).opciones || (f as any).options || (f as any).opcionesRaw || [];
                   const opciones: string[] = Array.isArray(rawOpts)
                     ? rawOpts.map((o: any) => (typeof o === 'string' ? o : String(o?.value ?? ''))).map((s: string) => s.trim()).filter(Boolean)
                     : (typeof rawOpts === 'string' ? rawOpts.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
@@ -2880,7 +2935,14 @@ const InventarioPage = () => {
                         <input
                           name="categoria"
                           value={categoryNameInput}
-                          onChange={(e) => setCategoryNameInput(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCategoryNameInput(val);
+                            if (!editingCategoryId) {
+                              const generated = generateCategoryCode(val);
+                              setCategoryCodeInput(generated);
+                            }
+                          }}
                           className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           placeholder="ej: Laptop"
                           readOnly={!!editingCategoryId}
@@ -2901,9 +2963,9 @@ const InventarioPage = () => {
                         <input
                           name="codigo"
                           value={categoryCodeInput}
-                          onChange={(e) => setCategoryCodeInput(e.target.value)}
-                          className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="ej: LAP-001"
+                          readOnly
+                          className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm bg-gray-50 text-gray-700"
+                          placeholder="Se generará automáticamente"
                           required
                         />
                         <p className="text-xs text-slate-400 mt-1.5">Código único corto para la categoría.</p>
@@ -2964,14 +3026,49 @@ const InventarioPage = () => {
                           <p className="text-xs text-slate-400 mt-0.5">Aparecerán al registrar un activo de esta categoría.</p>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setNewCategoryFields([...newCategoryFields, { nombre: '', tipo: 'text', requerido: false }])}
-                        className="flex items-center gap-1.5 text-sm bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-xl hover:bg-blue-100 transition-colors font-medium"
-                      >
+                      <div className="flex items-center gap-3">
+                        <div className="min-w-[260px]">
+                          <label className="block text-xs text-slate-500 mb-1">Copiar campos desde categoría existente (opcional)</label>
+                          <select
+                            value={copyFromCategoryId}
+                            onChange={(e) => {
+                              const id = e.target.value;
+                              setCopyFromCategoryId(id);
+                              if (!id) return;
+                              (async () => {
+                                try {
+                                  const cat = await getCategoriaById(id);
+                                  const source = cat ?? (categories || []).find(c => String(c.id ?? c._id ?? '') === String(id));
+                                  if (!source) return;
+                                  const mapped = (normalizeCampos((source as any).campos || []) as any[]).map(f => ({ ...f, opcionesRaw: Array.isArray(f.opciones) ? f.opciones.join(', ') : (typeof f.opciones === 'string' ? f.opciones : '') }));
+                                  setNewCategoryFields(mapped as any);
+                                } catch (err) {
+                                  console.error('Error fetching category for copy:', err);
+                                  const catLocal = (categories || []).find(c => String(c.id ?? c._id ?? '') === String(id));
+                                  if (!catLocal) return;
+                                  const mapped = (normalizeCampos(catLocal.campos || []) as any[]).map(f => ({ ...f, opcionesRaw: Array.isArray(f.opciones) ? f.opciones.join(', ') : (typeof f.opciones === 'string' ? f.opciones : '') }));
+                                  setNewCategoryFields(mapped as any);
+                                }
+                              })();
+                            }}
+                            className="w-full p-2.5 border rounded text-sm"
+                          >
+                            <option value="">-- No copiar --</option>
+                            {(categories || []).map(c => (
+                              <option key={String(c.id ?? c._id ?? '')} value={String(c.id ?? c._id ?? '')}>{c.nombre}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setNewCategoryFields([...newCategoryFields, { nombre: '', tipo: 'text', requerido: false, opcionesRaw: '' }])}
+                          className="flex items-center gap-1.5 text-sm bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-xl hover:bg-blue-100 transition-colors font-medium"
+                        >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                         Agregar campo
                       </button>
+                      </div>
                     </div>
 
                     {/* Table */}
@@ -3008,7 +3105,8 @@ const InventarioPage = () => {
                                   onChange={(e) => {
                                     const updated = [...newCategoryFields];
                                     updated[idx] = { ...updated[idx], tipo: e.target.value as CategoryField['tipo'] };
-                                    if (e.target.value !== 'select') updated[idx].opciones = [];
+                                    if (e.target.value !== 'select') { updated[idx].opciones = []; delete (updated[idx] as any).opcionesRaw; }
+                                    else { (updated[idx] as any).opcionesRaw = ((updated[idx] as any).opciones || []).join(', '); }
                                     setNewCategoryFields(updated);
                                   }}
                                   className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -3037,10 +3135,16 @@ const InventarioPage = () => {
                                 {field.tipo === 'select' ? (
                                   <input
                                     type="text"
-                                    value={(field.opciones || []).join(', ')}
+                                    value={((field as any).opcionesRaw ?? (field.opciones || []).join(', '))}
                                     onChange={(e) => {
                                       const updated = [...newCategoryFields];
-                                      updated[idx] = { ...updated[idx], opciones: e.target.value.split(',').map(s => s.trim()).filter(Boolean) };
+                                      updated[idx] = { ...updated[idx], opcionesRaw: e.target.value } as any;
+                                      setNewCategoryFields(updated);
+                                    }}
+                                    onBlur={() => {
+                                      const updated = [...newCategoryFields];
+                                      const raw = String((updated[idx] as any).opcionesRaw || '');
+                                      updated[idx] = { ...updated[idx], opciones: raw.split(',').map((s: string) => s.trim()).filter(Boolean), opcionesRaw: raw } as any;
                                       setNewCategoryFields(updated);
                                     }}
                                     className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
