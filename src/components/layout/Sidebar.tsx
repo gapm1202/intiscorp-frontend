@@ -300,7 +300,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
           justifyContent: 'space-between',
           zIndex: 50,
           transition: 'width 0.2s ease, transform 0.25s ease',
-          transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transform: (isLargeScreen || isOpen) ? 'translateX(0)' : 'translateX(-100%)',
           fontFamily: "'DM Sans', sans-serif",
         }}
         className={`${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
@@ -514,13 +514,13 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
               {gruposActivosOpen && !collapsed && (
                 <ul className="sb-submenu" style={{ listStyle: 'none', margin: '2px 0 0 26px', padding: '0 0 0 10px', borderLeft: '1px solid rgba(14,165,233,0.15)', display: 'flex', flexDirection: 'column', gap: 1 }}>
                   <li>
-                    <button className="sb-sub-btn" onClick={() => guardedNavigate('/admin/grupos-activos/tipos')} style={subItemStyle(includesPath('/grupos-activos/tipos') || isActive('/admin/grupos-activos/tipos'))}>
-                      Tipos de Activo
+                    <button className="sb-sub-btn" onClick={() => guardedNavigate('/admin/grupos-activos/grupos')} style={subItemStyle(includesPath('/grupos-activos/grupos') || isActive('/admin/grupos-activos/grupos'))}>
+                      Grupos
                     </button>
                   </li>
                   <li>
-                    <button className="sb-sub-btn" onClick={() => guardedNavigate('/admin/grupos-activos/grupos')} style={subItemStyle(includesPath('/grupos-activos/grupos') || isActive('/admin/grupos-activos/grupos'))}>
-                      Grupos
+                    <button className="sb-sub-btn" onClick={() => guardedNavigate('/admin/grupos-activos/tipos')} style={subItemStyle(includesPath('/grupos-activos/tipos') || isActive('/admin/grupos-activos/tipos'))}>
+                      Tipos de Activo
                     </button>
                   </li>
                   <li>
