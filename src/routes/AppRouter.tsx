@@ -11,6 +11,8 @@ import EmpresaDetailPage from "../modules/empresas/pages/EmpresaDetailPage";
 import HistorialEmpresaPage from "../modules/empresas/pages/HistorialEmpresaPage";
 import InventarioPage from "../modules/inventario/pages/InventarioPage";
 import EtiquetasPage from "../modules/inventario/pages/EtiquetasPage";
+import GruposPage from "../modules/inventario/pages/GruposPage";
+import TiposActivosPage from "../modules/inventario/pages/TiposActivosPage";
 import LoginEmpresaPage from "../modules/public/pages/LoginEmpresaPage";
 import ReporteIncidenciaPage from "../modules/public/pages/ReporteIncidenciaPage";
 import CatalogoCategoriasPage from "../modules/catalogo/pages/CatalogoCategoriasPage";
@@ -132,6 +134,26 @@ const AppRouter = () => {
             <RoleRoute role="admin">
               <AdminLayout>
                 <CatalogoCategoriasPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/grupos-activos/grupos"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <GruposPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/grupos-activos/tipos"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <TiposActivosPage />
               </AdminLayout>
             </RoleRoute>
           }

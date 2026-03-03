@@ -70,6 +70,7 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
 
   const menuItems = user ? menuByRole[user.rol] ?? menuByRole["cliente"] : menuByRole["cliente"];
   const [inventarioOpen, setInventarioOpen] = useState(false);
+  const [gruposActivosOpen, setGruposActivosOpen] = useState(false);
   const [catalogosOpen, setCatalogosOpen] = useState(false);
   const [usuariosOpen, setUsuariosOpen] = useState(false);
   const [usuariosClientesOpen, setUsuariosClientesOpen] = useState(false);
@@ -87,6 +88,9 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
     }
     if (location.pathname.includes('/tickets')) {
       setTicketsOpen(true);
+    }
+    if (location.pathname.includes('/grupos-activos') || location.pathname.includes('/admin/grupos-activos')) {
+      setGruposActivosOpen(true);
     }
     if (location.pathname.includes('/catalogo')) {
       setCatalogosOpen(true);
@@ -137,6 +141,8 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
       }
     }
   };
+
+  const toggleGruposActivos = () => { setGruposActivosOpen(v => !v); };
 
   const toggleCatalogos = () => { setCatalogosOpen(v => !v); };
   const toggleTickets = () => { setTicketsOpen(v => !v); };
@@ -486,6 +492,37 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
                       </li>
                     );
                   })}
+                </ul>
+              )}
+            </li>
+
+            {/* Grupos de Activos (nuevo módulo) */}
+            <li>
+              <button
+                className="sb-nav-btn"
+                onClick={toggleGruposActivos}
+                style={navItemStyle(includesPath('/grupos-activos') || includesPath('/admin/grupos-activos'))}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <svg style={{ width: 17, height: 17, flexShrink: 0, color: includesPath('/grupos-activos') ? '#38bdf8' : undefined }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                  {!collapsed && <span>Grupos de Activos</span>}
+                </span>
+                {!collapsed && <ChevronIcon open={gruposActivosOpen} />}
+              </button>
+              {gruposActivosOpen && !collapsed && (
+                <ul className="sb-submenu" style={{ listStyle: 'none', margin: '2px 0 0 26px', padding: '0 0 0 10px', borderLeft: '1px solid rgba(14,165,233,0.15)', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <li>
+                    <button className="sb-sub-btn" onClick={() => guardedNavigate('/admin/grupos-activos/tipos')} style={subItemStyle(includesPath('/grupos-activos/tipos') || isActive('/admin/grupos-activos/tipos'))}>
+                      Tipos de Activo
+                    </button>
+                  </li>
+                  <li>
+                    <button className="sb-sub-btn" onClick={() => guardedNavigate('/admin/grupos-activos/grupos')} style={subItemStyle(includesPath('/grupos-activos/grupos') || isActive('/admin/grupos-activos/grupos'))}>
+                      Grupos
+                    </button>
+                  </li>
                 </ul>
               )}
             </li>
