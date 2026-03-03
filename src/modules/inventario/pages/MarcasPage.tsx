@@ -8,6 +8,7 @@ const MarcasPage = () => {
   const [marcas, setMarcas] = useState<MarcaItem[]>([]);
 
   const [query, setQuery] = useState('');
+  const [selectedTipoFilter, setSelectedTipoFilter] = useState<string>('');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [nombre, setNombre] = useState('');
@@ -21,9 +22,18 @@ const MarcasPage = () => {
 
   const filtered = useMemo(() => {
     const q = String(query || '').toLowerCase().trim();
-    if (!q) return marcas;
-    return marcas.filter(m => (m.nombre || '').toLowerCase().includes(q));
-  }, [marcas, query]);
+    // Require a tipo filter: if none selected, return empty list
+    if (!selectedTipoFilter) return [];
+    // start from marcas
+    let list = marcas || [];
+    // filter by tipo (categoria)
+    const selectedCat = categorias.find(c => String(c.id) === String(selectedTipoFilter));
+    const selId = String(selectedCat?.id ?? '');
+    const selName = String(selectedCat?.nombre ?? '');
+    list = list.filter(m => Array.isArray(m.categorias) && m.categorias.some(c => String(c) === selId || String(c) === selName));
+    if (!q) return list;
+    return list.filter(m => (m.nombre || '').toLowerCase().includes(q));
+  }, [marcas, query, selectedTipoFilter, categorias]);
 
   const openNew = () => {
     setEditingId(null); setNombre(''); setActivo(true); setError(null);
@@ -32,7 +42,35 @@ const MarcasPage = () => {
 
   const openEdit = (m: MarcaItem) => {
     setEditingId(m.id); setNombre(m.nombre || ''); setActivo(Boolean(m.activo));
-    setError(null); setSelectedCategorias(m.categorias ?? []); setCatQuery(''); setShowModal(true);
+    setError(null);
+    // Map stored marca.categorias values (objects or strings) to our `categorias` ids
+    try {
+      const rawCats = Array.isArray((m as any).categorias) ? (m as any).categorias : [];
+      const mapped = rawCats.map((val: any) => {
+        if (!val && val !== 0) return '';
+        // If it's an object like { id, nombre }
+        if (typeof val === 'object') {
+          const idVal = String(val.id ?? val._id ?? val.codigo ?? '').trim();
+          if (idVal) return idVal;
+          const nameVal = String(val.nombre ?? val.name ?? '').trim();
+          if (nameVal) return nameVal;
+          return '';
+        }
+        // primitive (string/number)
+        const s = String(val).trim();
+        // try to find by id
+        const byId = categorias.find(c => String(c.id) === s || String(Number(c.id)) === s);
+        if (byId) return String(byId.id);
+        // try to find by name
+        const byName = categorias.find(c => String(c.nombre).toLowerCase() === s.toLowerCase());
+        if (byName) return String(byName.id);
+        return s;
+      }).filter(Boolean);
+      setSelectedCategorias(mapped);
+    } catch (e) {
+      setSelectedCategorias((m.categorias ?? []).map((x:any) => typeof x === 'object' ? String(x.id ?? x.nombre ?? '') : String(x)));
+    }
+    setCatQuery(''); setShowModal(true);
   };
 
   useEffect(() => {
@@ -52,7 +90,15 @@ const MarcasPage = () => {
       try {
         const list = await getMarcas();
         // normalize categories ids to strings
-        const normalized = (list || []).map((m: any) => ({ id: String(m.id), nombre: m.nombre, activo: Boolean(m.activo), categorias: Array.isArray(m.categorias) ? m.categorias.map((x: any) => String(x)) : [] }));
+        const normalized = (list || []).map((m: any) => ({
+          id: String(m.id ?? m._id ?? ''),
+          nombre: String(m.nombre ?? m.name ?? ''),
+          activo: Boolean(m.activo),
+          categorias: Array.isArray(m.categorias) ? m.categorias.map((x: any) => {
+            if (x && typeof x === 'object') return String(x.id ?? x._id ?? x.codigo ?? x.nombre ?? '');
+            return String(x ?? '');
+          }).filter(Boolean) : [],
+        }));
         setMarcas(normalized);
       } catch (err) {
         console.error('Error fetching marcas:', err);
@@ -307,7 +353,23 @@ const MarcasPage = () => {
                 />
               </div>
             </div>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', margin: '1rem 1.25rem' }}>
+              <div style={{ minWidth: 220 }}>
+                <select value={selectedTipoFilter} onChange={e => setSelectedTipoFilter(e.target.value)} className="mp-input">
+                  <option value="">-- Filtrar por Tipo de Activo --</option>
+                  {categorias.map(c => (
+                    <option key={c.id} value={c.id}>{c.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ flex: 1 }} />
+            </div>
 
+          { !selectedTipoFilter && (
+            <div style={{ padding: '1rem 1.25rem', color: '#6b7280' }}>
+              Selecciona un "Tipo de Activo" arriba para ver las marcas relacionadas.
+            </div>
+          )}
             <div style={{ overflowX: 'auto' }}>
               <table className="mp-table">
                 <thead>

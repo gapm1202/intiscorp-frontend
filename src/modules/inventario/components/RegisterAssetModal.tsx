@@ -5,6 +5,7 @@ import { formatAssetCode, getCompanyPrefix, getCategoryPrefix } from "@/utils/he
 import type { Category, FieldOption, SubField } from "@/modules/inventario/services/categoriasService";
 import { createActivo, updateActivo } from "@/modules/inventario/services/inventarioService";
 import { getUsuariosByEmpresa, type Usuario } from "@/modules/usuarios/services/usuariosService";
+import { getMarcas, type MarcaItemAPI } from '@/modules/inventario/services/marcasService';
 
 interface AreaItem {
   id?: string | number;
@@ -139,6 +140,7 @@ const RegisterAssetModal = ({
   const [motivo, setMotivo] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+  const [marcasList, setMarcasList] = useState<MarcaItemAPI[]>([]);
 
   // Helper para generar una clave interna estable (sin espacios) a partir de la etiqueta
   const getFieldKey = (label: string) => String(label || '').trim().replace(/\s+/g, '_');
@@ -573,6 +575,48 @@ const RegisterAssetModal = ({
     }
   }, [isOpen, editingAsset, areas]);
 
+  useEffect(() => {
+    // cuando cambia el grupo seleccionado, limpiar tipo/fabricante/campos dinámicos
+    setCategoria('');
+    setDynamicFields({});
+    setAssetId('');
+    setFabricante('');
+  }, [selectedGroupId]);
+
+  useEffect(() => {
+    // Cargar marcas cuando se abre el modal para poder filtrar fabricantes por categoría/tipo
+    let mounted = true;
+    const load = async () => {
+      try {
+        const list = await getMarcas();
+        if (mounted) {
+          const normalized = (Array.isArray(list) ? list : []).map((m: any) => ({
+            id: String(m.id ?? m._id ?? ''),
+            nombre: String(m.nombre ?? m.name ?? ''),
+            activo: Boolean(m.activo ?? true),
+            categorias: Array.isArray(m.categorias) ? m.categorias.flatMap((c: any) => {
+              if (!c && c !== 0) return [];
+              if (typeof c === 'object') {
+                const out: string[] = [];
+                if (c.id !== undefined && c.id !== null) out.push(String(c.id));
+                if (c._id !== undefined && c._id !== null) out.push(String(c._id));
+                if (c.nombre !== undefined && c.nombre !== null) out.push(String(c.nombre));
+                if (c.name !== undefined && c.name !== null) out.push(String(c.name));
+                return out.filter(Boolean);
+              }
+              return [String(c)];
+            }) : [],
+          } as MarcaItemAPI));
+          setMarcasList(normalized);
+        }
+      } catch (e) {
+        if (mounted) setMarcasList([]);
+      }
+    };
+    if (isOpen) load();
+    return () => { mounted = false; };
+  }, [isOpen]);
+
   // (Removed unused RAM/Storage helper functions to avoid lint warnings)
 
   const handleConfirmUpdate = async () => {
@@ -948,20 +992,35 @@ const RegisterAssetModal = ({
   // Categoría seleccionada (si existe) — usaremos sus `subcategorias` para popular el select de fabricante
   const selectedCategory = categories.find(c => String(c.nombre) === String(categoria));
   const filteredCategories = categories.filter(c => {
-    const gid = String((c as any).grupoId || (c as any).groupId || (c as any).grupo || '');
+    const gid = String(
+      (c as any).grupo_id ??
+      (c as any).grupoId ??
+      (c as any).groupId ??
+      (c as any).grupo ??
+      (c as any).group_id ??
+      ''
+    );
     return !selectedGroupId ? true : gid === selectedGroupId;
   });
+  const fabricantesFromMarcas = Array.isArray(marcasList) && selectedCategory ? marcasList.filter(m => {
+    const cats = Array.isArray(m.categorias) ? m.categorias.map(String) : [];
+    const catId = String((selectedCategory as any).id ?? (selectedCategory as any)._id ?? (selectedCategory as any).codigo ?? '');
+    const catName = String(selectedCategory.nombre ?? '');
+    const catNameLower = catName.toLowerCase();
+    return cats.some(c => {
+      const cStr = String(c);
+      if (!cStr) return false;
+      if (cStr === catId) return true;
+      if (cStr.toLowerCase() === catNameLower) return true;
+      // sometimes backend stores numeric ids as numbers in string form
+      if (Number(cStr) && String(Number(cStr)) === String(Number(catId))) return true;
+      return false;
+    });
+  }) : [];
 
-  useEffect(() => {
-    // cuando cambia el grupo seleccionado, limpiar tipo/fabricante/campos dinámicos
-    setCategoria('');
-    setDynamicFields({});
-    setAssetId('');
-    setFabricante('');
-  }, [selectedGroupId]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/40">
+    <div className="fixed inset-0 flex items-start justify-center pt-20 bg-black/40" style={{ zIndex: 99999 }} role="dialog" aria-modal="true">
       <div className="bg-white rounded-lg w-full max-w-4xl p-6 max-h-[85vh] overflow-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-semibold">
@@ -1012,8 +1071,8 @@ const RegisterAssetModal = ({
                 <option value="">-- Seleccionar grupo --</option>
                 {Array.isArray(groups) && groups.length > 0 ? (
                   groups.map((g, idx) => (
-                    <option key={String((g as any).id ?? (g as any)._id ?? idx)} value={String((g as any).id ?? (g as any)._id ?? (g as any).codigo ?? (g as any).nombre ?? idx)}>{String((g as any).nombre ?? (g as any).codigo ?? (g as any).id ?? '')}</option>
-                  ))
+                    <option key={String((g as any).id ?? (g as any)._id ?? idx)} value={String((g as any).id ?? (g as any)._id ?? '')}>{String((g as any).nombre ?? (g as any).codigo ?? (g as any).id ?? '')}</option>
+                  ) )
                 ) : (
                   <option disabled>No hay grupos registrados</option>
                 )}
@@ -1026,8 +1085,8 @@ const RegisterAssetModal = ({
                 onChange={e => { const newCategory = e.target.value; setCategoria(newCategory); setDynamicFields({}); setAssetId(''); setFabricante(''); }}
                 className="w-full mt-1 p-2 border rounded text-sm"
                 required
-                disabled={!!editingAsset || categories.length === 0}
-                style={editingAsset || categories.length === 0 ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
+                disabled={!!editingAsset || categories.length === 0 || !selectedGroupId}
+                style={!!editingAsset || categories.length === 0 || !selectedGroupId ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
               >
                 <option value="">-- Seleccionar --</option>
                 {filteredCategories.length > 0 ? (
@@ -1045,22 +1104,31 @@ const RegisterAssetModal = ({
                   )}
                 </div>
               )}
+              {!selectedGroupId && !editingAsset && (
+                <div className="mt-2 text-xs text-yellow-600">Seleccione primero un Grupo de Activo para ver los Tipos disponibles.</div>
+              )}
               {editingAsset && <p className="text-xs text-gray-500 mt-1">La categoría no puede modificarse</p>}
             </div>
 
-          {/* Identification: Fabricante / Modelo / Serie / Código */}
+          {/* Identification: Marcas / Modelo / Serie / Código */}
           <section className="grid grid-cols-1 md:grid-cols-4 gap-4 pb-4 border-b">
             <div>
-              <label className="block text-xs font-semibold text-gray-600">Fabricante</label>
-              {selectedCategory && selectedCategory.subcategorias && selectedCategory.subcategorias.length > 0 ? (
+              <label className="block text-xs font-semibold text-gray-600">Marcas</label>
+              <div className="text-xs text-gray-500 mb-1">Marcas cargadas: {marcasList.length} — relacionadas: {fabricantesFromMarcas.length}</div>
+              {fabricantesFromMarcas && fabricantesFromMarcas.length > 0 ? (
                 <select value={fabricante} onChange={e => setFabricante(e.target.value)} className="w-full mt-1 p-2 border rounded text-sm">
-                  <option value="">-- Seleccionar fabricante --</option>
-                  {selectedCategory.subcategorias.map((s, idx) => (
-                    <option key={idx} value={s}>{s}</option>
+                  <option value="">-- Seleccionar marca --</option>
+                  {fabricantesFromMarcas.map((m) => (
+                    <option key={m.id} value={m.nombre ?? m.id}>{m.nombre ?? m.id}</option>
                   ))}
                 </select>
               ) : (
-                <input value={fabricante} onChange={e => setFabricante(e.target.value)} className="w-full mt-1 p-2 border rounded text-sm" />
+                <select className="w-full mt-1 p-2 border rounded text-sm" disabled>
+                  <option value="">No hay marcas relacionadas</option>
+                </select>
+              )}
+              {!categoria && !editingAsset && (
+                <div className="mt-2 text-xs text-yellow-600">Seleccione primero un Tipo de Activo para habilitar Marcas.</div>
               )}
             </div>
             <div>
