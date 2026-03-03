@@ -103,17 +103,7 @@ const GruposPage = () => {
     }
   };
 
-  const handleDelete = async (id?: string) => {
-    if (!id) return;
-    if (!confirm('Confirmar eliminación del grupo?')) return;
-    try {
-      await axiosClient.delete(`/api/gestion-grupos-categorias/${id}`);
-      setGrupos(prev => prev.filter(g => g.id !== id));
-    } catch (err) {
-      console.error('Delete error', err);
-      alert('Error eliminando grupo');
-    }
-  };
+  
 
   return (
     <div className="p-6">
@@ -148,8 +138,7 @@ const GruposPage = () => {
                     <td className="py-2">{g.descripcion}</td>
                     <td className="py-2">{g.activo ? 'Sí' : 'No'}</td>
                     <td className="py-2">
-                      <button onClick={() => openEdit(g)} className="text-sm text-blue-600 mr-2">Editar</button>
-                      <button onClick={() => handleDelete(g.id)} className="text-sm text-red-600">Eliminar</button>
+                      <button onClick={() => openEdit(g)} className="text-sm text-blue-600">Editar</button>
                     </td>
                   </tr>
                 ))}
