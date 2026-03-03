@@ -26,6 +26,7 @@ interface Props {
   sedes?: Array<{ id?: number; _id?: string; nombre?: string }>;
   areas?: AreaItem[];
   categories?: Category[];
+  groups?: Array<{ id?: string; nombre?: string; codigo?: string }>;
   editingAsset?: Record<string, unknown> | null;
 }
 
@@ -44,6 +45,7 @@ const RegisterAssetModal = ({
   sedes,
   areas,
   categories = [],
+  groups = [],
   editingAsset = null,
 }: Props) => {
   const navigate = useNavigate();
@@ -136,6 +138,7 @@ const RegisterAssetModal = ({
   const [showMotivoModal, setShowMotivoModal] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
 
   // Helper para generar una clave interna estable (sin espacios) a partir de la etiqueta
   const getFieldKey = (label: string) => String(label || '').trim().replace(/\s+/g, '_');
@@ -944,6 +947,18 @@ const RegisterAssetModal = ({
 
   // Categoría seleccionada (si existe) — usaremos sus `subcategorias` para popular el select de fabricante
   const selectedCategory = categories.find(c => String(c.nombre) === String(categoria));
+  const filteredCategories = categories.filter(c => {
+    const gid = String((c as any).grupoId || (c as any).groupId || (c as any).grupo || '');
+    return !selectedGroupId ? true : gid === selectedGroupId;
+  });
+
+  useEffect(() => {
+    // cuando cambia el grupo seleccionado, limpiar tipo/fabricante/campos dinámicos
+    setCategoria('');
+    setDynamicFields({});
+    setAssetId('');
+    setFabricante('');
+  }, [selectedGroupId]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/40">
@@ -957,7 +972,7 @@ const RegisterAssetModal = ({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Header row: Empresa / Sede / Área / Categoría */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pb-4 border-b">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pb-4 border-b">
             <div>
               <label className="block text-xs font-semibold text-gray-600">Empresa</label>
               <input value={empresaNombre ?? empresa?.nombre ?? empresaId ?? ""} readOnly className="w-full mt-1 p-2 border rounded bg-gray-50 text-sm" />
@@ -990,8 +1005,22 @@ const RegisterAssetModal = ({
               <label className="block text-xs font-semibold text-gray-600 mt-2">Responsable</label>
               <input value={responsable} readOnly className="w-full mt-1 p-2 border rounded bg-gray-50 text-sm" />
             </div>
+            </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600">Categoría *</label>
+              <label className="block text-xs font-semibold text-gray-600">Grupo de Activo</label>
+              <select value={selectedGroupId} onChange={e => setSelectedGroupId(e.target.value)} className="w-full mt-1 p-2 border rounded text-sm">
+                <option value="">-- Seleccionar grupo --</option>
+                {Array.isArray(groups) && groups.length > 0 ? (
+                  groups.map((g, idx) => (
+                    <option key={String((g as any).id ?? (g as any)._id ?? idx)} value={String((g as any).id ?? (g as any)._id ?? (g as any).codigo ?? (g as any).nombre ?? idx)}>{String((g as any).nombre ?? (g as any).codigo ?? (g as any).id ?? '')}</option>
+                  ))
+                ) : (
+                  <option disabled>No hay grupos registrados</option>
+                )}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600">Tipo de Activo *</label>
               <select
                 value={categoria}
                 onChange={e => { const newCategory = e.target.value; setCategoria(newCategory); setDynamicFields({}); setAssetId(''); setFabricante(''); }}
@@ -1001,10 +1030,10 @@ const RegisterAssetModal = ({
                 style={editingAsset || categories.length === 0 ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
               >
                 <option value="">-- Seleccionar --</option>
-                {categories.length > 0 ? (
-                  categories.map((cat, idx) => (<option key={cat.nombre ?? idx} value={cat.nombre}>{cat.nombre}</option>))
+                {filteredCategories.length > 0 ? (
+                  filteredCategories.map((cat, idx) => (<option key={cat.nombre ?? idx} value={cat.nombre}>{cat.nombre}</option>))
                 ) : (
-                  <option disabled>No hay categorías registradas</option>
+                  <option disabled>No hay tipos registrados</option>
                 )}
               </select>
               {categories.length === 0 && (
@@ -1018,7 +1047,6 @@ const RegisterAssetModal = ({
               )}
               {editingAsset && <p className="text-xs text-gray-500 mt-1">La categoría no puede modificarse</p>}
             </div>
-          </div>
 
           {/* Identification: Fabricante / Modelo / Serie / Código */}
           <section className="grid grid-cols-1 md:grid-cols-4 gap-4 pb-4 border-b">
@@ -1224,239 +1252,151 @@ const RegisterAssetModal = ({
           </section>
 
           {/* Dynamic Category Fields (keep existing logic) */}
-          {categoria && (() => {
-            const selectedCat = categories.find(c => c.nombre === categoria);
-            if (selectedCat && selectedCat.campos && selectedCat.campos.length > 0) {
-              return (
-                <div className="space-y-4 pb-4 border-b bg-yellow-50 p-4 rounded">
-                  <h4 className="font-semibold text-lg">Campos personalizados - {categoria}</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {selectedCat.campos.map((field, idx) => (
-                      <div key={idx} className={field.subcampos && field.subcampos.length > 0 ? "col-span-full" : ""}>
-                        <label className="block text-sm text-gray-700 font-medium mb-1">{field.nombre}{field.requerido && <span className="text-red-500 ml-1">*</span>}</label>
-                        {field.subcampos && field.subcampos.length > 0 ? (
-                          <div className="border-l-4 border-blue-400 pl-4 bg-blue-50 p-3 rounded">{/* same as before */}
-                            <div className="flex items-center justify-between mb-3">
-                              <span className="text-sm font-medium text-gray-700">Entradas</span>
-                              <button type="button" onClick={() => {
-                                const fieldKey = getFieldKey(field.nombre);
-                                setDynamicArrayFields(prev => {
-                                  const current = prev[fieldKey] || [];
-                                  const newEntry: Record<string, string> = {};
-                                  field.subcampos?.forEach(sf => { newEntry[sf.nombre] = ''; });
-                                  return { ...prev, [fieldKey]: [...current, newEntry] };
-                                });
-                              }} className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">+ Añadir {field.nombre}</button>
-                            </div>
-                            <div className="space-y-3">{(dynamicArrayFields[getFieldKey(field.nombre)] || []).map((entry, entryIdx) => (
-                              <div key={entryIdx} className="bg-white border border-gray-200 p-3 rounded">
-                                <div className="flex items-start gap-2">
-                                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">{field.subcampos!.map((subfield, subIdx) => (
-                                    <div key={subIdx}><label className="block text-xs text-gray-600 font-medium mb-1">{subfield.nombre}</label>
-                                    {subfield.tipo === 'select' && subfield.opciones ? (
-                                      <select value={entry[subfield.nombre] || ''} onChange={e => { setDynamicArrayFields(prev => { const key = getFieldKey(field.nombre); const updated = [...(prev[key] || [])]; updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value }; return { ...prev, [key]: updated }; }); }} className="w-full p-2 border rounded text-sm"><option value="">-- Seleccionar --</option>{subfield.opciones.map((opt, optIdx) => (<option key={optIdx} value={opt}>{opt}</option>))}</select>
-                                    ) : subfield.tipo === 'number' ? (
-                                      <input type="number" value={entry[subfield.nombre] || ''} onChange={e => { setDynamicArrayFields(prev => { const key = getFieldKey(field.nombre); const updated = [...(prev[key] || [])]; updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value }; return { ...prev, [key]: updated }; }); }} className="w-full p-2 border rounded text-sm" />
-                                    ) : (
-                                      <input type="text" value={entry[subfield.nombre] || ''} onChange={e => { setDynamicArrayFields(prev => { const key = getFieldKey(field.nombre); const updated = [...(prev[key] || [])]; updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value }; return { ...prev, [key]: updated }; }); }} className="w-full p-2 border rounded text-sm" />
-                                    )}</div>
-                                  ))}</div>
-                                  <button type="button" onClick={() => { setDynamicArrayFields(prev => { const key = getFieldKey(field.nombre); const updated = (prev[key] || []).filter((_, i) => i !== entryIdx); return { ...prev, [key]: updated }; }); }} className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600 text-xs">X</button>
-                                </div>
-                              </div>
-                            ))}{(!dynamicArrayFields[getFieldKey(field.nombre)] || dynamicArrayFields[getFieldKey(field.nombre)].length === 0) && (<div className="text-center text-gray-500 text-sm py-2">No hay entradas. Haz clic en "+ Añadir {field.nombre}" para agregar.</div>)}</div>
-                          </div>
-                        ) : (
-                          // normal field
-                          <>
-                            {field.tipo === 'select' && field.opciones ? (
-                              (() => {
-                                // Check if this select has option-specific subcampos
-                                const firstOpt = field.opciones[0];
-                                const hasOptionSubcampos = firstOpt && typeof firstOpt !== 'string' && 
-                                  (field.opciones as FieldOption[]).some(opt => 
-                                    typeof opt !== 'string' && opt.subcampos && opt.subcampos.length > 0
-                                  );
+          {selectedCategory && selectedCategory.campos && selectedCategory.campos.length > 0 && (
+            <div className="space-y-4 pb-4 border-b bg-yellow-50 p-4 rounded">
+              <h4 className="font-semibold text-lg">Campos personalizados - {selectedCategory.nombre}</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {selectedCategory.campos.map((field, idx) => (
+                  <div key={idx} className={field.subcampos && field.subcampos.length > 0 ? "col-span-full" : ""}>
+                    <label className="block text-sm text-gray-700 font-medium mb-1">{field.nombre}{field.requerido && <span className="text-red-500 ml-1">*</span>}</label>
+                    {field.subcampos && field.subcampos.length > 0 ? (
+                      <div className="border-l-4 border-blue-400 pl-4 bg-blue-50 p-3 rounded">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium text-gray-700">Entradas</span>
+                          <button type="button" onClick={() => {
+                            const fieldKey = getFieldKey(field.nombre);
+                            setDynamicArrayFields(prev => {
+                              const current = prev[fieldKey] || [];
+                              const newEntry: Record<string, string> = {};
+                              field.subcampos?.forEach(sf => { newEntry[sf.nombre] = ''; });
+                              return { ...prev, [fieldKey]: [...current, newEntry] };
+                            });
+                          }} className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">+ Añadir {field.nombre}</button>
+                        </div>
 
-                                // If has option-specific subcampos, render as MULTIPLE INSTANCES (array)
-                                if (hasOptionSubcampos) {
-                                  const fieldKey = getFieldKey(field.nombre);
-                                  const instances = dynamicArrayFields[fieldKey] || [];
-
-                                  return (
-                                    <div className="border-l-4 border-purple-400 pl-4 bg-purple-50 p-3 rounded">
-                                      <div className="flex items-center justify-between mb-3">
-                                        <span className="text-sm font-medium text-gray-700">Instancias</span>
-                                        <button 
-                                          type="button" 
-                                          onClick={() => {
-                                            setDynamicArrayFields(prev => {
-                                              const current = prev[fieldKey] || [];
-                                              const newEntry: Record<string, string> = { _opcion: '' };
-                                              return { ...prev, [fieldKey]: [...current, newEntry] };
-                                            });
-                                          }} 
-                                          className="text-xs bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700"
-                                        >
-                                          + Añadir {field.nombre}
-                                        </button>
-                                      </div>
-
-                                      <div className="space-y-3">
-                                        {instances.map((entry, entryIdx) => {
-                                          const selectedValue = entry._opcion || '';
-                                          const selectedOption = selectedValue ? 
-                                            (field.opciones as FieldOption[]).find(opt => typeof opt !== 'string' && opt.value === selectedValue) 
-                                            : null;
-
-                                          return (
-                                            <div key={entryIdx} className="bg-white border border-gray-200 p-3 rounded">
-                                              <div className="flex items-start gap-2">
-                                                <div className="flex-1 space-y-3">
-                                                  {/* Select dropdown */}
-                                                  <div>
-                                                    <label className="block text-xs text-gray-600 font-medium mb-1">Opción</label>
-                                                    <select 
-                                                      value={selectedValue} 
-                                                      onChange={e => {
-                                                        const newOpcion = e.target.value;
-                                                        setDynamicArrayFields(prev => {
-                                                          const updated = [...(prev[fieldKey] || [])];
-                                                          // Reset entry with new option
-                                                          updated[entryIdx] = { _opcion: newOpcion };
-                                                          return { ...prev, [fieldKey]: updated };
-                                                        });
-                                                      }}
-                                                      className="w-full p-2 border rounded text-sm"
-                                                    >
-                                                      <option value="">-- Seleccionar --</option>
-                                                      {field.opciones.map((opt, optIdx) => {
-                                                        const optValue = typeof opt === 'string' ? opt : opt.value;
-                                                        return <option key={optIdx} value={optValue}>{optValue}</option>;
-                                                      })}
-                                                    </select>
-                                                  </div>
-
-                                                  {/* Option-specific subcampos */}
-                                                  {selectedOption && typeof selectedOption !== 'string' && selectedOption.subcampos && selectedOption.subcampos.length > 0 && (
-                                                    <div className="ml-2 pl-3 border-l-2 border-purple-300 space-y-2">
-                                                      <p className="text-xs font-semibold text-purple-700">Campos para "{selectedValue}"</p>
-                                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                        {selectedOption.subcampos.map((subfield, subIdx) => (
-                                                          <div key={subIdx}>
-                                                            <label className="block text-xs text-gray-600 font-medium mb-1">{subfield.nombre}</label>
-                                                            {subfield.tipo === 'select' && subfield.opciones ? (
-                                                              <select 
-                                                                value={entry[subfield.nombre] || ''} 
-                                                                onChange={e => {
-                                                                  setDynamicArrayFields(prev => {
-                                                                    const updated = [...(prev[fieldKey] || [])];
-                                                                    updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value };
-                                                                    return { ...prev, [fieldKey]: updated };
-                                                                  });
-                                                                }}
-                                                                className="w-full p-2 border rounded text-sm"
-                                                              >
-                                                                <option value="">-- Seleccionar --</option>
-                                                                {subfield.opciones.map((sopt, soptIdx) => (
-                                                                  <option key={soptIdx} value={sopt}>{sopt}</option>
-                                                                ))}
-                                                              </select>
-                                                            ) : subfield.tipo === 'number' ? (
-                                                              <input 
-                                                                type="number" 
-                                                                value={entry[subfield.nombre] || ''} 
-                                                                onChange={e => {
-                                                                  setDynamicArrayFields(prev => {
-                                                                    const updated = [...(prev[fieldKey] || [])];
-                                                                    updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value };
-                                                                    return { ...prev, [fieldKey]: updated };
-                                                                  });
-                                                                }}
-                                                                className="w-full p-2 border rounded text-sm" 
-                                                              />
-                                                            ) : (
-                                                              <input 
-                                                                type="text" 
-                                                                value={entry[subfield.nombre] || ''} 
-                                                                onChange={e => {
-                                                                  setDynamicArrayFields(prev => {
-                                                                    const updated = [...(prev[fieldKey] || [])];
-                                                                    updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value };
-                                                                    return { ...prev, [fieldKey]: updated };
-                                                                  });
-                                                                }}
-                                                                className="w-full p-2 border rounded text-sm" 
-                                                              />
-                                                            )}
-                                                          </div>
-                                                        ))}
-                                                      </div>
-                                                    </div>
-                                                  )}
-                                                </div>
-
-                                                {/* Delete button */}
-                                                <button 
-                                                  type="button" 
-                                                  onClick={() => {
-                                                    setDynamicArrayFields(prev => {
-                                                      const updated = (prev[fieldKey] || []).filter((_, i) => i !== entryIdx);
-                                                      return { ...prev, [fieldKey]: updated };
-                                                    });
-                                                  }}
-                                                  className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600 text-xs"
-                                                >
-                                                  X
-                                                </button>
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-
-                                        {instances.length === 0 && (
-                                          <div className="text-center text-gray-500 text-sm py-2">
-                                            No hay entradas. Haz clic en "+ Añadir {field.nombre}" para agregar.
-                                          </div>
-                                        )}
-                                      </div>
+                        <div className="space-y-3">
+                          {(dynamicArrayFields[getFieldKey(field.nombre)] || []).map((entry, entryIdx) => (
+                            <div key={entryIdx} className="bg-white border border-gray-200 p-3 rounded">
+                              <div className="flex items-start gap-2">
+                                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {field.subcampos!.map((subfield, subIdx) => (
+                                    <div key={subIdx}>
+                                      <label className="block text-xs text-gray-600 font-medium mb-1">{subfield.nombre}</label>
+                                      {subfield.tipo === 'select' && subfield.opciones ? (
+                                        <select value={entry[subfield.nombre] || ''} onChange={e => { setDynamicArrayFields(prev => { const key = getFieldKey(field.nombre); const updated = [...(prev[key] || [])]; updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value }; return { ...prev, [key]: updated }; }); }} className="w-full p-2 border rounded text-sm">
+                                          <option value="">-- Seleccionar --</option>
+                                          {subfield.opciones.map((opt, optIdx) => (<option key={optIdx} value={opt}>{opt}</option>))}
+                                        </select>
+                                      ) : subfield.tipo === 'number' ? (
+                                        <input type="number" value={entry[subfield.nombre] || ''} onChange={e => { setDynamicArrayFields(prev => { const key = getFieldKey(field.nombre); const updated = [...(prev[key] || [])]; updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value }; return { ...prev, [key]: updated }; }); }} className="w-full p-2 border rounded text-sm" />
+                                      ) : (
+                                        <input type="text" value={entry[subfield.nombre] || ''} onChange={e => { setDynamicArrayFields(prev => { const key = getFieldKey(field.nombre); const updated = [...(prev[key] || [])]; updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value }; return { ...prev, [key]: updated }; }); }} className="w-full p-2 border rounded text-sm" />
+                                      )}
                                     </div>
-                                  );
-                                }
+                                  ))}
+                                </div>
+                                <button type="button" onClick={() => { setDynamicArrayFields(prev => { const key = getFieldKey(field.nombre); const updated = (prev[key] || []).filter((_, i) => i !== entryIdx); return { ...prev, [key]: updated }; }); }} className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600 text-xs">X</button>
+                              </div>
+                            </div>
+                          ))}
 
-                                // Regular select without option-specific subcampos
-                                return (
-                                  <select 
-                                    value={dynamicFields[getFieldKey(field.nombre)] || ''} 
-                                    onChange={e => setDynamicFields(prev => ({ ...prev, [getFieldKey(field.nombre)]: e.target.value }))} 
-                                    className="w-full p-2 border rounded" 
-                                    required={field.requerido}
-                                  >
-                                    <option value="">-- Seleccionar --</option>
-                                    {field.opciones.map((opt, optIdx) => {
-                                      const optValue = typeof opt === 'string' ? opt : opt.value;
-                                      return <option key={optIdx} value={optValue}>{optValue}</option>;
-                                    })}
-                                  </select>
-                                );
-                              })()
-                            ) : field.tipo === 'textarea' ? (
-                              <textarea value={dynamicFields[getFieldKey(field.nombre)] || ''} onChange={e => setDynamicFields(prev => ({ ...prev, [getFieldKey(field.nombre)]: e.target.value }))} className="w-full p-2 border rounded" rows={3} required={field.requerido} />
-                            ) : field.tipo === 'number' ? (
-                              <input type="number" value={dynamicFields[getFieldKey(field.nombre)] || ''} onChange={e => setDynamicFields(prev => ({ ...prev, [getFieldKey(field.nombre)]: e.target.value }))} className="w-full p-2 border rounded" required={field.requerido} />
-                            ) : (
-                              <input type="text" value={dynamicFields[getFieldKey(field.nombre)] || ''} onChange={e => setDynamicFields(prev => ({ ...prev, [getFieldKey(field.nombre)]: e.target.value }))} className="w-full p-2 border rounded" required={field.requerido} />
-                            )}
-                          </>
-                        )}
+                          {(!dynamicArrayFields[getFieldKey(field.nombre)] || dynamicArrayFields[getFieldKey(field.nombre)].length === 0) && (
+                            <div className="text-center text-gray-500 text-sm py-2">No hay entradas. Haz clic en "+ Añadir {field.nombre}" para agregar.</div>
+                          )}
+                        </div>
                       </div>
-                    ))}
+                    ) : (
+                      // normal field
+                      <>
+                        {field.tipo === 'select' && field.opciones ? (
+                          (() => {
+                            const firstOpt = field.opciones[0];
+                            const hasOptionSubcampos = firstOpt && typeof firstOpt !== 'string' && (field.opciones as FieldOption[]).some(opt => typeof opt !== 'string' && opt.subcampos && opt.subcampos.length > 0);
+                            if (hasOptionSubcampos) {
+                              const fieldKey = getFieldKey(field.nombre);
+                              const instances = dynamicArrayFields[fieldKey] || [];
+                              return (
+                                <div className="border-l-4 border-purple-400 pl-4 bg-purple-50 p-3 rounded">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <span className="text-sm font-medium text-gray-700">Instancias</span>
+                                    <button type="button" onClick={() => { setDynamicArrayFields(prev => { const current = prev[fieldKey] || []; const newEntry: Record<string, string> = { _opcion: '' }; return { ...prev, [fieldKey]: [...current, newEntry] }; }); }} className="text-xs bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700">+ Añadir {field.nombre}</button>
+                                  </div>
+
+                                  <div className="space-y-3">
+                                    {instances.map((entry, entryIdx) => {
+                                      const selectedValue = entry._opcion || '';
+                                      const selectedOption = selectedValue ? (field.opciones as FieldOption[]).find(opt => typeof opt !== 'string' && opt.value === selectedValue) : null;
+                                      return (
+                                        <div key={entryIdx} className="bg-white border border-gray-200 p-3 rounded">
+                                          <div className="flex items-start gap-2">
+                                            <div className="flex-1 space-y-3">
+                                              <div>
+                                                <label className="block text-xs text-gray-600 font-medium mb-1">Opción</label>
+                                                <select value={selectedValue} onChange={e => { const newOpcion = e.target.value; setDynamicArrayFields(prev => { const updated = [...(prev[fieldKey] || [])]; updated[entryIdx] = { _opcion: newOpcion }; return { ...prev, [fieldKey]: updated }; }); }} className="w-full p-2 border rounded text-sm">
+                                                  <option value="">-- Seleccionar --</option>
+                                                  {field.opciones.map((opt, optIdx) => { const optValue = typeof opt === 'string' ? opt : opt.value; return <option key={optIdx} value={optValue}>{optValue}</option>; })}
+                                                </select>
+                                              </div>
+
+                                              {selectedOption && typeof selectedOption !== 'string' && selectedOption.subcampos && selectedOption.subcampos.length > 0 && (
+                                                <div className="ml-2 pl-3 border-l-2 border-purple-300 space-y-2">
+                                                  <p className="text-xs font-semibold text-purple-700">Campos para "{selectedValue}"</p>
+                                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                    {selectedOption.subcampos.map((subfield, subIdx) => (
+                                                      <div key={subIdx}>
+                                                        <label className="block text-xs text-gray-600 font-medium mb-1">{subfield.nombre}</label>
+                                                        {subfield.tipo === 'select' && subfield.opciones ? (
+                                                          <select value={entry[subfield.nombre] || ''} onChange={e => { setDynamicArrayFields(prev => { const updated = [...(prev[fieldKey] || [])]; updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value }; return { ...prev, [fieldKey]: updated }; }); }} className="w-full p-2 border rounded text-sm">
+                                                            <option value="">-- Seleccionar --</option>
+                                                            {subfield.opciones.map((sopt, soptIdx) => (<option key={soptIdx} value={sopt}>{sopt}</option>))}
+                                                          </select>
+                                                        ) : subfield.tipo === 'number' ? (
+                                                          <input type="number" value={entry[subfield.nombre] || ''} onChange={e => { setDynamicArrayFields(prev => { const updated = [...(prev[fieldKey] || [])]; updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value }; return { ...prev, [fieldKey]: updated }; }); }} className="w-full p-2 border rounded text-sm" />
+                                                        ) : (
+                                                          <input type="text" value={entry[subfield.nombre] || ''} onChange={e => { setDynamicArrayFields(prev => { const updated = [...(prev[fieldKey] || [])]; updated[entryIdx] = { ...updated[entryIdx], [subfield.nombre]: e.target.value }; return { ...prev, [fieldKey]: updated }; }); }} className="w-full p-2 border rounded text-sm" />
+                                                        )}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+
+                                            <button type="button" onClick={() => { setDynamicArrayFields(prev => { const updated = (prev[fieldKey] || []).filter((_, i) => i !== entryIdx); return { ...prev, [fieldKey]: updated }; }); }} className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600 text-xs">X</button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+
+                                    {instances.length === 0 && (
+                                      <div className="text-center text-gray-500 text-sm py-2">No hay entradas. Haz clic en "+ Añadir {field.nombre}" para agregar.</div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <select value={dynamicFields[getFieldKey(field.nombre)] || ''} onChange={e => setDynamicFields(prev => ({ ...prev, [getFieldKey(field.nombre)]: e.target.value }))} className="w-full p-2 border rounded" required={field.requerido}>
+                                <option value="">-- Seleccionar --</option>
+                                {field.opciones.map((opt, optIdx) => { const optValue = typeof opt === 'string' ? opt : opt.value; return <option key={optIdx} value={optValue}>{optValue}</option>; })}
+                              </select>
+                            );
+                          })()
+                        ) : field.tipo === 'textarea' ? (
+                          <textarea value={dynamicFields[getFieldKey(field.nombre)] || ''} onChange={e => setDynamicFields(prev => ({ ...prev, [getFieldKey(field.nombre)]: e.target.value }))} className="w-full p-2 border rounded" rows={3} required={field.requerido} />
+                        ) : field.tipo === 'number' ? (
+                          <input type="number" value={dynamicFields[getFieldKey(field.nombre)] || ''} onChange={e => setDynamicFields(prev => ({ ...prev, [getFieldKey(field.nombre)]: e.target.value }))} className="w-full p-2 border rounded" required={field.requerido} />
+                        ) : (
+                          <input type="text" value={dynamicFields[getFieldKey(field.nombre)] || ''} onChange={e => setDynamicFields(prev => ({ ...prev, [getFieldKey(field.nombre)]: e.target.value }))} className="w-full p-2 border rounded" required={field.requerido} />
+                        )}
+                      </>
+                    )}
                   </div>
-                </div>
-              );
-            }
-            return null;
-          })()}
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Users, Photos, Observations */}
           <section className="space-y-4 py-4">

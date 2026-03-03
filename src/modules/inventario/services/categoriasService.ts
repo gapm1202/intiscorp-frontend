@@ -13,16 +13,16 @@ export interface FieldOption {
 
 export interface CategoryField {
   nombre: string;
-  tipo: 'text' | 'number' | 'select' | 'textarea' | 'group';
-  opciones?: string[] | FieldOption[]; // Support both old and new format
+  tipo: 'text' | 'number' | 'select' | 'textarea';
   requerido: boolean;
-  subcampos?: SubField[]; // Deprecated - for backward compatibility
+  opciones?: string[]; // only for select
 }
 
 export interface Category {
   id?: string;
   nombre: string;
-  subcategorias?: string[];
+  codigo: string;
+  marcas?: string[];
   campos?: CategoryField[];
 }
 
