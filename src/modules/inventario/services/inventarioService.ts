@@ -66,6 +66,23 @@ export async function getInventarioBySede(
   return data;
 }
 
+export async function getInventarioById(empresaId: string | number, sedeId: string | number, activoId: string | number) {
+  const url = `${API_BASE}/api/empresas/${empresaId}/sedes/${sedeId}/inventario/${activoId}`;
+  const token = getToken();
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json', ...(token && { 'Authorization': `Bearer ${token}` }) }
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    const err = new Error(`Error fetching inventario by id: ${res.status} ${res.statusText} - ${text}`) as any;
+    err.status = res.status; err.body = text;
+    throw err;
+  }
+  const data = await res.json();
+  return data?.data ?? data;
+}
+
 export async function createActivo(empresaId: string | number, sedeId: string | number, activoData: ActivoPayload) {
   const url = `${API_BASE}/api/empresas/${empresaId}/sedes/${sedeId}/inventario`;
   const token = getToken();

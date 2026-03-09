@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getWarrantyInfo } from "@/modules/inventario/utils/warranty";
 import { formatAssetCode, getCompanyPrefix, getCategoryPrefix } from "@/utils/helpers";
 import type { Category, FieldOption, SubField } from "@/modules/inventario/services/categoriasService";
-import { createActivo, updateActivo } from "@/modules/inventario/services/inventarioService";
+import { createActivo, updateActivo, getInventarioBySede, API_BASE } from "@/modules/inventario/services/inventarioService";
 import { getFormularioByCategoria } from '@/modules/inventario/services/componentesService';
 import { getUsuariosByEmpresa, type Usuario } from "@/modules/usuarios/services/usuariosService";
 import { getMarcas, type MarcaItemAPI } from '@/modules/inventario/services/marcasService';
@@ -42,7 +42,7 @@ type TabId = 'identificacion' | 'compra' | 'personalizados' | 'asignaciones';
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'identificacion',  label: 'Identificación',   icon: '🏷️' },
   { id: 'compra',          label: 'Compra & Garantía', icon: '🧾' },
-  { id: 'personalizados',  label: 'Campos Extra',      icon: '⚙️' },
+  { id: 'personalizados',  label: 'Componentes',      icon: '⚙️' },
   { id: 'asignaciones',    label: 'Asignaciones',      icon: '👥' },
 ];
 
@@ -141,7 +141,9 @@ const RegisterAssetModal = ({
   const [dynamicFields,              setDynamicFields]              = useState<Record<string, string>>({});
   const [dynamicArrayFields,         setDynamicArrayFields]         = useState<Record<string, Array<Record<string, string>>>>({});
   const [componentesForm,            setComponentesForm]            = useState<Array<any>>([]);
+  const [dynamicCompInstances,      setDynamicCompInstances]      = useState<Record<string, Array<Record<string, string>>>>({});
   const [valoresDinamicos,          setValoresDinamicos]          = useState<Array<{ campo_id: number | string; valor: string }>>([]);
+  const [valoresDinamicosGrouped,   setValoresDinamicosGrouped]   = useState<any[] | null>(null);
   const [showMotivoModal,            setShowMotivoModal]            = useState(false);
   const [motivo,                     setMotivo]                     = useState('');
   const [isSubmitting,               setIsSubmitting]               = useState(false);
@@ -315,18 +317,20 @@ const RegisterAssetModal = ({
         try {
           const rawValDyn = asset['valoresDinamicos'] ?? asset['valores_dinamicos'] ?? asset['valoresDinamicosArray'] ?? asset['valores_dinamicos_array'] ?? asset['valores_dinamicos'] ?? asset['valores'] ?? null;
           if (rawValDyn) {
-            const parsed = typeof rawValDyn === 'string' ? JSON.parse(String(rawValDyn)) : rawValDyn;
-            if (Array.isArray(parsed)) {
-              const normalized = parsed.map((v: any) => ({
-                campo_id: v.campo_id ?? v.campoId ?? v.field_id ?? v.id ?? v.campo_id,
-                valor: v.valor != null ? String(v.valor) : ''
-              }));
-              setValoresDinamicos(normalized);
-            } else {
-              setValoresDinamicos([]);
-            }
+            // keep grouped version if backend provided it (componentes -> instancias)
+            try {
+              const parsedRaw = typeof rawValDyn === 'string' ? JSON.parse(String(rawValDyn)) : rawValDyn;
+              if (Array.isArray(parsedRaw) && parsedRaw.length > 0 && parsedRaw[0] && Array.isArray(parsedRaw[0].campos || parsedRaw[0].instancias)) {
+                setValoresDinamicosGrouped(parsedRaw);
+              } else {
+                setValoresDinamicosGrouped(null);
+              }
+            } catch (e) { setValoresDinamicosGrouped(null); }
+
+            const normalized = normalizeBackendValoresDinamicos(rawValDyn);
+            setValoresDinamicos(Array.isArray(normalized) ? normalized : []);
           } else {
-            setValoresDinamicos([]);
+            setValoresDinamicos([]); setValoresDinamicosGrouped(null);
           }
         } catch (err) { console.error('Error parsing valoresDinamicos from asset:', err); setValoresDinamicos([]); }
 
@@ -389,15 +393,130 @@ const RegisterAssetModal = ({
         const data = await getFormularioByCategoria(catId);
         if (!mounted) return;
         // normalize fields order if needed
-        setComponentesForm(Array.isArray(data) ? data : []);
+        const comps = Array.isArray(data) ? data : [];
+        setComponentesForm(comps);
       } catch (err) {
-        console.error('Error cargando componentes dinámicos:', err);
+        console.error('Error cargando componentes:', err);
         if (mounted) { setComponentesForm([]); }
       }
     };
     if (categoria) load();
     return () => { mounted = false; };
   }, [categoria, categories, editingAsset]);
+
+  // Inicializar instancias dinámicas cuando cambian los componentes cargados o los valores dinámicos (modo edición)
+  useEffect(() => {
+    try {
+      if (!componentesForm || componentesForm.length === 0) return;
+      const init: Record<string, Array<Record<string,string>>> = {};
+
+      // If we have grouped valores from backend (with instancias), use them directly
+      const grouped = valoresDinamicosGrouped;
+
+      componentesForm.forEach((comp: any) => {
+        const compId = String(comp.id ?? comp._id ?? comp.nombre ?? Math.random());
+        const campos = Array.isArray(comp.campos) ? comp.campos : [];
+        init[compId] = [];
+
+        if (grouped && Array.isArray(grouped)) {
+          // find matching grouped component by id or nombre
+          const found = grouped.find((g: any) => String(g.id ?? g._id ?? g.nombre) === String(comp.id ?? comp._id ?? comp.nombre) || String(g.nombre) === String(comp.nombre));
+          if (found && Array.isArray(found.instancias) && found.instancias.length > 0) {
+            found.instancias.forEach((inst: any) => {
+              const entry: Record<string,string> = {};
+              (inst.campos || []).forEach((c: any) => {
+                const cid = String(c.campo_id ?? c.field_id ?? c.id ?? c.campoId ?? '');
+                entry[cid] = String(c.valor ?? '');
+              });
+              init[compId].push(entry);
+            });
+            return; // next component
+          }
+        }
+
+        // Fallback: derive from flat valoresDinamicos (counts per campo)
+        const counts = campos.map((cf: any) => {
+          const cid = String(cf.id ?? cf.campo_id ?? `${compId}_${cf.nombre}`);
+          return (valoresDinamicos || []).filter(v => String(v.campo_id) === cid).length;
+        });
+        const maxCount = counts.length ? Math.max(1, ...counts) : 1;
+        for (let i = 0; i < maxCount; i++) {
+          const entry: Record<string,string> = {};
+          campos.forEach((cf: any, idx: number) => {
+            const cid = String(cf.id ?? cf.campo_id ?? `${compId}_${idx}`);
+            const matched = (valoresDinamicos || []).filter(v => String(v.campo_id) === cid);
+            entry[cid] = matched[i] ? String(matched[i].valor ?? '') : '';
+          });
+          init[compId].push(entry);
+        }
+      });
+      setDynamicCompInstances(init);
+    } catch (err) { console.error('Error inicializando instancias dinámicas (effect):', err); }
+  }, [componentesForm, valoresDinamicos, valoresDinamicosGrouped]);
+
+  const buildValoresDinamicosFromInstances = () => {
+    const out: Array<{ campo_id: number | string; valor: string; instancia?: number }> = [];
+    try {
+      Object.keys(dynamicCompInstances || {}).forEach(compId => {
+        const instances = dynamicCompInstances[compId] || [];
+        instances.forEach((inst, instIndex) => {
+          Object.keys(inst || {}).forEach(fieldKey => {
+            out.push({ campo_id: fieldKey, valor: String(inst[fieldKey] ?? ''), instancia: instIndex });
+          });
+        });
+      });
+    } catch (e) { console.error('Error construyendo valoresDinamicos desde instancias:', e); }
+    return out;
+  };
+
+  const sanitizeValoresDinamicos = (arr: Array<any>) => {
+    if (!Array.isArray(arr)) return [];
+    type Item = { campo_id: number; valor: string; instancia: number };
+    const out: Item[] = [];
+    let dropped = 0;
+    arr.forEach(item => {
+      if (!item) return;
+      const rawId = item.campo_id ?? item.campoId ?? item.field_id ?? item.id ?? item.campo_id;
+      const numId = Number(rawId);
+      const rawInst = item.instancia ?? item.instance ?? 0;
+      const numInst = Number(rawInst);
+      if (!Number.isFinite(numId) || Number.isNaN(numId) || !Number.isFinite(numInst) || Number.isNaN(numInst)) { dropped++; return; }
+      const valor = item.valor != null ? String(item.valor) : '';
+      out.push({ campo_id: Math.trunc(numId), valor, instancia: Math.trunc(numInst) });
+    });
+    if (dropped) console.warn(`[RegisterAssetModal] valoresDinamicos: descartados ${dropped} entries con campo_id/instancia no numérico`);
+    // Deduplicate by (campo_id, instancia) keeping the last occurrence
+    const map = new Map<string, string>();
+    out.forEach(o => map.set(`${o.campo_id}::${o.instancia}`, o.valor));
+    return Array.from(map.entries()).map(([k, valor]) => {
+      const [campo_id, instancia] = k.split('::');
+      return { campo_id: Number(campo_id), valor, instancia: Number(instancia) };
+    });
+  };
+
+  // Normaliza formatos que el backend puede devolver:
+  // - Flat: [{ campo_id, valor }, ...]
+  // - Agrupado por componentes: [{ id, nombre, campos: [{ campo_id, valor, ... }, ...] }, ...]
+  const normalizeBackendValoresDinamicos = (raw: any) => {
+    try {
+      if (!raw) return [];
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!Array.isArray(parsed)) return [];
+      // Detectar formato agrupado (componentes con `campos`)
+      if (parsed.length > 0 && parsed[0] && Array.isArray(parsed[0].campos)) {
+        const out: Array<{ campo_id: number | string; valor: string }> = [];
+        parsed.forEach((comp: any) => {
+          (comp.campos || []).forEach((c: any) => {
+            const id = c.campo_id ?? c.campoId ?? c.id ?? c.field_id ?? c.fieldId;
+            out.push({ campo_id: id, valor: c.valor != null ? String(c.valor) : '' });
+          });
+        });
+        return out;
+      }
+      // Si es ya flat, mapear campos comunes
+      return parsed.map((v: any) => ({ campo_id: v.campo_id ?? v.campoId ?? v.field_id ?? v.id ?? v.campo_id, valor: v.valor != null ? String(v.valor) : '' }));
+    } catch (e) { console.warn('normalizeBackendValoresDinamicos error:', e); return []; }
+  };
 
   const setValorDinamico = (campoId: number | string, valor: string) => {
     setValoresDinamicos(prev => {
@@ -510,7 +629,15 @@ const RegisterAssetModal = ({
     ...buildCategoryData(),
     camposPersonalizados: buildCamposPersonalizados(),
     camposPersonalizadosArray: buildCamposPersonalizadosArray(),
-    valoresDinamicos: valoresDinamicos && valoresDinamicos.length ? valoresDinamicos : undefined,
+    valoresDinamicos: (() => {
+      const fromInst = buildValoresDinamicosFromInstances();
+      const compFieldIds = new Set<string>();
+      (componentesForm || []).forEach((c: any) => ((c.campos||[]) as any[]).forEach(cf => compFieldIds.add(String(cf.id ?? cf.campo_id ?? `${c.id}_${cf.nombre}`))));
+      const others = (valoresDinamicos || []).filter(v => !compFieldIds.has(String(v.campo_id)));
+      const merged = [...others, ...fromInst];
+      const sanitized = sanitizeValoresDinamicos(merged);
+      return sanitized && sanitized.length ? sanitized : undefined;
+    })(),
     fotosExistentes: fotosExistentes.map(f => ({ url: f.url, name: f.name, description: f.description })),
     fotosNuevas: fotos.map(f => ({ name: f.file.name, description: f.description })),
     fotosFiles: fotos.length > 0 ? fotos : undefined,
@@ -519,9 +646,73 @@ const RegisterAssetModal = ({
   const procesarCreacion = async (empresaId: string, sedeId: string) => {
     setIsSubmitting(true);
     try {
-      console.log('🟢 [DEBUG] Payload enviado al backend (CREATE):', buildPayload());
-      const response = await createActivo(empresaId, sedeId, buildPayload());
-      const activoCreado = response?.data || response;
+      const payload = buildPayload();
+      console.log('🟢 [DEBUG] componentesForm:', componentesForm);
+      console.log('🟢 [DEBUG] dynamicCompInstances:', dynamicCompInstances);
+      console.log('🟢 [DEBUG] valoresDinamicos (state):', valoresDinamicos);
+      console.log('🟢 [DEBUG] Payload enviado al backend (CREATE):', payload);
+      console.log('🟢 [DEBUG] payload.valoresDinamicos (CREATE):', payload.valoresDinamicos);
+      const response = await createActivo(empresaId, sedeId, payload);
+      console.log('🟢 [DEBUG] Response backend (CREATE):', response);
+      console.log('🟢 [DEBUG] Response.data.valoresDinamicos (CREATE):', response?.data?.valoresDinamicos);
+      let activoCreado = response?.data || response;
+
+      // Si el backend devolviera la definición de componentes bajo "valoresDinamicos"
+      // en lugar de los valores (caso observado: array de componentes con `campos`),
+      // preferimos usar los valores que enviamos en el payload para poblar el activo
+      // y evitar que la UI quede sin los valores dinámicos esperados.
+      try {
+        const respVals = response?.data?.valoresDinamicos ?? response?.data?.valores_dinamicos;
+        if (Array.isArray(respVals) && respVals.length && respVals[0] && (respVals[0].campos || respVals[0].nombre)) {
+          console.warn('[RegisterAssetModal] Backend devolvió componentes en `valoresDinamicos`; usando payload.valoresDinamicos en su lugar.');
+          activoCreado = { ...(activoCreado || {}), valoresDinamicos: payload.valoresDinamicos ?? [] };
+        }
+      } catch (e) { console.warn('Error normalizando valoresDinamicos tras CREATE:', e); }
+
+      // Fallback: si la respuesta no incluye valoresDinamicos, intentar obtener el activo por sede y tomar los valores
+      try {
+        const hasValores = activoCreado && (activoCreado.valoresDinamicos || activoCreado.valores_dinamicos);
+        if (!hasValores && activoCreado && (activoCreado.id || activoCreado._id)) {
+          const id = activoCreado.id ?? activoCreado._id;
+          // 1) Intentar listado por sede (sin filtrar soloSedeActual)
+          try {
+            const listado = await getInventarioBySede(empresaId, sedeId, false);
+            const items = listado?.data ?? listado ?? [];
+            console.log('🟢 [DEBUG] Fallback listado (soloSedeActual=false) length:', Array.isArray(items) ? items.length : 'not-array');
+            const found = Array.isArray(items) ? items.find((it: any) => String(it.id ?? it._id) === String(id)) : null;
+            if (found) {
+              activoCreado = { ...activoCreado, ...found };
+              console.log('🟢 [DEBUG] Fallback listado encontró activo:', found?.id ?? found?._id);
+              console.log('🟢 [DEBUG] Fallback valoresDinamicos (list):', activoCreado.valoresDinamicos ?? activoCreado.valores_dinamicos);
+            }
+          } catch (err) {
+            console.warn('⚠️ Fallback listado por sede falló:', err);
+          }
+
+          // 2) Si aún no hay valores, intentar GET directo por ID
+          try {
+            const token = localStorage.getItem('token');
+            const urlById = `${API_BASE}/api/empresas/${empresaId}/sedes/${sedeId}/inventario/${id}`;
+            console.log('🟢 [DEBUG] Intentando GET directo por ID:', urlById);
+            const resById = await fetch(urlById, {
+              method: 'GET',
+              headers: { 'Content-Type': 'application/json', ...(token && { 'Authorization': `Bearer ${token}` }) }
+            });
+            if (resById.ok) {
+              const dataById = await resById.json();
+              console.log('🟢 [DEBUG] GET por ID response:', dataById);
+              const found = dataById?.data ?? dataById;
+              if (found) {
+                activoCreado = { ...activoCreado, ...found };
+                console.log('🟢 [DEBUG] Fallback GET por ID valoresDinamicos:', activoCreado.valoresDinamicos ?? activoCreado.valores_dinamicos);
+              }
+            } else {
+              console.warn('⚠️ GET por ID no OK:', resById.status, await resById.text());
+            }
+          } catch (err) { console.warn('⚠️ Fallback GET por ID falló:', err); }
+        }
+      } catch (e) { console.error('Error en fallback de valoresDinamicos:', e); }
+
       if (activoCreado.fotos && typeof activoCreado.fotos === 'string') activoCreado.fotos = JSON.parse(activoCreado.fotos);
       onSuccess?.(activoCreado); onClose();
     } catch (error) { console.error('❌ Error creando activo:', error); alert('Error al crear el activo. Revisa la consola para más detalles.'); }
@@ -535,7 +726,19 @@ const RegisterAssetModal = ({
       const payload = { ...buildPayload(), motivo };
       console.log('🟣 [DEBUG] Payload enviado al backend (UPDATE):', payload);
       const response = await updateActivo(empresaId, sedeId, activoId, payload);
+      console.log('🟣 [DEBUG] Response backend (UPDATE):', response);
+      console.log('🟣 [DEBUG] Response.data.valoresDinamicos (UPDATE):', response?.data?.valoresDinamicos);
       const activoActualizado = response?.data || response;
+      // Normalizar caso análogo al CREATE: si el backend devuelve componentes
+      // en `valoresDinamicos` (estructura con `campos`), mantener los valores
+      // que enviamos en el payload para evitar perder los datos en la UI.
+      try {
+        const respValsU = response?.data?.valoresDinamicos ?? response?.data?.valores_dinamicos;
+        if (Array.isArray(respValsU) && respValsU.length && respValsU[0] && (respValsU[0].campos || respValsU[0].nombre)) {
+          console.warn('[RegisterAssetModal] Backend devolvió componentes en `valoresDinamicos` (UPDATE); usando payload.valoresDinamicos en su lugar.');
+          (activoActualizado as any).valoresDinamicos = payload.valoresDinamicos ?? [];
+        }
+      } catch (e) { console.warn('Error normalizando valoresDinamicos tras UPDATE:', e); }
       if (activoActualizado.fotos && typeof activoActualizado.fotos === 'string') activoActualizado.fotos = JSON.parse(activoActualizado.fotos);
       onSuccess?.(activoActualizado); onClose();
     } catch (error) { console.error('❌ Error guardando activo:', error); alert('Error al guardar el activo. Revisa la consola para más detalles.'); }
@@ -879,7 +1082,7 @@ const RegisterAssetModal = ({
       return (
         <div className={`${cardCls} flex flex-col items-center justify-center py-16 text-center`}>
           <span className="text-5xl mb-3">🧩</span>
-          <p className="text-slate-500 font-medium">No hay componentes dinámicos</p>
+          <p className="text-slate-500 font-medium">No hay componentes</p>
           <p className="text-xs text-slate-400 mt-1">Selecciona un Tipo de Activo en la pestaña de Identificación para cargar componentes.</p>
         </div>
       );
@@ -1008,60 +1211,92 @@ const RegisterAssetModal = ({
     if (!componentesForm || componentesForm.length === 0) return null;
     return (
       <div className={cardCls}>
-        <p className={sectionTitle}><span>🧩</span> Componentes dinámicos</p>
+        <p className={sectionTitle}><span>🧩</span> Componentes</p>
         <div className="space-y-4">
-          {componentesForm.map((comp: any) => (
-            <div key={comp.id} className="bg-white border border-slate-100 rounded-xl shadow-sm p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <div className="text-sm font-semibold text-slate-800">{comp.nombre}</div>
-                  <div className="text-xs text-slate-400">{comp.campos?.length ?? 0} campo{(comp.campos?.length ?? 0) !== 1 ? 's' : ''}</div>
+          {componentesForm.map((comp: any) => {
+            const compId = String(comp.id ?? comp._id ?? comp.nombre ?? Math.random());
+            const instances = dynamicCompInstances[compId] || [{}];
+            return (
+              <div key={compId} className="bg-white border border-slate-100 rounded-xl shadow-sm p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-800">{comp.nombre}</div>
+                    <div className="text-xs text-slate-400">{comp.campos?.length ?? 0} campo{(comp.campos?.length ?? 0) !== 1 ? 's' : ''}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => {
+                      setDynamicCompInstances(prev => {
+                        const cur = prev[compId] ? [...prev[compId]] : [];
+                        const entry: Record<string,string> = {};
+                        (comp.campos || []).forEach((cf: any, idx: number) => { const cid = String(cf.id ?? cf.campo_id ?? `${compId}_${idx}`); entry[cid] = ''; });
+                        cur.push(entry);
+                        return { ...prev, [compId]: cur };
+                      });
+                    }} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition">+ Añadir {comp.nombre}</button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {instances.map((inst: any, ii: number) => (
+                    <div key={`${compId}_inst_${ii}`} className="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-xs text-slate-600">{comp.nombre} #{ii+1}</div>
+                        {instances.length > 1 && (
+                          <button type="button" onClick={() => setDynamicCompInstances(prev => {
+                            const cur = prev[compId] ? [...prev[compId]] : [];
+                            cur.splice(ii,1);
+                            return { ...prev, [compId]: cur };
+                          })} className="px-2 py-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 text-xs transition">✕</button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {(comp.campos || []).map((cf: any, ci: number) => {
+                          const campoId = String(cf.id ?? cf.campo_id ?? `${compId}_${ci}`);
+                          const value = (dynamicCompInstances[compId] && dynamicCompInstances[compId][ii] && dynamicCompInstances[compId][ii][campoId]) || '';
+                          const required = Boolean(cf.requerido);
+                          if (cf.tipo === 'select') {
+                            const opts: any[] = Array.isArray(cf.opciones) ? cf.opciones : [];
+                            return (
+                              <div key={campoId}>
+                                <label className={labelCls}>{cf.nombre}{required && <span className="text-red-500 ml-1">*</span>}</label>
+                                <select value={value} onChange={e => setDynamicCompInstances(prev => { const cur = { ...(prev||{}) }; cur[compId] = cur[compId] || [{}]; cur[compId][ii] = { ...(cur[compId][ii]||{}), [campoId]: e.target.value }; return cur; })} className={selectCls}>
+                                  <option value="">-- Seleccionar --</option>
+                                  {opts.map((o, oi) => <option key={oi} value={typeof o === 'string' ? o : o.value}>{typeof o === 'string' ? o : o.value}</option>)}
+                                </select>
+                              </div>
+                            );
+                          }
+                          if (cf.tipo === 'textarea') {
+                            return (
+                              <div key={campoId}>
+                                <label className={labelCls}>{cf.nombre}{required && <span className="text-red-500 ml-1">*</span>}</label>
+                                <textarea value={value} onChange={e => setDynamicCompInstances(prev => { const cur = { ...(prev||{}) }; cur[compId] = cur[compId] || [{}]; cur[compId][ii] = { ...(cur[compId][ii]||{}), [campoId]: e.target.value }; return cur; })} className={inputCls} rows={3} />
+                              </div>
+                            );
+                          }
+                          if (cf.tipo === 'number') {
+                            return (
+                              <div key={campoId}>
+                                <label className={labelCls}>{cf.nombre}{required && <span className="text-red-500 ml-1">*</span>}</label>
+                                <input type="number" value={value} onChange={e => setDynamicCompInstances(prev => { const cur = { ...(prev||{}) }; cur[compId] = cur[compId] || [{}]; cur[compId][ii] = { ...(cur[compId][ii]||{}), [campoId]: e.target.value }; return cur; })} className={inputCls} />
+                              </div>
+                            );
+                          }
+                          // default: text
+                          return (
+                            <div key={campoId}>
+                              <label className={labelCls}>{cf.nombre}{required && <span className="text-red-500 ml-1">*</span>}</label>
+                              <input type="text" value={value} onChange={e => setDynamicCompInstances(prev => { const cur = { ...(prev||{}) }; cur[compId] = cur[compId] || [{}]; cur[compId][ii] = { ...(cur[compId][ii]||{}), [campoId]: e.target.value }; return cur; })} className={inputCls} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(comp.campos || []).map((cf: any, ci: number) => {
-                  const campoId = cf.id ?? cf.campo_id ?? `${comp.id}_${ci}`;
-                  const value = getValorDinamico(campoId);
-                  const required = Boolean(cf.requerido);
-                  if (cf.tipo === 'select') {
-                    const opts: any[] = Array.isArray(cf.opciones) ? cf.opciones : [];
-                    return (
-                      <div key={campoId}>
-                        <label className={labelCls}>{cf.nombre}{required && <span className="text-red-500 ml-1">*</span>}</label>
-                        <select value={value} onChange={e => setValorDinamico(campoId, e.target.value)} className={selectCls}>
-                          <option value="">-- Seleccionar --</option>
-                          {opts.map((o, oi) => <option key={oi} value={typeof o === 'string' ? o : o.value}>{typeof o === 'string' ? o : o.value}</option>)}
-                        </select>
-                      </div>
-                    );
-                  }
-                  if (cf.tipo === 'textarea') {
-                    return (
-                      <div key={campoId}>
-                        <label className={labelCls}>{cf.nombre}{required && <span className="text-red-500 ml-1">*</span>}</label>
-                        <textarea value={value} onChange={e => setValorDinamico(campoId, e.target.value)} className={inputCls} rows={3} />
-                      </div>
-                    );
-                  }
-                  if (cf.tipo === 'number') {
-                    return (
-                      <div key={campoId}>
-                        <label className={labelCls}>{cf.nombre}{required && <span className="text-red-500 ml-1">*</span>}</label>
-                        <input type="number" value={value} onChange={e => setValorDinamico(campoId, e.target.value)} className={inputCls} />
-                      </div>
-                    );
-                  }
-                  // default: text
-                  return (
-                    <div key={campoId}>
-                      <label className={labelCls}>{cf.nombre}{required && <span className="text-red-500 ml-1">*</span>}</label>
-                      <input type="text" value={value} onChange={e => setValorDinamico(campoId, e.target.value)} className={inputCls} />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );

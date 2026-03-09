@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { getInventarioByEmpresa, getInventarioBySede } from "@/modules/inventario/services/inventarioService";
+import { getInventarioByEmpresa, getInventarioBySede, getInventarioById } from "@/modules/inventario/services/inventarioService";
 import { getEmpresaById } from "@/modules/empresas/services/empresasService";
 import { getSedesByEmpresa } from "@/modules/empresas/services/sedesService";
 import { getAreasByEmpresa } from "@/modules/inventario/services/areasService";
@@ -316,6 +316,70 @@ const InventarioPage = () => {
     };
     fetchData();
   }, [empresaId, sedeId]);
+
+  // Normaliza formatos de `valoresDinamicos` que el backend puede devolver
+  // - Flat: [{ campo_id, valor }, ...]
+  // - Agrupado por componentes: [{ id, nombre, campos: [{ campo_id, valor, ... }, ...] }, ...]
+  const normalizeBackendValoresDinamicos = (raw: any) => {
+    try {
+      if (!raw) return [];
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!Array.isArray(parsed)) return [];
+      if (parsed.length > 0 && parsed[0] && Array.isArray(parsed[0].campos)) {
+        const out: Array<{ campo_id: number | string; valor: string }> = [];
+        parsed.forEach((comp: any) => {
+          (comp.campos || []).forEach((c: any) => {
+            const id = c.campo_id ?? c.campoId ?? c.id ?? c.field_id ?? c.fieldId;
+            out.push({ campo_id: id, valor: c.valor != null ? String(c.valor) : '' });
+          });
+        });
+        return out;
+      }
+      return parsed.map((v: any) => ({ campo_id: v.campo_id ?? v.campoId ?? v.field_id ?? v.id ?? v.campo_id, valor: v.valor != null ? String(v.valor) : '' }));
+    } catch (e) { console.warn('normalizeBackendValoresDinamicos error:', e); return []; }
+  };
+
+  // Cuando se abre la vista de detalle, re-fetch del activo por id para asegurar valoresDinamicos actuales
+  useEffect(() => {
+    if (currentView !== 'viewAsset' || !viewItem || !empresaId || !sedeId) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const activoId = viewItem.id ?? viewItem._id ?? viewItem.id;
+        if (!activoId) return;
+        const refreshed = await getInventarioById(empresaId, sedeId, activoId);
+        if (!mounted) return;
+        if (refreshed) {
+          try {
+            const rawVals = refreshed.valoresDinamicos ?? refreshed.valores_dinamicos ?? refreshed.valores ?? null;
+            const normalized = normalizeBackendValoresDinamicos(rawVals);
+            // Preserve the original/grouped format returned by backend under `valoresDinamicosGrouped`
+            // and expose a flat normalized version under `valoresDinamicosFlat` for editors.
+            try {
+              if (Array.isArray(rawVals) && rawVals.length && rawVals[0] && Array.isArray(rawVals[0].campos)) {
+                (refreshed as any).valoresDinamicosGrouped = rawVals;
+                (refreshed as any).valoresDinamicosFlat = normalized;
+                console.log('[InventarioPage] refreshed activo valoresDinamicos grouped -> preserved grouped and created flat version');
+              } else {
+                // If backend already returned flat, keep it as `valoresDinamicosFlat` and also set grouped=null
+                (refreshed as any).valoresDinamicosGrouped = null;
+                (refreshed as any).valoresDinamicosFlat = normalized;
+                console.log('[InventarioPage] refreshed activo valoresDinamicos flat -> stored flat version');
+              }
+            } catch (e) { console.warn('Error normalizando valoresDinamicos en InventarioPage:', e); }
+          } catch (e) { console.warn('Error normalizando valoresDinamicos en InventarioPage:', e); }
+
+          // Merge safely into current viewItem to avoid changing the object id and
+          // triggering effects repeatedly. Use functional setState to merge values.
+          setViewItem(prev => ({ ...(prev || {}), ...(refreshed as any) }));
+        }
+      } catch (err) {
+        console.warn('No se pudo refrescar activo por id:', err);
+      }
+    })();
+    return () => { mounted = false; };
+  // Depend only on the asset id to avoid re-running when the whole object changes
+  }, [currentView, empresaId, sedeId, viewItem?.id]);
 
   // ── RENDER ───────────────────────────────────────────────────────────────────
   return (
@@ -869,6 +933,50 @@ const InventarioPage = () => {
                 <Field label="N° Serie" value={String(viewItem.serie ?? '—')} />
               </div>
             </InfoSection>
+
+            {/* Componentes dinámicos (lectura) */}
+            {(() => {
+              const rawDyn = viewItem.valoresDinamicos ?? viewItem.valores_dinamicos ?? viewItem.valores ?? null;
+              if (!rawDyn) return null;
+              // If grouped format (componentes -> campos)
+              if (Array.isArray(rawDyn) && rawDyn.length && rawDyn[0] && Array.isArray(rawDyn[0].campos)) {
+                return (
+                  <InfoSection title="Componentes" color="teal" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h18M3 17h18"/></svg>}>
+                    <div className="space-y-3">
+                      {(rawDyn as any[]).map((comp: any, ci: number) => (
+                        <div key={ci} className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+                          <div className="font-semibold text-sm text-slate-700 mb-2">{String(comp.nombre ?? comp.name ?? `Componente ${ci+1}`)}</div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {(comp.campos || []).map((c: any, fi: number) => (
+                              <div key={fi} className="bg-white border border-slate-100 rounded-lg p-3 text-sm">
+                                <div className="text-xs text-slate-400">{String(c.nombre ?? c.label ?? `Campo ${fi+1}`)}</div>
+                                <div className="font-medium text-slate-700 mt-1">{String(c.valor ?? c.valor ?? '')}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </InfoSection>
+                );
+              }
+              // If flat format, render simple list
+              if (Array.isArray(rawDyn) && rawDyn.length) {
+                return (
+                  <InfoSection title="Componentes" color="teal" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h18M3 17h18"/></svg>}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {(rawDyn as any[]).map((v: any, i: number) => (
+                        <div key={i} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                          <div className="text-xs text-slate-400">Campo {String(v.campo_id ?? v.id ?? '')}</div>
+                          <div className="font-medium text-slate-700">{String(v.valor ?? '')}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </InfoSection>
+                );
+              }
+              return null;
+            })()}
 
             {/* Estados */}
             <InfoSection title="Estados del activo" color="green" icon={
