@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import ComponentsModal from '@/modules/inventario/components/ComponentsModal';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getCategorias, createCategoria, updateCategoria, getCategoriaById } from '@/modules/inventario/services/categoriasService';
 import axiosClient from '@/api/axiosClient';
@@ -38,6 +39,14 @@ const generateCategoryCode = (rawName: string): string => {
 const normalizeCampos = (campos: any[] = []): CategoryField[] => {
   return (campos || []).map((f: any) => {
     const opcionesRaw = f.opciones || f.options || [];
+    if (Array.isArray(opcionesRaw) && opcionesRaw.length > 0 && typeof opcionesRaw[0] === 'object') {
+      const opcionesDetalladas = opcionesRaw.map((o: any) => ({
+        value: String(o.value ?? o.nombre ?? o.name ?? '').trim(),
+        opcionesRaw: Array.isArray(o.opciones) ? o.opciones.join(', ') : (typeof o.opciones === 'string' ? o.opciones : ''),
+        subcampos: Array.isArray(o.subcampos || o.subfields || o.children) ? (o.subcampos || o.subfields || o.children).map((s: any) => ({ nombre: String(s.nombre || s.name || '').trim(), tipo: s.tipo || 'text', requerido: Boolean(s.requerido), opciones: Array.isArray(s.opciones) ? s.opciones.map((x:any)=>String(x).trim()) : (typeof s.opciones === 'string' ? s.opciones.split(',').map((x:string)=>x.trim()).filter(Boolean) : []) })) : []
+      }));
+      return { nombre: String(f.nombre || f.name || '').trim(), tipo: f.tipo || 'text', requerido: Boolean(f.requerido), dependiente: true, opciones: opcionesDetalladas } as any;
+    }
     const opciones: string[] = Array.isArray(opcionesRaw)
       ? opcionesRaw.map((o: any) => (typeof o === 'string' ? o : String(o?.value ?? ''))).map((s: string) => s.trim()).filter(Boolean)
       : (typeof opcionesRaw === 'string' ? opcionesRaw.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
@@ -54,14 +63,9 @@ const TiposActivosPage = () => {
   const [categoryCodeInput, setCategoryCodeInput] = useState('');
   const [categoryGroupId, setCategoryGroupId] = useState('');
   const [groups, setGroups] = useState<Array<{ id: string; nombre: string }>>([]);
-  
-  const [subcategoriesInput, setSubcategoriesInput] = useState('');
-  const [newCategoryFields, setNewCategoryFields] = useState<CategoryField[] & any[]>([]);
-  const [copyFromCategoryId, setCopyFromCategoryId] = useState('');
-  const [showPreview, setShowPreview] = useState(false);
-  const [categoryPreview, setCategoryPreview] = useState<any>(null);
 
   const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showComponentsModal, setShowComponentsModal] = useState(false);
   const [groupNameInput, setGroupNameInput] = useState('');
   const [groupCodeInput, setGroupCodeInput] = useState('');
   const [groupDescriptionInput, setGroupDescriptionInput] = useState('');
@@ -72,7 +76,6 @@ const TiposActivosPage = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [showErrorToast, setShowErrorToast] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [previewValues, setPreviewValues] = useState<Record<number, string>>({});
 
   const fetchCategorias = async () => {
     setLoading(true);
@@ -100,23 +103,19 @@ const TiposActivosPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // If navigated from creating a group, auto-open the "new category" modal and preselect group
     try {
       if ((location as any)?.state?.autoOpenNew) {
         const gid = String((location as any).state.groupId || '');
         setCategoryGroupId(gid);
         setShowModal(true);
-        // clear state to avoid reopening
         navigate(location.pathname, { replace: true, state: {} });
       }
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
   }, []);
 
   const openNew = () => {
     setEditingCategoryId(null); setCategoryNameInput(''); setCategoryCodeInput('');
-    setCategoryGroupId(''); setNewCategoryFields([]); setShowModal(true);
+    setCategoryGroupId(''); setShowModal(true);
   };
 
   const openEdit = (cat: Category) => {
@@ -124,66 +123,33 @@ const TiposActivosPage = () => {
     setCategoryNameInput(cat.nombre || '');
     setCategoryCodeInput(cat.codigo || generateCategoryCode(cat.nombre || ''));
     setCategoryGroupId((cat as any).grupoId || (cat as any).grupo_id || '');
-    const mapped = normalizeCampos((cat as any).campos || []).map(f => ({
-      ...f,
-      opcionesRaw: Array.isArray(f.opciones) ? f.opciones.join(', ') : (typeof f.opciones === 'string' ? f.opciones : '')
-    }));
-    setNewCategoryFields(mapped as any[]);
     setShowModal(true);
   };
 
-  const handlePreview = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cat = String(categoryNameInput || '').trim();
-    if (!cat) { setErrorMessage('El nombre de la categoría es obligatorio'); setShowErrorToast(true); setTimeout(() => setShowErrorToast(false), 3000); return; }
-    if (!categoryGroupId) { setErrorMessage('Selecciona un Grupo de Activo'); setShowErrorToast(true); setTimeout(() => setShowErrorToast(false), 3000); return; }
-    const cleanedCampos: CategoryField[] = (newCategoryFields || []).map((f) => {
-      const rawOpts = (f as any).opciones || (f as any).options || (f as any).opcionesRaw || [];
-      const opciones: string[] = Array.isArray(rawOpts)
-        ? rawOpts.map((o: any) => (typeof o === 'string' ? o : String(o?.value ?? ''))).map((s: string) => s.trim()).filter(Boolean)
-        : (typeof rawOpts === 'string' ? rawOpts.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
-      return { nombre: String(f.nombre || '').trim(), tipo: f.tipo || 'text', requerido: Boolean(f.requerido), opciones } as CategoryField;
-    });
-    setCategoryPreview({
-      nombre: cat, grupoId: categoryGroupId || undefined, campos: cleanedCampos,
-      createdAt: new Date().toLocaleString(),
-      subcategorias: subcategoriesInput.split(',').map(s => s.trim()).filter(Boolean)
-    });
-    // require at least one valid custom field
-    const hasValidField = cleanedCampos.some(f => String(f.nombre || '').trim().length > 0);
-    if (!hasValidField) { setErrorMessage('Agrega al menos un campo personalizado'); setShowErrorToast(true); setTimeout(() => setShowErrorToast(false), 3000); return; }
-    setShowPreview(true);
-  };
-
-  const handleSavePreview = async () => {
+  const handleSaveBasic = async (e?: React.FormEvent) => {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
     try {
+      const cat = String(categoryNameInput || '').trim();
+      if (!cat) { setErrorMessage('El nombre de la categoría es obligatorio'); setShowErrorToast(true); setTimeout(() => setShowErrorToast(false), 3000); return; }
+      if (!categoryGroupId) { setErrorMessage('Selecciona un Grupo de Activo'); setShowErrorToast(true); setTimeout(() => setShowErrorToast(false), 3000); return; }
       if (editingCategoryId) {
-        const finalCampos: CategoryField[] = (categoryPreview.campos || []).map((f: any) => ({ nombre: String(f.nombre || '').trim(), tipo: f.tipo || 'text', requerido: Boolean(f.requerido), opciones: Array.isArray(f.opciones) ? f.opciones.map((o: any) => String(o).trim()) : (typeof f.opciones === 'string' ? f.opciones.split(',').map((s: string) => s.trim()) : []) }));
-        if (!categoryPreview.grupoId) throw new Error('Selecciona un Grupo de Activo');
-        if (!finalCampos || finalCampos.filter(f => String(f.nombre || '').trim().length > 0).length === 0) throw new Error('Agrega al menos un campo personalizado');
-        const updated = await updateCategoria(editingCategoryId, { ...(categoryPreview.grupoId ? { grupo_id: categoryPreview.grupoId } : {}), campos: finalCampos });
+        const updatePayload: any = { nombre: cat, ...(categoryGroupId ? { grupo_id: categoryGroupId } : {}) };
+        const updated = await updateCategoria(editingCategoryId, updatePayload);
         setCategorias(prev => prev.map(c => c.id === editingCategoryId ? updated : c));
         setSuccessMessage('Categoría actualizada exitosamente'); setShowSuccessToast(true); setTimeout(() => setShowSuccessToast(false), 3000);
       } else {
-        const finalCampos: CategoryField[] = (categoryPreview.campos || []).filter((f: any) => f.nombre && String(f.nombre).trim().length > 0).map((f: any) => ({ nombre: String(f.nombre || '').trim(), tipo: f.tipo || 'text', requerido: Boolean(f.requerido), opciones: Array.isArray(f.opciones) ? f.opciones.map((o: any) => String(o).trim()) : (typeof f.opciones === 'string' ? f.opciones.split(',').map((s: string) => s.trim()) : []) }));
-        if (!categoryPreview.grupoId) throw new Error('Selecciona un Grupo de Activo');
-        if (!finalCampos || finalCampos.length === 0) throw new Error('Agrega al menos un campo personalizado');
-        const payload: any = { nombre: categoryPreview.nombre.trim(), ...(categoryPreview.grupoId ? { grupo_id: categoryPreview.grupoId } : {}), ...(finalCampos.length > 0 && { campos: finalCampos }) };
+        const payload: any = { nombre: cat, ...(categoryGroupId ? { grupo_id: categoryGroupId } : {}) };
         const created = await createCategoria(payload);
         setCategorias(prev => [created, ...prev]);
         setSuccessMessage('Categoría creada exitosamente'); setShowSuccessToast(true); setTimeout(() => setShowSuccessToast(false), 3000);
-        // If this flow was triggered from creating a group, navigate to Marcas and request opening the new marca modal
         try {
           if ((location as any)?.state?.autoOpenNew) {
             const catId = String(created.id ?? created._id ?? created);
             navigate('/admin/grupos-activos/marcas', { state: { autoOpenNewMarca: true, categoriaId: catId } });
           }
-        } catch (e) {
-          // ignore
-        }
+        } catch (e) {}
       }
-      setCategoryPreview(null); setShowPreview(false); setShowModal(false);
-      setNewCategoryFields([]); setEditingCategoryId(null); setCategoryNameInput(''); setSubcategoriesInput('');
+      setShowModal(false); setEditingCategoryId(null); setCategoryNameInput(''); setCategoryCodeInput(''); setCategoryGroupId('');
     } catch (err: any) {
       console.error('Error:', err);
       const errorMsg = err instanceof Error ? err.message : 'Error al guardar la categoría';
@@ -196,236 +162,484 @@ const TiposActivosPage = () => {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&family=DM+Mono:wght@400;500&display=swap');
+
         .ta-root { font-family: 'DM Sans', sans-serif; }
         .ta-root * { box-sizing: border-box; }
-        @keyframes ta-spin { to { transform: rotate(360deg); } }
-        @keyframes ta-modalIn { from { opacity:0; transform:scale(0.94) translateY(12px); } to { opacity:1; transform:scale(1) translateY(0); } }
-        @keyframes ta-slideUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
 
+        @keyframes ta-spin { to { transform: rotate(360deg); } }
+        @keyframes ta-modalIn { from { opacity:0; transform:scale(0.97) translateY(12px); } to { opacity:1; transform:scale(1) translateY(0); } }
+        @keyframes ta-slideUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes ta-fadeIn { from { opacity:0; } to { opacity:1; } }
+        @keyframes ta-rowIn { from { opacity:0; transform:translateX(-6px); } to { opacity:1; transform:translateX(0); } }
+
+        /* ── INPUTS ── */
         .ta-input {
-          width: 100%; padding: .62rem .9rem;
-          border: 1.5px solid #cce2fa; border-radius: 8px;
-          font-size: .9rem; font-family: 'DM Sans', sans-serif;
-          color: #0d2d5e; font-weight: 500; background: #f4f8fe;
-          transition: border-color .15s, box-shadow .15s, background .15s; outline: none;
+          width: 100%;
+          padding: .72rem 1rem;
+          border: 1.5px solid #c8ddf5;
+          border-radius: 9px;
+          font-size: .925rem;
+          font-family: 'DM Sans', sans-serif;
+          color: #0d2d5e;
+          font-weight: 600;
+          background: #ffffff;
+          transition: border-color .15s, box-shadow .15s;
+          outline: none;
+          line-height: 1.4;
         }
-        .ta-input:focus { border-color: #1458b8; background: #fff; box-shadow: 0 0 0 3px rgba(20,88,184,.12); }
-        .ta-input::placeholder { color: #a0bdda; }
-        .ta-input[readonly] { background: #f4f8fe; color: #5a7fa8; cursor: default; border-color: #d8eaf8; }
+        .ta-input:focus { border-color: #1458b8; box-shadow: 0 0 0 3px rgba(20,88,184,.12); }
+        .ta-input::placeholder { color: #a8c0d8; font-weight: 400; }
+        .ta-input[readonly], .ta-input:disabled {
+          background: #f5f8fc; color: #8aaac8;
+          cursor: default; border-color: #dce9f5; font-weight: 500;
+        }
         .ta-select {
           appearance: none;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%231458b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-          background-repeat: no-repeat; background-position: right .75rem center; padding-right: 2.5rem !important;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath d='M1 1l4.5 4.5L10 1' stroke='%231458b8' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right .85rem center;
+          padding-right: 2.6rem !important;
         }
+        .ta-select:not([disabled]) { background-color: #ffffff; }
 
+        /* ── BUTTONS ── */
         .ta-btn-primary {
           display: inline-flex; align-items: center; gap: .45rem;
-          padding: .62rem 1.25rem; background: #1458b8; color: #fff;
-          border: none; border-radius: 8px; font-weight: 600; font-size: .875rem;
+          padding: .62rem 1.25rem;
+          background: #1458b8; color: #fff;
+          border: none; border-radius: 8px;
+          font-weight: 700; font-size: .845rem;
           cursor: pointer; font-family: 'DM Sans', sans-serif;
           transition: background .18s, box-shadow .18s, transform .1s;
-          box-shadow: 0 2px 8px rgba(20,88,184,.25);
+          box-shadow: 0 1px 8px rgba(20,88,184,.28);
+          letter-spacing: .01em;
+          white-space: nowrap;
         }
-        .ta-btn-primary:hover { background: #0d45a0; box-shadow: 0 4px 16px rgba(20,88,184,.35); transform: translateY(-1px); }
+        .ta-btn-primary:hover { background: #0d45a0; box-shadow: 0 4px 14px rgba(20,88,184,.36); transform: translateY(-1px); }
         .ta-btn-primary:active { transform: translateY(0); }
 
         .ta-btn-secondary {
           display: inline-flex; align-items: center; gap: .4rem;
-          padding: .62rem 1.1rem; background: #fff; color: #1458b8;
-          border: 1.5px solid #b8d4f8; border-radius: 8px; font-weight: 600; font-size: .875rem;
+          padding: .62rem 1.1rem;
+          background: #fff; color: #1458b8;
+          border: 1.5px solid #c8ddf5; border-radius: 8px;
+          font-weight: 600; font-size: .845rem;
           cursor: pointer; font-family: 'DM Sans', sans-serif;
           transition: background .15s, border-color .15s, transform .1s;
+          white-space: nowrap;
         }
         .ta-btn-secondary:hover { background: #eef5ff; border-color: #1458b8; transform: translateY(-1px); }
 
-        .ta-btn-ghost {
+        .ta-btn-outline-sm {
           display: inline-flex; align-items: center; gap: .35rem;
-          padding: .35rem .75rem; background: #eef5ff; color: #1458b8;
-          border: 1px solid #b8d4f8; border-radius: 6px;
-          font-size: .8rem; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif;
-          transition: background .12s, border-color .12s;
+          padding: .38rem .85rem;
+          background: transparent; color: #3a6199;
+          border: 1.5px solid #c8ddf5; border-radius: 7px;
+          font-size: .79rem; font-weight: 600;
+          cursor: pointer; font-family: 'DM Sans', sans-serif;
+          transition: all .15s;
+          white-space: nowrap;
         }
-        .ta-btn-ghost:hover { background: #ddeeff; border-color: #1458b8; }
-        .ta-btn-ghost.danger:hover { background: #fff1f1; color: #c53030; border-color: #fca5a5; }
+        .ta-btn-outline-sm:hover { background: #eef5ff; border-color: #94bef0; color: #1458b8; }
 
-        .ta-card { background: #fff; border: 1px solid #d4e5f9; border-radius: 14px; box-shadow: 0 2px 20px rgba(13,45,94,.06); overflow: hidden; }
+        .ta-btn-edit {
+          display: inline-flex; align-items: center; gap: .35rem;
+          padding: .35rem .75rem;
+          background: #f0f6ff; color: #1050a8;
+          border: 1.5px solid #c8ddf5; border-radius: 7px;
+          font-size: .78rem; font-weight: 600;
+          cursor: pointer; font-family: 'DM Sans', sans-serif;
+          transition: all .15s;
+        }
+        .ta-btn-edit:hover { background: #ddeeff; border-color: #94bef0; }
 
+        /* ── LAYOUT ── */
+        .ta-page {
+          padding: 2.5rem 2.5rem 3rem;
+          min-height: 100vh;
+          background: #f0f5fb;
+        }
+        .ta-page-inner { max-width: 1100px; margin: 0 auto; }
+
+        /* ── PAGE HEADER ── */
+        .ta-page-header {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 1.75rem; gap: 1rem;
+          padding-bottom: 1.5rem;
+          border-bottom: 1px solid #dae6f5;
+        }
+        .ta-page-header-left { display: flex; align-items: center; gap: 1rem; }
+        .ta-page-icon {
+          width: 44px; height: 44px;
+          background: linear-gradient(135deg, #0a2550 0%, #1458b8 100%);
+          border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+          box-shadow: 0 2px 12px rgba(20,88,184,.28);
+        }
+        .ta-page-title {
+          font-size: 1.45rem; font-weight: 800;
+          color: #0a2550; margin: 0; letter-spacing: -.025em; line-height: 1.15;
+        }
+        .ta-page-subtitle {
+          font-size: .82rem; color: #6a91b8; margin: .2rem 0 0; font-weight: 400;
+        }
+        .ta-count-pill {
+          display: inline-flex; align-items: center;
+          background: #e0ecff; color: #1050a8;
+          border: 1px solid #c0d9f8;
+          border-radius: 20px; padding: .15rem .6rem;
+          font-size: .72rem; font-weight: 700;
+          margin-left: .5rem; vertical-align: middle;
+          letter-spacing: .02em;
+        }
+
+        /* ── HEADER ACTIONS ── */
+        .ta-page-actions {
+          display: flex; align-items: center; gap: .6rem;
+        }
+        .ta-action-divider {
+          width: 1px; height: 24px;
+          background: #d4e5f5;
+          margin: 0 .1rem;
+          flex-shrink: 0;
+        }
+
+        /* ── TOOLBAR (secondary row) ── */
+        .ta-toolbar {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 1.1rem; gap: 1rem;
+        }
+        .ta-toolbar-left { display: flex; align-items: center; gap: .5rem; }
+        .ta-toolbar-label {
+          font-size: .7rem; font-weight: 700;
+          text-transform: uppercase; letter-spacing: .12em;
+          color: #7da0c4;
+        }
+
+        /* ── CARD ── */
+        .ta-card {
+          background: #fff;
+          border: 1px solid #d4e5f9;
+          border-radius: 14px;
+          box-shadow: 0 1px 18px rgba(13,45,94,.06);
+          overflow: hidden;
+        }
+
+        /* ── TABLE ── */
         .ta-table { width: 100%; border-collapse: collapse; }
-        .ta-table thead { background: #f0f6ff; border-bottom: 2px solid #cce2fa; }
-        .ta-table th { padding: .85rem 1.25rem; text-align: left; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: #3572b0; }
-        .ta-table td { padding: .9rem 1.25rem; color: #1a2f55; font-weight: 500; border-bottom: 1px solid #e8f1fb; vertical-align: middle; }
+        .ta-table thead {
+          background: #f7fafd;
+          border-bottom: 1.5px solid #dce9f5;
+        }
+        .ta-table th {
+          padding: .85rem 1.5rem;
+          text-align: left;
+          font-size: .67rem; font-weight: 800;
+          text-transform: uppercase; letter-spacing: .14em;
+          color: #5a87ba;
+        }
+        .ta-table td {
+          padding: 1rem 1.5rem;
+          color: #1a2f55; font-weight: 500;
+          border-bottom: 1px solid #eef4fb;
+          vertical-align: middle;
+        }
         .ta-table tbody tr:last-child td { border-bottom: none; }
-        .ta-table tbody tr { transition: background .15s; }
+        .ta-table tbody tr {
+          transition: background .1s;
+          animation: ta-rowIn .22s ease both;
+        }
         .ta-table tbody tr:hover td { background: #f5f9ff; }
 
-        .ta-badge { font-family: 'DM Mono', monospace; font-size: .78rem; font-weight: 500; padding: .25rem .6rem; border-radius: 5px; display: inline-block; letter-spacing: .05em; }
-        .ta-badge-blue { background: #e8f1fb; color: #1458b8; }
-        .ta-badge-gray { background: #eef5ff; color: #3572b0; }
+        /* ── STATUS DOT ── */
+        .ta-dot {
+          width: 7px; height: 7px;
+          border-radius: 50%;
+          background: #3b82f6;
+          flex-shrink: 0;
+          box-shadow: 0 0 0 2.5px rgba(59,130,246,.18);
+        }
 
+        /* ── BADGES ── */
+        .ta-badge {
+          font-family: 'DM Mono', monospace;
+          font-size: .74rem; font-weight: 500;
+          padding: .22rem .65rem;
+          border-radius: 6px;
+          display: inline-block;
+          letter-spacing: .04em;
+        }
+        .ta-badge-blue { background: #e4effc; color: #1050a8; border: 1px solid #c5daf5; }
+        .ta-badge-gray { background: #edf2fa; color: #3a6199; border: 1px solid #cdd9eb; }
+
+        /* ── MODAL ── */
         .ta-modal-overlay {
           position: fixed; inset: 0; z-index: 50;
           display: flex; align-items: center; justify-content: center;
-          background: rgba(10,30,70,.45); backdrop-filter: blur(3px);
-          padding: 1rem; overflow-y: auto;
+          background: rgba(6,18,46,.52);
+          backdrop-filter: blur(5px);
+          padding: 1.25rem;
+          overflow-y: auto;
+          animation: ta-fadeIn .15s ease;
         }
         .ta-modal {
-          background: #fff; border-radius: 16px; width: 100%; max-width: 790px; margin: auto;
-          box-shadow: 0 20px 60px rgba(13,45,94,.22); border: 1px solid #d4e5f9;
-          overflow: hidden; max-height: 92vh; display: flex; flex-direction: column;
-          animation: ta-modalIn .22s cubic-bezier(.34,1.5,.64,1);
+          background: #fff;
+          border-radius: 16px;
+          width: 100%; max-width: 780px; margin: auto;
+          box-shadow: 0 20px 70px rgba(13,45,94,.22);
+          border: 1px solid #c8ddf5;
+          overflow: hidden;
+          max-height: 94vh;
+          display: flex; flex-direction: column;
+          animation: ta-modalIn .22s cubic-bezier(.34,1.4,.64,1);
         }
         .ta-modal-sm { max-width: 500px; }
 
         .ta-modal-header {
-          background: linear-gradient(135deg, #0d2d5e 0%, #1458b8 100%);
-          padding: 1.4rem 1.75rem; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+          background: linear-gradient(135deg, #0a2550 0%, #1458b8 100%);
+          padding: 1.35rem 1.75rem;
+          display: flex; align-items: center; justify-content: space-between;
+          flex-shrink: 0;
         }
-        .ta-modal-header-icon { background: rgba(255,255,255,.15); padding: .55rem; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-        .ta-modal-title { font-size: 1.05rem; font-weight: 700; color: #fff; margin: 0; letter-spacing: -.01em; }
-        .ta-modal-sub { font-size: .78rem; color: rgba(255,255,255,.7); margin: .2rem 0 0; }
+        .ta-modal-header-icon {
+          background: rgba(255,255,255,.15);
+          padding: .55rem; border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .ta-modal-title { font-size: 1.05rem; font-weight: 800; color: #fff; margin: 0; letter-spacing: -.02em; }
+        .ta-modal-sub { font-size: .77rem; color: rgba(255,255,255,.6); margin: .18rem 0 0; }
         .ta-modal-close {
-          background: rgba(255,255,255,.12); border: none; color: #fff;
-          width: 32px; height: 32px; border-radius: 8px; font-size: 1rem;
+          background: rgba(255,255,255,.13); border: none; color: #fff;
+          width: 32px; height: 32px; border-radius: 8px; font-size: .9rem;
           cursor: pointer; display: flex; align-items: center; justify-content: center;
           transition: background .15s; flex-shrink: 0;
         }
-        .ta-modal-close:hover { background: rgba(255,255,255,.22); }
+        .ta-modal-close:hover { background: rgba(255,255,255,.24); }
+
         .ta-modal-body { overflow-y: auto; flex: 1; padding: 1.75rem 2rem; }
         .ta-modal-footer {
-          background: #f8fbff; border-top: 1px solid #e8f1fb;
-          padding: 1rem 1.75rem; display: flex; justify-content: space-between; align-items: center; gap: .75rem; flex-shrink: 0;
+          background: #f5f9ff;
+          border-top: 1px solid #e4effc;
+          padding: 1rem 1.75rem;
+          display: flex; justify-content: flex-end; align-items: center; gap: .65rem;
+          flex-shrink: 0;
         }
 
-        .ta-form-label { display: block; font-size: .78rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #3572b0; margin-bottom: .45rem; }
-        .ta-form-hint { font-size: .73rem; color: #7da0c4; margin-top: .3rem; }
-        .ta-form-group { margin-bottom: 1.1rem; }
-        .ta-divider { border: none; border-top: 1.5px solid #e8f1fb; margin: 1.4rem 0; }
+        /* ── FORM ── */
+        .ta-form-label {
+          display: block;
+          font-size: .7rem; font-weight: 800;
+          letter-spacing: .07em; text-transform: uppercase;
+          color: #2e6db4; margin-bottom: .45rem;
+        }
+        .ta-form-hint { font-size: .72rem; color: #7da0c4; margin-top: .3rem; font-weight: 400; }
+        .ta-form-group { margin-bottom: 1.3rem; }
 
-        .ta-section-label { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; }
-        .ta-section-num { width: 22px; height: 22px; background: #1458b8; color: #fff; border-radius: 50%; font-size: .68rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-        .ta-section-title { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #1458b8; }
+        .ta-section-wrap {
+          display: flex; align-items: center; gap: .65rem;
+          margin-bottom: 1.15rem;
+        }
+        .ta-section-num {
+          width: 24px; height: 24px;
+          background: linear-gradient(135deg, #1458b8, #2575d0);
+          color: #fff; border-radius: 50%;
+          font-size: .67rem; font-weight: 800;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+          box-shadow: 0 2px 6px rgba(20,88,184,.32);
+        }
+        .ta-section-title {
+          font-size: .72rem; font-weight: 800;
+          text-transform: uppercase; letter-spacing: .1em;
+          color: #1458b8;
+        }
+        .ta-section-subtitle {
+          font-size: .71rem; color: #7da0c4;
+          margin-top: .08rem; font-weight: 400;
+        }
 
         .ta-tip {
-          display: flex; align-items: flex-start; gap: .65rem;
-          padding: .75rem 1rem; background: #eef5ff; border: 1.5px solid #b8d4f8; border-radius: 10px;
-          font-size: .82rem; color: #1458b8; margin-bottom: 1.5rem;
+          display: flex; align-items: flex-start; gap: .7rem;
+          padding: .8rem 1rem;
+          background: #eef6ff;
+          border: 1.5px solid #c0d9f8;
+          border-radius: 10px;
+          font-size: .82rem; color: #1050a8;
+          margin-bottom: 1.5rem;
+          line-height: 1.5;
         }
 
-        .ta-fields-wrap { border: 1.5px solid #d4e5f9; border-radius: 12px; overflow: hidden; }
-        .ta-fields-table { width: 100%; border-collapse: collapse; }
-        .ta-fields-table th { padding: .65rem .9rem; text-align: left; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #3572b0; background: #f0f6ff; border-bottom: 1.5px solid #d4e5f9; }
-        .ta-fields-table td { padding: .6rem .75rem; border-bottom: 1px solid #e8f1fb; vertical-align: middle; }
-        .ta-fields-table tr:last-child td { border-bottom: none; }
-        .ta-fields-table tbody tr { transition: background .12s; }
-        .ta-fields-table tbody tr:hover td { background: #f5f9ff; }
+        .ta-readonly-badge {
+          display: inline-flex; align-items: center; gap: .25rem;
+          font-size: .67rem; font-weight: 700; color: #7da0c4;
+          background: #f0f6ff; border: 1px solid #dce9f5;
+          padding: .15rem .45rem; border-radius: 5px;
+          letter-spacing: .03em; vertical-align: middle; margin-left: .35rem;
+        }
 
-        .ta-preview-hero { padding: 1.25rem 1.5rem; background: linear-gradient(135deg,#eef5ff 0%,#ddeeff 100%); border: 1.5px solid #b8d4f8; border-radius: 12px; margin-bottom: 1.25rem; }
-        .ta-field-card { padding: .9rem 1rem; background: #fff; border: 1.5px solid #d4e5f9; border-radius: 10px; transition: box-shadow .15s; }
-        .ta-field-card:hover { box-shadow: 0 2px 12px rgba(20,88,184,.1); }
-
+        /* ── TOASTS ── */
         .ta-toast {
           position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 9999;
           display: flex; align-items: center; gap: .75rem;
-          padding: .85rem 1.25rem; border-radius: 12px;
-          font-family: 'DM Sans', sans-serif; font-size: .875rem; font-weight: 500;
-          box-shadow: 0 8px 30px rgba(0,0,0,.12);
+          padding: .85rem 1.25rem; border-radius: 11px;
+          font-family: 'DM Sans', sans-serif; font-size: .855rem; font-weight: 600;
+          box-shadow: 0 8px 28px rgba(0,0,0,.13);
           animation: ta-slideUp .28s cubic-bezier(.22,.68,0,1.2);
+          max-width: 320px;
         }
         .ta-toast-success { background: #f0fdf4; color: #166534; border: 1.5px solid #bbf7d0; }
         .ta-toast-error { background: #fff5f5; color: #991b1b; border: 1.5px solid #fecaca; }
 
+        /* ── EMPTY STATE ── */
         .ta-empty { padding: 4rem 2rem; text-align: center; }
-        .ta-empty-icon { width: 52px; height: 52px; background: #eef5ff; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; }
+        .ta-empty-icon {
+          width: 52px; height: 52px;
+          background: #eef5ff; border-radius: 14px;
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 1rem;
+          border: 1.5px solid #c8ddf5;
+        }
+
+        /* ── NAV BREADCRUMB style ── */
+        .ta-breadcrumb {
+          display: flex; align-items: center; gap: .45rem;
+          font-size: .73rem; color: #7da0c4; font-weight: 500;
+          margin-bottom: 1.25rem;
+        }
+        .ta-breadcrumb span { color: #b8cfe8; }
       `}</style>
 
-      <div className="ta-root" style={{ padding: '2.5rem 2rem', minHeight: '100vh', background: '#f0f6ff' }}>
-        <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+      <div className="ta-root ta-page">
+        <div className="ta-page-inner">
 
-          {/* PAGE HEADER */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '2rem', gap: '1rem' }}>
-            <div>
-              <div style={{ fontSize: '.7rem', fontWeight: 600, letterSpacing: '.18em', textTransform: 'uppercase', color: '#38a3d1', marginBottom: '.3rem' }}>
-                Gestión de Activos
+          {/* ── BREADCRUMB ── */}
+          <div className="ta-breadcrumb">
+            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+            Gestión de Activos
+            <span>›</span>
+            Tipos de Activo
+          </div>
+
+          {/* ── PAGE HEADER ── */}
+          <div className="ta-page-header">
+            <div className="ta-page-header-left">
+              <div className="ta-page-icon">
+                <svg width="20" height="20" fill="none" stroke="#fff" viewBox="0 0 24 24" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
               </div>
-              <h2 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#0d2d5e', letterSpacing: '-.03em', margin: 0, lineHeight: 1.1 }}>
-                Tipos de Activo
-                {!loading && (
-                  <span style={{ fontSize: '.75rem', fontWeight: 700, background: '#ddeeff', color: '#1458b8', borderRadius: '20px', padding: '.15rem .6rem', marginLeft: '.5rem', verticalAlign: 'middle' }}>
-                    {categorias.length}
-                  </span>
-                )}
-              </h2>
-              <p style={{ fontSize: '.85rem', color: '#5a7fa8', margin: '.35rem 0 0', fontWeight: 400 }}>
-                Administra las categorías y sus campos personalizados
-              </p>
+              <div>
+                <h2 className="ta-page-title">
+                  Tipos de Activo
+                  {!loading && <span className="ta-count-pill">{categorias.length}</span>}
+                </h2>
+                <p className="ta-page-subtitle">Administra las categorías y sus campos personalizados del inventario</p>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: '.6rem', flexShrink: 0 }}>
+
+            <div className="ta-page-actions">
+              <button onClick={() => setShowComponentsModal(true)} className="ta-btn-secondary">
+                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                Componentes
+              </button>
+              <div className="ta-action-divider" />
               <button onClick={fetchCategorias} className="ta-btn-secondary">
-                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 Actualizar
               </button>
               <button onClick={openNew} className="ta-btn-primary">
-                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-                Añadir tipo
+                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                Nuevo tipo
               </button>
             </div>
           </div>
 
-          {/* TABLE CARD */}
+          {/* ── TABLE CARD ── */}
           <div className="ta-card">
+            {/* Card header row */}
+            <div style={{
+              padding: '.85rem 1.5rem',
+              background: '#f7fafd',
+              borderBottom: '1px solid #e4eef8',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+            }}>
+              <span style={{ fontSize: '.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: '#5a87ba' }}>
+                Listado de categorías
+              </span>
+              {!loading && categorias.length > 0 && (
+                <span style={{ fontSize: '.75rem', color: '#8aaac8', fontWeight: 500 }}>
+                  {categorias.length} {categorias.length === 1 ? 'registro' : 'registros'}
+                </span>
+              )}
+            </div>
+
             {loading ? (
               <div style={{ padding: '3.5rem', textAlign: 'center', color: '#7da0c4' }}>
-                <div style={{ display: 'inline-block', width: '22px', height: '22px', border: '2.5px solid #b8d4f8', borderTopColor: '#1458b8', borderRadius: '50%', animation: 'ta-spin .7s linear infinite', marginRight: '.6rem', verticalAlign: 'middle' }} />
-                <span style={{ fontWeight: 500, fontSize: '.875rem' }}>Cargando categorías...</span>
+                <div style={{
+                  display: 'inline-block', width: '22px', height: '22px',
+                  border: '2.5px solid #c8ddf5', borderTopColor: '#1458b8',
+                  borderRadius: '50%', animation: 'ta-spin .7s linear infinite',
+                  marginRight: '.6rem', verticalAlign: 'middle'
+                }} />
+                <span style={{ fontWeight: 600, fontSize: '.855rem' }}>Cargando categorías...</span>
               </div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table className="ta-table">
                   <thead>
                     <tr>
-                      <th>Nombre</th>
-                      <th>Código</th>
-                      <th>Grupo</th>
-                      <th style={{ width: '110px' }}>Acciones</th>
+                      <th style={{ width: '40%' }}>Nombre</th>
+                      <th style={{ width: '20%' }}>Código</th>
+                      <th style={{ width: '28%' }}>Grupo</th>
+                      <th style={{ width: '12%', textAlign: 'right' }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {categorias.map(c => (
-                      <tr key={String(c.id ?? c.nombre)}>
+                    {categorias.map((c, idx) => (
+                      <tr key={String(c.id ?? c.nombre)} style={{ animationDelay: `${idx * 0.04}s` }}>
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '.65rem' }}>
-                            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#1458b8', flexShrink: 0 }} />
-                            <span style={{ fontWeight: 700, color: '#0d2d5e', fontSize: '.9rem' }}>{c.nombre}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+                            <div className="ta-dot" />
+                            <span style={{ fontWeight: 700, color: '#0a2550', fontSize: '.9rem' }}>{c.nombre}</span>
                           </div>
                         </td>
-                        <td><span className="ta-badge ta-badge-blue">{c.codigo}</span></td>
+                        <td>
+                          <span className="ta-badge ta-badge-blue">{c.codigo}</span>
+                        </td>
                         <td>
                           {(() => {
                             const gid = String((c as any).grupoId ?? (c as any).grupo_id ?? (c as any).groupId ?? (c as any).grupo ?? '').trim();
-                            if (!gid) return <span style={{ color: '#b0c8e0' }}>—</span>;
+                            if (!gid) return <span style={{ color: '#c5d9ef', fontSize: '.85rem' }}>—</span>;
                             const g = groups.find(x => String(x.id) === gid);
-                            return g ? <span className="ta-badge ta-badge-gray">{g.nombre}</span> : <span className="ta-badge ta-badge-gray">{gid}</span>;
+                            return <span className="ta-badge ta-badge-gray">{g ? g.nombre : gid}</span>;
                           })()}
                         </td>
-                        <td>
-                          <button onClick={() => openEdit(c)} className="ta-btn-ghost">
-                            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        <td style={{ textAlign: 'right' }}>
+                          <button onClick={() => openEdit(c)} className="ta-btn-edit">
+                            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
                             Editar
                           </button>
                         </td>
                       </tr>
                     ))}
                     {categorias.length === 0 && (
-                      <tr><td colSpan={4} style={{ border: 'none', padding: 0 }}>
-                        <div className="ta-empty">
-                          <div className="ta-empty-icon">
-                            <svg width="22" height="22" fill="none" stroke="#7da0c4" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                      <tr>
+                        <td colSpan={4} style={{ border: 'none', padding: 0 }}>
+                          <div className="ta-empty">
+                            <div className="ta-empty-icon">
+                              <svg width="22" height="22" fill="none" stroke="#7da0c4" viewBox="0 0 24 24" strokeWidth={1.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                              </svg>
+                            </div>
+                            <p style={{ fontSize: '.95rem', fontWeight: 700, color: '#4a6f98', marginBottom: '.25rem' }}>Sin tipos registrados</p>
+                            <p style={{ fontSize: '.82rem', color: '#9bbcd4', margin: 0, fontWeight: 400 }}>Pulsa "Nuevo tipo" para comenzar</p>
                           </div>
-                          <p style={{ fontSize: '.95rem', fontWeight: 600, color: '#5a7fa8', marginBottom: '.25rem' }}>Sin tipos registrados</p>
-                          <p style={{ fontSize: '.82rem', color: '#9bbcd4', margin: 0 }}>Pulsa "Añadir tipo" para comenzar</p>
-                        </div>
-                      </td></tr>
+                        </td>
+                      </tr>
                     )}
                   </tbody>
                 </table>
@@ -435,203 +649,97 @@ const TiposActivosPage = () => {
         </div>
       </div>
 
-      {/* ADD / EDIT MODAL */}
+      {/* ──────────────── ADD / EDIT MODAL ──────────────── */}
       {showModal && (
         <div className="ta-modal-overlay">
           <div className="ta-modal">
             <div className="ta-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '.85rem' }}>
                 <div className="ta-modal-header-icon">
-                  <svg width="20" height="20" fill="none" stroke="#fff" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                  <svg width="18" height="18" fill="none" stroke="#fff" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
                 </div>
                 <div>
                   <p className="ta-modal-title">{editingCategoryId ? 'Editar categoría' : 'Nueva categoría'}</p>
-                  <p className="ta-modal-sub">{editingCategoryId ? 'Actualiza subcategorías y campos personalizados.' : 'Define la categoría y sus campos para el formulario.'}</p>
+                  <p className="ta-modal-sub">{editingCategoryId ? 'Actualiza los datos de la categoría seleccionada.' : 'Define el nuevo tipo de activo y su clasificación.'}</p>
                 </div>
               </div>
-              <button type="button" className="ta-modal-close" onClick={() => { setShowModal(false); setNewCategoryFields([]); setCategoryPreview(null); setShowPreview(false); setEditingCategoryId(null); setCategoryNameInput(''); setSubcategoriesInput(''); }}>✕</button>
+              <button type="button" className="ta-modal-close" onClick={() => { setShowModal(false); setEditingCategoryId(null); setCategoryNameInput(''); setCategoryCodeInput(''); setCategoryGroupId(''); }}>✕</button>
             </div>
 
             <div className="ta-modal-body">
-              <form onSubmit={handlePreview}>
+              <form onSubmit={handleSaveBasic}>
+
                 <div className="ta-tip">
-                  <svg width="15" height="15" fill="none" stroke="#1458b8" viewBox="0 0 24 24" strokeWidth={2} style={{ flexShrink: 0, marginTop: '1px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  <span><strong style={{ fontWeight: 700 }}>Recomendación:</strong> usa un nombre claro y agrega marcas sólo si ayudan al usuario a elegir mejor.</span>
+                  <svg width="15" height="15" fill="none" stroke="#1458b8" viewBox="0 0 24 24" strokeWidth={2} style={{ flexShrink: 0, marginTop: '1px' }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span><strong style={{ fontWeight: 700 }}>Recomendación:</strong> usa un nombre claro y descriptivo para facilitar la clasificación del activo.</span>
                 </div>
 
-                {/* Section 1 */}
-                <div className="ta-section-label">
+                <div className="ta-section-wrap">
                   <span className="ta-section-num">1</span>
-                  <span className="ta-section-title">Información básica</span>
+                  <div>
+                    <span className="ta-section-title">Información básica</span>
+                    <p className="ta-section-subtitle">Identificación y grupo al que pertenece la categoría</p>
+                  </div>
                 </div>
 
                 <div className="ta-form-group">
-                  <label className="ta-form-label">Grupo de Activo</label>
+                  <label className="ta-form-label">Grupo de Activo <span style={{ color: '#e53e3e' }}>*</span></label>
                   <select value={categoryGroupId} onChange={(e) => setCategoryGroupId(e.target.value)} className="ta-input ta-select">
                     <option value="">— Seleccionar grupo —</option>
                     {groups.map(g => (<option key={g.id} value={g.id}>{g.nombre}</option>))}
                   </select>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem', marginBottom: '1.3rem' }}>
                   <div>
-                    <label className="ta-form-label">Nombre de categoría <span style={{ color: '#e53e3e' }}>*</span></label>
-                    <input name="categoria" value={categoryNameInput} onChange={(e) => { const v = e.target.value; setCategoryNameInput(v); if (!editingCategoryId) setCategoryCodeInput(generateCategoryCode(v)); }} className="ta-input" placeholder="ej: Laptop" readOnly={!!editingCategoryId} required />
+                    <label className="ta-form-label">
+                      Nombre de categoría <span style={{ color: '#e53e3e' }}>*</span>
+                      {editingCategoryId && <span className="ta-readonly-badge">Solo lectura</span>}
+                    </label>
+                    <input
+                      name="categoria"
+                      value={categoryNameInput}
+                      onChange={(e) => { const v = e.target.value; setCategoryNameInput(v); if (!editingCategoryId) setCategoryCodeInput(generateCategoryCode(v)); }}
+                      className="ta-input"
+                      placeholder="ej: Laptop"
+                      readOnly={!!editingCategoryId}
+                      required
+                    />
                     {editingCategoryId && <p className="ta-form-hint">El nombre no se edita para mantener consistencia.</p>}
                   </div>
                   <div>
-                    <label className="ta-form-label">Código <span style={{ color: '#e53e3e' }}>*</span></label>
-                    <input name="codigo" value={categoryCodeInput} readOnly className="ta-input" placeholder="ej: LAP-001" required style={{ fontFamily: "'DM Mono', monospace" }} />
-                    <p className="ta-form-hint">Código único corto para la categoría.</p>
+                    <label className="ta-form-label">
+                      Código <span style={{ color: '#e53e3e' }}>*</span>
+                      <span className="ta-readonly-badge">Auto</span>
+                    </label>
+                    <input
+                      name="codigo"
+                      value={categoryCodeInput}
+                      readOnly
+                      className="ta-input"
+                      placeholder="Se genera automáticamente"
+                      required
+                      style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '.04em' }}
+                    />
+                    <p className="ta-form-hint">Generado automáticamente desde el nombre.</p>
                   </div>
                 </div>
 
-                <hr className="ta-divider" />
-
-                <hr className="ta-divider" />
-
-                {/* Section 3 - Campos */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                  <div className="ta-section-label" style={{ marginBottom: 0 }}>
-                    <span className="ta-section-num">2</span>
-                    <div>
-                      <span className="ta-section-title" style={{ display: 'block' }}>Campos personalizados</span>
-                      <span style={{ fontSize: '.73rem', color: '#7da0c4', marginTop: '.1rem', display: 'block' }}>Aparecerán al registrar un activo de este tipo.</span>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '.75rem', flexWrap: 'wrap' }}>
-                    <div style={{ minWidth: '210px' }}>
-                      <label style={{ display: 'block', fontSize: '.72rem', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.05em', color: '#7da0c4', marginBottom: '.35rem' }}>Copiar desde categoría</label>
-                      <select value={copyFromCategoryId} onChange={async (e) => {
-                        const id = e.target.value; setCopyFromCategoryId(id); if (!id) return;
-                        try {
-                          const cat = await getCategoriaById(id);
-                          const source = cat ?? (categorias || []).find(c => String(c.id ?? (c as any)._id ?? '') === String(id));
-                          if (!source) return;
-                          const mapped = normalizeCampos((source as any).campos || []).map(f => ({ ...f, opcionesRaw: Array.isArray(f.opciones) ? f.opciones.join(', ') : (typeof f.opciones === 'string' ? f.opciones : '') }));
-                          setNewCategoryFields(mapped as any);
-                        } catch (err) { console.error('Error:', err); }
-                      }} className="ta-input ta-select">
-                        <option value="">-- No copiar --</option>
-                        {(categorias || []).map(c => (<option key={String(c.id ?? (c as any)._id ?? '')} value={String(c.id ?? (c as any)._id ?? '')}>{c.nombre}</option>))}
-                      </select>
-                    </div>
-                    <button type="button" onClick={() => setNewCategoryFields([...newCategoryFields, { nombre: '', tipo: 'text', requerido: false, opcionesRaw: '' }])} className="ta-btn-secondary" style={{ whiteSpace: 'nowrap' as const }}>
-                      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-                      Agregar campo
-                    </button>
-                  </div>
-                </div>
-
-                <div className="ta-fields-wrap">
-                  <table className="ta-fields-table">
-                    <thead>
-                      <tr>
-                        <th>Nombre</th>
-                        <th>Tipo</th>
-                        <th style={{ textAlign: 'center', width: '60px' }}>Req.</th>
-                        <th>Opciones</th>
-                        <th style={{ width: '60px' }} />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {newCategoryFields.map((field, idx) => (
-                        <tr key={idx}>
-                          <td><input type="text" value={field.nombre} onChange={(e) => { const u = [...newCategoryFields]; u[idx] = { ...u[idx], nombre: e.target.value }; setNewCategoryFields(u); }} className="ta-input" placeholder="Ej: Procesador" /></td>
-                          <td>
-                            <select value={field.tipo} onChange={(e) => { const u = [...newCategoryFields]; u[idx] = { ...u[idx], tipo: e.target.value as CategoryField['tipo'] }; if (e.target.value !== 'select') u[idx].opciones = []; else (u[idx] as any).opcionesRaw = ((u[idx] as any).opciones || []).join(', '); setNewCategoryFields(u); }} className="ta-input ta-select" style={{ minWidth: '120px' }}>
-                              <option value="text">Texto</option>
-                              <option value="number">Número</option>
-                              <option value="select">Selección</option>
-                              <option value="textarea">Texto largo</option>
-                            </select>
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            <input type="checkbox" checked={Boolean(field.requerido)} onChange={(e) => { const u = [...newCategoryFields]; u[idx] = { ...u[idx], requerido: e.target.checked }; setNewCategoryFields(u); }} style={{ width: '16px', height: '16px', accentColor: '#1458b8', cursor: 'pointer' }} />
-                          </td>
-                          <td>
-                            {field.tipo === 'select'
-                              ? <input type="text" value={((field as any).opcionesRaw ?? (field.opciones || []).join(', '))} onChange={(e) => { const u = [...newCategoryFields]; u[idx] = { ...u[idx], opcionesRaw: e.target.value } as any; setNewCategoryFields(u); }} onBlur={() => { const u = [...newCategoryFields]; const raw = String((u[idx] as any).opcionesRaw || ''); u[idx] = { ...u[idx], opciones: raw.split(',').map((s: string) => s.trim()).filter(Boolean), opcionesRaw: raw } as any; setNewCategoryFields(u); }} className="ta-input" placeholder="Ej: Intel, AMD" />
-                              : <span style={{ color: '#b0c8e0' }}>—</span>}
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            <button type="button" onClick={() => setNewCategoryFields(newCategoryFields.filter((_, i) => i !== idx))} className="ta-btn-ghost danger" style={{ padding: '.3rem .5rem' }}>
-                              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                      {newCategoryFields.length === 0 && (
-                        <tr><td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: '#9bbcd4', fontSize: '.85rem', fontStyle: 'italic' }}>No hay campos. Pulsa "+ Agregar campo" para comenzar.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Section 3 - Vista previa interactiva de campos */}
-                <div className="ta-section-label" style={{ marginTop: '1rem' }}>
-                  <span className="ta-section-num">3</span>
-                  <span className="ta-section-title">Vista previa de campos</span>
-                </div>
-
-                <div style={{ background: '#fff', border: '1.5px solid #d4e5f9', borderRadius: '12px', padding: '1rem', marginBottom: '1rem' }}>
-                  {newCategoryFields.length === 0 ? (
-                    <p style={{ color: '#9bbcd4', fontStyle: 'italic', margin: 0 }}>No hay campos para previsualizar</p>
-                  ) : (
-                    <form style={{ display: 'grid', gap: '.85rem' }} onSubmit={(e) => e.preventDefault()}>
-                      {newCategoryFields.map((campo: any, idx: number) => {
-                        const opcionesArr: string[] = Array.isArray(campo.opciones)
-                          ? campo.opciones.map((o: any) => (typeof o === 'string' ? o : String(o?.value ?? '')))
-                          : (campo.opcionesRaw ? String(campo.opcionesRaw).split(',').map((s: string) => s.trim()).filter(Boolean) : []);
-                        return (
-                          <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '.35rem' }}>
-                            <label style={{ fontSize: '.85rem', fontWeight: 700, color: '#0d2d5e' }}>
-                              {campo.nombre || 'Campo sin nombre'} {campo.requerido && <span style={{ color: '#e53e3e' }}>*</span>}
-                            </label>
-                            {campo.tipo === 'text' && (
-                              <input className="ta-input" type="text" placeholder={campo.nombre ? `Ej: ${campo.nombre}` : 'Campo de texto'} disabled />
-                            )}
-                            {campo.tipo === 'number' && (
-                              <input className="ta-input" type="number" placeholder="0" disabled />
-                            )}
-                            {campo.tipo === 'select' && (
-                              <>
-                                <select
-                                  className="ta-input ta-select"
-                                  value={previewValues[idx] ?? ''}
-                                  onChange={(e) => setPreviewValues(p => ({ ...p, [idx]: e.target.value }))}
-                                >
-                                  <option value="">— Seleccionar —</option>
-                                  {opcionesArr.map((opt, oidx) => (<option key={oidx} value={opt}>{opt}</option>))}
-                                </select>
-                                {opcionesArr.length > 0 && (
-                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.35rem', marginTop: '.5rem' }}>
-                                    {opcionesArr.map((opt: string, oidx: number) => (
-                                      <span key={oidx} style={{ padding: '.15rem .55rem', borderRadius: '6px', fontSize: '.72rem', color: '#0d2d5e', background: '#f0f6ff', border: '1.5px solid #d4e5f9', fontFamily: "'DM Mono', monospace" }}>{opt}</span>
-                                    ))}
-                                  </div>
-                                )}
-                              </>
-                            )}
-                            {campo.tipo === 'textarea' && (
-                              <textarea className="ta-input" rows={3} placeholder={campo.nombre ? `Describe ${campo.nombre}` : ''} disabled />
-                            )}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem' }}>
-                              <small style={{ color: '#7da0c4' }}>{tipoLabel[campo.tipo] || campo.tipo}</small>
-                              {campo.tipo === 'select' && opcionesArr.length > 0 && <small style={{ color: '#7da0c4' }}>{opcionesArr.length} opciones</small>}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </form>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.75rem', paddingTop: '1.25rem', marginTop: '1.25rem', borderTop: '1.5px solid #e8f1fb' }}>
-                  <button type="button" onClick={() => { setShowModal(false); setNewCategoryFields([]); setCategoryPreview(null); setShowPreview(false); setEditingCategoryId(null); setCategoryNameInput(''); setSubcategoriesInput(''); }} className="ta-btn-secondary">Cancelar</button>
+                <div className="ta-modal-footer" style={{ margin: '0 -2rem -1.75rem', borderRadius: '0 0 16px 16px' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setShowModal(false); setEditingCategoryId(null); setCategoryNameInput(''); setCategoryCodeInput(''); setCategoryGroupId(''); }}
+                    className="ta-btn-secondary"
+                  >
+                    Cancelar
+                  </button>
                   <button type="submit" className="ta-btn-primary">
-                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                    Previsualizar
+                    <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    {editingCategoryId ? 'Guardar cambios' : 'Crear categoría'}
                   </button>
                 </div>
               </form>
@@ -640,109 +748,47 @@ const TiposActivosPage = () => {
         </div>
       )}
 
-      {/* PREVIEW MODAL */}
-      {showPreview && categoryPreview && (
-        <div className="ta-modal-overlay" style={{ zIndex: 60 }}>
-          <div className="ta-modal" style={{ maxWidth: '640px' }}>
-            <div className="ta-modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '.85rem' }}>
-                <div className="ta-modal-header-icon">
-                  <svg width="20" height="20" fill="none" stroke="#fff" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                </div>
-                <div>
-                  <p className="ta-modal-title">Vista previa</p>
-                  <p className="ta-modal-sub">Revisa la información antes de confirmar</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="ta-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div className="ta-preview-hero">
-                <p style={{ fontSize: '.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: '#1458b8', marginBottom: '.3rem' }}>Nombre de categoría</p>
-                <p style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0d2d5e', margin: 0, letterSpacing: '-.02em' }}>{categoryPreview.nombre}</p>
-              </div>
-
-              {categoryPreview.campos.length > 0 && (
-                <div style={{ background: '#fff', border: '1.5px solid #d4e5f9', borderRadius: '12px', padding: '1.25rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                    <p style={{ fontSize: '.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#3572b0', margin: 0 }}>Campos personalizados</p>
-                    <span style={{ background: '#ddeeff', color: '#1458b8', fontSize: '.72rem', fontWeight: 700, padding: '.15rem .6rem', borderRadius: '99px' }}>{categoryPreview.campos.length}</span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))', gap: '.75rem' }}>
-                    {categoryPreview.campos.map((campo: any, idx: number) => (
-                      <div key={idx} className="ta-field-card">
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '.5rem', marginBottom: '.5rem' }}>
-                          <span style={{ fontWeight: 700, fontSize: '.875rem', color: '#0d2d5e' }}>{campo.nombre}</span>
-                          {campo.requerido && <span style={{ background: '#fff5f5', color: '#c53030', fontSize: '.68rem', fontWeight: 700, padding: '.15rem .5rem', borderRadius: '6px', border: '1px solid #fecaca', whiteSpace: 'nowrap', flexShrink: 0 }}>Req.</span>}
-                        </div>
-                        <span style={{ display: 'inline-block', fontSize: '.72rem', fontWeight: 600, padding: '.2rem .6rem', borderRadius: '6px', background: '#eef5ff', color: '#1458b8', border: '1.5px solid #b8d4f8' }}>{tipoLabel[campo.tipo] || campo.tipo}</span>
-                        {campo.opciones && campo.opciones.length > 0 && (
-                          <div style={{ marginTop: '.6rem', paddingTop: '.6rem', borderTop: '1px solid #e8f1fb' }}>
-                            <p style={{ fontSize: '.7rem', color: '#7da0c4', marginBottom: '.4rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>Opciones:</p>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.35rem' }}>
-                              {campo.opciones.map((opt: any, oidx: number) => (
-                                <span key={oidx} style={{ padding: '.15rem .55rem', borderRadius: '6px', fontSize: '.72rem', color: '#0d2d5e', background: '#f0f6ff', border: '1.5px solid #d4e5f9', fontFamily: "'DM Mono', monospace" }}>{typeof opt === 'string' ? opt : opt.value}</span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="ta-modal-footer">
-              <button onClick={() => { setCategoryPreview(null); setShowPreview(false); }} className="ta-btn-secondary">
-                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-                Volver
-              </button>
-              <button onClick={handleSavePreview} className="ta-btn-primary">
-                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                Confirmar y guardar
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Components modal */}
+      {showComponentsModal && (
+        <ComponentsModal visible={showComponentsModal} onClose={() => setShowComponentsModal(false)} categories={categorias} />
       )}
 
-      {/* GROUP MODAL */}
+      {/* ──────────────── GROUP MODAL ──────────────── */}
       {showGroupModal && (
         <div className="ta-modal-overlay">
           <div className="ta-modal ta-modal-sm">
             <div className="ta-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '.85rem' }}>
                 <div className="ta-modal-header-icon">
-                  <svg width="18" height="18" fill="none" stroke="#fff" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                  <svg width="16" height="16" fill="none" stroke="#fff" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
                 </div>
                 <div>
-                  <p className="ta-modal-title">{editingGroupId ? 'Editar Grupo' : 'Crear Grupo'}</p>
-                  <p className="ta-modal-sub">Define un grupo para agrupar tipos de activo relacionados.</p>
+                  <p className="ta-modal-title">{editingGroupId ? 'Editar grupo' : 'Crear grupo'}</p>
+                  <p className="ta-modal-sub">Define un grupo para clasificar tipos de activo relacionados.</p>
                 </div>
               </div>
               <button type="button" className="ta-modal-close" onClick={() => { setShowGroupModal(false); setEditingGroupId(null); setGroupNameInput(''); setGroupCodeInput(''); setGroupDescriptionInput(''); setGroupActiveInput(true); }}>✕</button>
             </div>
 
             <div className="ta-modal-body">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div className="ta-form-group">
-                  <label className="ta-form-label">Nombre del Grupo <span style={{ color: '#e53e3e' }}>*</span></label>
-                  <input value={groupNameInput} onChange={e => { const v = e.target.value; setGroupNameInput(v); setGroupCodeInput(generateGroupCode(v)); }} className="ta-input" placeholder="Ej: Equipos de Computo" />
-                </div>
-                <div className="ta-form-group">
-                  <label className="ta-form-label">Código</label>
-                  <input value={groupCodeInput} readOnly className="ta-input" placeholder="Se generará automáticamente" style={{ fontFamily: "'DM Mono', monospace" }} />
-                  <p className="ta-form-hint">Generado automáticamente a partir del nombre.</p>
-                </div>
-                <div className="ta-form-group">
-                  <label className="ta-form-label">Descripción</label>
-                  <textarea value={groupDescriptionInput} onChange={e => setGroupDescriptionInput(e.target.value)} className="ta-input" placeholder="Descripción del grupo (opcional)" rows={3} style={{ resize: 'vertical' }} />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', padding: '.85rem 1rem', background: '#f4f8fe', border: '1.5px solid #cce2fa', borderRadius: '8px' }}>
-                  <input type="checkbox" id="grp-activo" checked={groupActiveInput} onChange={e => setGroupActiveInput(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#1458b8', cursor: 'pointer' }} />
-                  <label htmlFor="grp-activo" style={{ fontSize: '.875rem', fontWeight: 600, color: '#0d2d5e', cursor: 'pointer' }}>Grupo activo</label>
-                </div>
+              <div className="ta-form-group">
+                <label className="ta-form-label">Nombre del grupo <span style={{ color: '#e53e3e' }}>*</span></label>
+                <input value={groupNameInput} onChange={e => { const v = e.target.value; setGroupNameInput(v); setGroupCodeInput(generateGroupCode(v)); }} className="ta-input" placeholder="Ej: Equipos de Cómputo" />
+              </div>
+              <div className="ta-form-group">
+                <label className="ta-form-label">Código <span className="ta-readonly-badge">Auto</span></label>
+                <input value={groupCodeInput} readOnly className="ta-input" placeholder="Se genera automáticamente" style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '.04em' }} />
+                <p className="ta-form-hint">Generado automáticamente a partir del nombre.</p>
+              </div>
+              <div className="ta-form-group">
+                <label className="ta-form-label">Descripción</label>
+                <textarea value={groupDescriptionInput} onChange={e => setGroupDescriptionInput(e.target.value)} className="ta-input" placeholder="Descripción del grupo (opcional)" rows={3} style={{ resize: 'vertical' }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', padding: '.85rem 1rem', background: '#f5f9ff', border: '1.5px solid #c8ddf5', borderRadius: '10px' }}>
+                <input type="checkbox" id="grp-activo" checked={groupActiveInput} onChange={e => setGroupActiveInput(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#1458b8', cursor: 'pointer' }} />
+                <label htmlFor="grp-activo" style={{ fontSize: '.855rem', fontWeight: 600, color: '#0a2550', cursor: 'pointer', userSelect: 'none' }}>Grupo activo</label>
               </div>
             </div>
 
@@ -772,13 +818,13 @@ const TiposActivosPage = () => {
                   else setErrorMessage('Error al guardar grupo');
                   setShowErrorToast(true); setTimeout(() => setShowErrorToast(false), 5000);
                 }
-              }} className="ta-btn-primary">{editingGroupId ? 'Actualizar' : 'Crear'}</button>
+              }} className="ta-btn-primary">{editingGroupId ? 'Guardar cambios' : 'Crear grupo'}</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* TOASTS */}
+      {/* ── TOASTS ── */}
       {showSuccessToast && (
         <div className="ta-toast ta-toast-success">
           <svg width="16" height="16" fill="none" stroke="#16a34a" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>

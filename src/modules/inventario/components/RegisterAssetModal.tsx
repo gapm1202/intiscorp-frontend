@@ -4,6 +4,7 @@ import { getWarrantyInfo } from "@/modules/inventario/utils/warranty";
 import { formatAssetCode, getCompanyPrefix, getCategoryPrefix } from "@/utils/helpers";
 import type { Category, FieldOption, SubField } from "@/modules/inventario/services/categoriasService";
 import { createActivo, updateActivo } from "@/modules/inventario/services/inventarioService";
+import { getFormularioByCategoria } from '@/modules/inventario/services/componentesService';
 import { getUsuariosByEmpresa, type Usuario } from "@/modules/usuarios/services/usuariosService";
 import { getMarcas, type MarcaItemAPI } from '@/modules/inventario/services/marcasService';
 
@@ -139,6 +140,8 @@ const RegisterAssetModal = ({
   const [fotosExistentes,            setFotosExistentes]            = useState<Array<{ url: string; name: string; description: string }>>([]);
   const [dynamicFields,              setDynamicFields]              = useState<Record<string, string>>({});
   const [dynamicArrayFields,         setDynamicArrayFields]         = useState<Record<string, Array<Record<string, string>>>>({});
+  const [componentesForm,            setComponentesForm]            = useState<Array<any>>([]);
+  const [valoresDinamicos,          setValoresDinamicos]          = useState<Array<{ campo_id: number | string; valor: string }>>([]);
   const [showMotivoModal,            setShowMotivoModal]            = useState(false);
   const [motivo,                     setMotivo]                     = useState('');
   const [isSubmitting,               setIsSubmitting]               = useState(false);
@@ -308,6 +311,25 @@ const RegisterAssetModal = ({
           } catch (err) { console.error('❌ Error parsing campos_personalizados_array:', err); setDynamicFields({}); setDynamicArrayFields({}); }
         } else { setDynamicFields({}); setDynamicArrayFields({}); }
 
+        // Cargar valoresDinamicos si existen en el activo (modo edición)
+        try {
+          const rawValDyn = asset['valoresDinamicos'] ?? asset['valores_dinamicos'] ?? asset['valoresDinamicosArray'] ?? asset['valores_dinamicos_array'] ?? asset['valores_dinamicos'] ?? asset['valores'] ?? null;
+          if (rawValDyn) {
+            const parsed = typeof rawValDyn === 'string' ? JSON.parse(String(rawValDyn)) : rawValDyn;
+            if (Array.isArray(parsed)) {
+              const normalized = parsed.map((v: any) => ({
+                campo_id: v.campo_id ?? v.campoId ?? v.field_id ?? v.id ?? v.campo_id,
+                valor: v.valor != null ? String(v.valor) : ''
+              }));
+              setValoresDinamicos(normalized);
+            } else {
+              setValoresDinamicos([]);
+            }
+          } else {
+            setValoresDinamicos([]);
+          }
+        } catch (err) { console.error('Error parsing valoresDinamicos from asset:', err); setValoresDinamicos([]); }
+
         const cat = String(asset['categoria'] ?? '');
         if (cat === 'Laptop') {
           setLapCpu(String(asset['lapCpu'] ?? '')); setLapCpuSerie(String(asset['lapCpuSerie'] ?? ''));
@@ -353,6 +375,44 @@ const RegisterAssetModal = ({
   }, [isOpen, editingAsset, areas]);
 
   useEffect(() => { setCategoria(''); setDynamicFields({}); setAssetId(''); setFabricante(''); }, [selectedGroupId]);
+
+  // Cargar componentes dinámicos cuando cambia la categoría seleccionada
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        setComponentesForm([]);
+        if (!editingAsset) setValoresDinamicos([]);
+        const sel = categories.find(c => String(c.nombre) === String(categoria));
+        const catId = sel?.id ?? sel?._id ?? sel?.codigo ?? '';
+        if (!catId) return;
+        const data = await getFormularioByCategoria(catId);
+        if (!mounted) return;
+        // normalize fields order if needed
+        setComponentesForm(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Error cargando componentes dinámicos:', err);
+        if (mounted) { setComponentesForm([]); }
+      }
+    };
+    if (categoria) load();
+    return () => { mounted = false; };
+  }, [categoria, categories, editingAsset]);
+
+  const setValorDinamico = (campoId: number | string, valor: string) => {
+    setValoresDinamicos(prev => {
+      const copy = [...prev];
+      const idx = copy.findIndex(p => String(p.campo_id) === String(campoId));
+      if (idx === -1) copy.push({ campo_id: campoId, valor });
+      else copy[idx] = { ...copy[idx], valor };
+      return copy;
+    });
+  };
+
+  const getValorDinamico = (campoId: number | string) => {
+    const found = valoresDinamicos.find(p => String(p.campo_id) === String(campoId));
+    return found ? found.valor : '';
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -450,6 +510,7 @@ const RegisterAssetModal = ({
     ...buildCategoryData(),
     camposPersonalizados: buildCamposPersonalizados(),
     camposPersonalizadosArray: buildCamposPersonalizadosArray(),
+    valoresDinamicos: valoresDinamicos && valoresDinamicos.length ? valoresDinamicos : undefined,
     fotosExistentes: fotosExistentes.map(f => ({ url: f.url, name: f.name, description: f.description })),
     fotosNuevas: fotos.map(f => ({ name: f.file.name, description: f.description })),
     fotosFiles: fotos.length > 0 ? fotos : undefined,
@@ -812,141 +873,18 @@ const RegisterAssetModal = ({
 
   // ── Render: Tab Campos Personalizados ──────────────────────────────────
   const renderPersonalizados = () => {
-    if (!selectedCategory?.campos?.length) {
+    // Mostrar únicamente los componentes dinámicos; ya no se muestran "campos personalizados"
+    const comps = renderComponentesDinamicos();
+    if (!comps) {
       return (
         <div className={`${cardCls} flex flex-col items-center justify-center py-16 text-center`}>
-          <span className="text-5xl mb-3">⚙️</span>
-          <p className="text-slate-500 font-medium">No hay campos personalizados</p>
-          <p className="text-xs text-slate-400 mt-1">Selecciona un Tipo de Activo en la pestaña de Identificación para ver sus campos.</p>
+          <span className="text-5xl mb-3">🧩</span>
+          <p className="text-slate-500 font-medium">No hay componentes dinámicos</p>
+          <p className="text-xs text-slate-400 mt-1">Selecciona un Tipo de Activo en la pestaña de Identificación para cargar componentes.</p>
         </div>
       );
     }
-    return (
-      <div className={cardCls}>
-        <p className={sectionTitle}><span>⚙️</span> Campos de {selectedCategory.nombre}</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {selectedCategory.campos.map((field, idx) => {
-            const fk = getFieldKey(field.nombre);
-            const isArray = field.subcampos?.length > 0;
-            const firstOpt = field.opciones?.[0];
-            const hasOptionSubcampos = firstOpt && typeof firstOpt !== 'string' &&
-              (field.opciones as FieldOption[]).some(opt => typeof opt !== 'string' && opt.subcampos?.length > 0);
-
-            if (isArray) return (
-              <div key={idx} className="col-span-full border border-blue-200 rounded-xl p-4 bg-blue-50">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="text-sm font-semibold text-blue-800">{field.nombre}{field.requerido && <span className="text-red-500 ml-1">*</span>}</label>
-                  <button type="button" onClick={() => { setDynamicArrayFields(prev => { const cur = prev[fk] || []; const entry: Record<string,string> = {}; field.subcampos!.forEach(sf => { entry[sf.nombre] = ''; }); return { ...prev, [fk]: [...cur, entry] }; }); }}
-                    className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition">+ Añadir {field.nombre}</button>
-                </div>
-                <div className="space-y-3">
-                  {(dynamicArrayFields[fk] || []).map((entry, ei) => (
-                    <div key={ei} className="bg-white border border-blue-200 rounded-lg p-3 flex items-start gap-2">
-                      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {field.subcampos!.map((sf, si) => (
-                          <div key={si}>
-                            <label className="block text-xs text-slate-500 font-medium mb-1">{sf.nombre}</label>
-                            {sf.tipo === 'select' && sf.opciones ? (
-                              <select value={entry[sf.nombre] || ''} onChange={e => { setDynamicArrayFields(prev => { const arr = [...(prev[fk]||[])]; arr[ei] = {...arr[ei],[sf.nombre]:e.target.value}; return {...prev,[fk]:arr}; }); }} className={selectCls}>
-                                <option value="">-- Seleccionar --</option>
-                                {sf.opciones.map((o,oi) => <option key={oi} value={o}>{o}</option>)}
-                              </select>
-                            ) : sf.tipo === 'number' ? (
-                              <input type="number" value={entry[sf.nombre]||''} onChange={e => { setDynamicArrayFields(prev => { const arr=[...(prev[fk]||[])]; arr[ei]={...arr[ei],[sf.nombre]:e.target.value}; return {...prev,[fk]:arr}; }); }} className={inputCls} />
-                            ) : (
-                              <input type="text" value={entry[sf.nombre]||''} onChange={e => { setDynamicArrayFields(prev => { const arr=[...(prev[fk]||[])]; arr[ei]={...arr[ei],[sf.nombre]:e.target.value}; return {...prev,[fk]:arr}; }); }} className={inputCls} />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <button type="button" onClick={() => { setDynamicArrayFields(prev => ({ ...prev, [fk]: (prev[fk]||[]).filter((_,i)=>i!==ei) })); }}
-                        className="px-2 py-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 text-xs transition">✕</button>
-                    </div>
-                  ))}
-                  {!(dynamicArrayFields[fk]?.length) && <p className="text-center text-slate-400 text-sm py-3">No hay entradas. Haz clic en "+ Añadir {field.nombre}".</p>}
-                </div>
-              </div>
-            );
-
-            if (hasOptionSubcampos) {
-              const instances = dynamicArrayFields[fk] || [];
-              return (
-                <div key={idx} className="col-span-full border border-violet-200 rounded-xl p-4 bg-violet-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="text-sm font-semibold text-violet-800">{field.nombre}{field.requerido && <span className="text-red-500 ml-1">*</span>}</label>
-                    <button type="button" onClick={() => { setDynamicArrayFields(prev => ({ ...prev, [fk]: [...(prev[fk]||[]), { _opcion:'' }] })); }}
-                      className="text-xs bg-violet-600 text-white px-3 py-1.5 rounded-lg hover:bg-violet-700 transition">+ Añadir {field.nombre}</button>
-                  </div>
-                  <div className="space-y-3">
-                    {instances.map((entry, ei) => {
-                      const selVal = entry._opcion || '';
-                      const selOpt = selVal ? (field.opciones as FieldOption[]).find(o => typeof o !== 'string' && o.value === selVal) : null;
-                      return (
-                        <div key={ei} className="bg-white border border-violet-200 rounded-lg p-3 flex items-start gap-2">
-                          <div className="flex-1 space-y-3">
-                            <div>
-                              <label className="block text-xs text-slate-500 font-medium mb-1">Opción</label>
-                              <select value={selVal} onChange={e => { setDynamicArrayFields(prev => { const arr=[...(prev[fk]||[])]; arr[ei]={_opcion:e.target.value}; return {...prev,[fk]:arr}; }); }} className={selectCls}>
-                                <option value="">-- Seleccionar --</option>
-                                {field.opciones.map((o,oi) => { const v = typeof o === 'string' ? o : o.value; return <option key={oi} value={v}>{v}</option>; })}
-                              </select>
-                            </div>
-                            {selOpt && typeof selOpt !== 'string' && selOpt.subcampos?.length > 0 && (
-                              <div className="pl-3 border-l-2 border-violet-300 space-y-2">
-                                <p className="text-xs font-semibold text-violet-700">Campos para "{selVal}"</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                  {selOpt.subcampos.map((sf, si) => (
-                                    <div key={si}>
-                                      <label className="block text-xs text-slate-500 font-medium mb-1">{sf.nombre}</label>
-                                      {sf.tipo === 'select' && sf.opciones ? (
-                                        <select value={entry[sf.nombre]||''} onChange={e => { setDynamicArrayFields(prev => { const arr=[...(prev[fk]||[])]; arr[ei]={...arr[ei],[sf.nombre]:e.target.value}; return {...prev,[fk]:arr}; }); }} className={selectCls}>
-                                          <option value="">-- Seleccionar --</option>
-                                          {sf.opciones.map((so,soi) => <option key={soi} value={so}>{so}</option>)}
-                                        </select>
-                                      ) : sf.tipo === 'number' ? (
-                                        <input type="number" value={entry[sf.nombre]||''} onChange={e => { setDynamicArrayFields(prev => { const arr=[...(prev[fk]||[])]; arr[ei]={...arr[ei],[sf.nombre]:e.target.value}; return {...prev,[fk]:arr}; }); }} className={inputCls} />
-                                      ) : (
-                                        <input type="text" value={entry[sf.nombre]||''} onChange={e => { setDynamicArrayFields(prev => { const arr=[...(prev[fk]||[])]; arr[ei]={...arr[ei],[sf.nombre]:e.target.value}; return {...prev,[fk]:arr}; }); }} className={inputCls} />
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          <button type="button" onClick={() => { setDynamicArrayFields(prev => ({ ...prev, [fk]: (prev[fk]||[]).filter((_,i)=>i!==ei) })); }}
-                            className="px-2 py-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 text-xs transition">✕</button>
-                        </div>
-                      );
-                    })}
-                    {!instances.length && <p className="text-center text-slate-400 text-sm py-3">No hay entradas. Haz clic en "+ Añadir {field.nombre}".</p>}
-                  </div>
-                </div>
-              );
-            }
-
-            // Campo simple
-            return (
-              <div key={idx}>
-                <label className={labelCls}>{field.nombre}{field.requerido && <span className="text-red-500 ml-1">*</span>}</label>
-                {field.tipo === 'select' && field.opciones ? (
-                  <select value={dynamicFields[fk]||''} onChange={e => setDynamicFields(p => ({...p,[fk]:e.target.value}))} className={selectCls} required={field.requerido}>
-                    <option value="">-- Seleccionar --</option>
-                    {field.opciones.map((o,oi) => { const v = typeof o === 'string' ? o : o.value; return <option key={oi} value={v}>{v}</option>; })}
-                  </select>
-                ) : field.tipo === 'textarea' ? (
-                  <textarea value={dynamicFields[fk]||''} onChange={e => setDynamicFields(p => ({...p,[fk]:e.target.value}))} className={inputCls} rows={3} required={field.requerido} />
-                ) : field.tipo === 'number' ? (
-                  <input type="number" value={dynamicFields[fk]||''} onChange={e => setDynamicFields(p => ({...p,[fk]:e.target.value}))} className={inputCls} required={field.requerido} />
-                ) : (
-                  <input type="text" value={dynamicFields[fk]||''} onChange={e => setDynamicFields(p => ({...p,[fk]:e.target.value}))} className={inputCls} required={field.requerido} />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
+    return comps;
   };
 
   // ── Render: Tab Asignaciones ───────────────────────────────────────────
@@ -1066,6 +1004,69 @@ const RegisterAssetModal = ({
   );
 
   // ── Render principal ───────────────────────────────────────────────────
+  const renderComponentesDinamicos = () => {
+    if (!componentesForm || componentesForm.length === 0) return null;
+    return (
+      <div className={cardCls}>
+        <p className={sectionTitle}><span>🧩</span> Componentes dinámicos</p>
+        <div className="space-y-4">
+          {componentesForm.map((comp: any) => (
+            <div key={comp.id} className="bg-white border border-slate-100 rounded-xl shadow-sm p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-800">{comp.nombre}</div>
+                  <div className="text-xs text-slate-400">{comp.campos?.length ?? 0} campo{(comp.campos?.length ?? 0) !== 1 ? 's' : ''}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(comp.campos || []).map((cf: any, ci: number) => {
+                  const campoId = cf.id ?? cf.campo_id ?? `${comp.id}_${ci}`;
+                  const value = getValorDinamico(campoId);
+                  const required = Boolean(cf.requerido);
+                  if (cf.tipo === 'select') {
+                    const opts: any[] = Array.isArray(cf.opciones) ? cf.opciones : [];
+                    return (
+                      <div key={campoId}>
+                        <label className={labelCls}>{cf.nombre}{required && <span className="text-red-500 ml-1">*</span>}</label>
+                        <select value={value} onChange={e => setValorDinamico(campoId, e.target.value)} className={selectCls}>
+                          <option value="">-- Seleccionar --</option>
+                          {opts.map((o, oi) => <option key={oi} value={typeof o === 'string' ? o : o.value}>{typeof o === 'string' ? o : o.value}</option>)}
+                        </select>
+                      </div>
+                    );
+                  }
+                  if (cf.tipo === 'textarea') {
+                    return (
+                      <div key={campoId}>
+                        <label className={labelCls}>{cf.nombre}{required && <span className="text-red-500 ml-1">*</span>}</label>
+                        <textarea value={value} onChange={e => setValorDinamico(campoId, e.target.value)} className={inputCls} rows={3} />
+                      </div>
+                    );
+                  }
+                  if (cf.tipo === 'number') {
+                    return (
+                      <div key={campoId}>
+                        <label className={labelCls}>{cf.nombre}{required && <span className="text-red-500 ml-1">*</span>}</label>
+                        <input type="number" value={value} onChange={e => setValorDinamico(campoId, e.target.value)} className={inputCls} />
+                      </div>
+                    );
+                  }
+                  // default: text
+                  return (
+                    <div key={campoId}>
+                      <label className={labelCls}>{cf.nombre}{required && <span className="text-red-500 ml-1">*</span>}</label>
+                      <input type="text" value={value} onChange={e => setValorDinamico(campoId, e.target.value)} className={inputCls} />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 flex items-start justify-center pt-8 bg-black/50 backdrop-blur-sm" style={{ zIndex: 99999 }} role="dialog" aria-modal="true">
       <div className="bg-slate-50 rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
@@ -1193,5 +1194,7 @@ const RegisterAssetModal = ({
     </div>
   );
 };
+
+  
 
 export default RegisterAssetModal;

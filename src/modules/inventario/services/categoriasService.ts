@@ -15,7 +15,10 @@ export interface CategoryField {
   nombre: string;
   tipo: 'text' | 'number' | 'select' | 'textarea';
   requerido: boolean;
-  opciones?: string[]; // only for select
+  dependiente?: boolean; // si true, las opciones pueden tener subcampos
+  // Para soportar dependencias, `opciones` puede ser un arreglo simple de strings
+  // o un arreglo de objetos con subcampos por opción
+  opciones?: string[] | FieldOption[]; // only for select
 }
 
 export interface Category {
