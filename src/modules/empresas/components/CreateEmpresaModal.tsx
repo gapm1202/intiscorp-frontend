@@ -78,6 +78,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingEmpresaData, setPendingEmpresaData] = useState<typeof formData | null>(null);
   const [loadingCodigo, setLoadingCodigo] = useState(false);
+  const [passwordModalMsg, setPasswordModalMsg] = useState<string | null>(null);
 
   // Generar código de cliente automáticamente al abrir modal para crear
   useEffect(() => {
@@ -156,6 +157,16 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    // Validación: al crear nueva empresa, la contraseña del Portal de Soporte debe tener al menos 12 caracteres
+    if (!empresaId) {
+      const pwd = String(formData.contrasenaPortalSoporte ?? '');
+      if (pwd.trim().length < 12) {
+        setPasswordModalMsg('La contraseña del Portal de Soporte debe tener al menos 12 caracteres.');
+        setLoading(false);
+        return;
+      }
+    }
 
     // Lógica para asignar estado automáticamente según fecha de fin
     let estadoContrato = formData.estadoContrato || 'activo';
@@ -386,7 +397,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Dirección fiscal
+                    Nombre Comercial
                   </label>
                   <input
                     type="text"
@@ -475,8 +486,8 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
                         onChange={handleChange}
                         autoComplete="new-password"
                         className="w-full px-3 py-2 pr-10 border-2 border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
-                        placeholder="Ingrese una contraseña segura (mín. 8 caracteres)"
-                        minLength={8}
+                        placeholder="Ingrese una contraseña segura (mín. 12 caracteres)"
+                        minLength={12}
                         required
                       />
                       <button
@@ -811,6 +822,23 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
         onCancel={() => setConfirmOpen(false)}
         onConfirm={handleConfirmUpdate}
       />
+      {passwordModalMsg && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-4 border border-red-100">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center text-red-700">⚠️</div>
+              <div className="flex-1">
+                <h4 className="text-red-800 font-semibold">Contraseña insuficiente</h4>
+                <p className="text-sm text-slate-700 mt-1">{passwordModalMsg}</p>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setPasswordModalMsg(null)} className="px-4 py-2 rounded-lg bg-white border">Cerrar</button>
+              <button onClick={() => setPasswordModalMsg(null)} className="px-4 py-2 rounded-lg bg-red-600 text-white">Entendido</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
