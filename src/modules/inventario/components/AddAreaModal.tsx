@@ -100,7 +100,7 @@ const AddAreaModal = ({
                 value={name}
                 onChange={e => setName(e.target.value)}
                 className="w-full mt-2 p-2 border rounded"
-                placeholder="Ej: Recursos Humanos, IT, Almacén"
+                placeholder="Ej: Contabilidad"
                 required
                 disabled={loading}
               />

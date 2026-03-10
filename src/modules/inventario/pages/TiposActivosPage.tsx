@@ -132,6 +132,9 @@ const TiposActivosPage = () => {
       const cat = String(categoryNameInput || '').trim();
       if (!cat) { setErrorMessage('El nombre de la categoría es obligatorio'); setShowErrorToast(true); setTimeout(() => setShowErrorToast(false), 3000); return; }
       if (!categoryGroupId) { setErrorMessage('Selecciona un Grupo de Activo'); setShowErrorToast(true); setTimeout(() => setShowErrorToast(false), 3000); return; }
+      // Validar unicidad de nombre (ignorando la categoría que se está editando)
+      const exists = categorias.some(c => String(c.nombre || '').trim().toLowerCase() === cat.toLowerCase() && String(c.id) !== String(editingCategoryId ?? ''));
+      if (exists) { setErrorMessage('Ya existe una categoría con ese nombre'); setShowErrorToast(true); setTimeout(() => setShowErrorToast(false), 3000); return; }
       if (editingCategoryId) {
         const updatePayload: any = { nombre: cat, ...(categoryGroupId ? { grupo_id: categoryGroupId } : {}) };
         const updated = await updateCategoria(editingCategoryId, updatePayload);
@@ -696,20 +699,16 @@ const TiposActivosPage = () => {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem', marginBottom: '1.3rem' }}>
                   <div>
-                    <label className="ta-form-label">
-                      Nombre de categoría <span style={{ color: '#e53e3e' }}>*</span>
-                      {editingCategoryId && <span className="ta-readonly-badge">Solo lectura</span>}
-                    </label>
+                    <label className="ta-form-label">Nombre de categoría <span style={{ color: '#e53e3e' }}>*</span></label>
                     <input
                       name="categoria"
                       value={categoryNameInput}
                       onChange={(e) => { const v = e.target.value; setCategoryNameInput(v); if (!editingCategoryId) setCategoryCodeInput(generateCategoryCode(v)); }}
                       className="ta-input"
                       placeholder="ej: Laptop"
-                      readOnly={!!editingCategoryId}
                       required
                     />
-                    {editingCategoryId && <p className="ta-form-hint">El nombre no se edita para mantener consistencia.</p>}
+                    {/* El nombre es editable al editar; la unicidad se valida al guardar */}
                   </div>
                   <div>
                     <label className="ta-form-label">

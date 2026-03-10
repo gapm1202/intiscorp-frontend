@@ -63,6 +63,10 @@ const RegisterAssetModal = ({
 
   // ── Estado: tab activo ──
   const [activeTab, setActiveTab] = useState<TabId>('identificacion');
+  // Stepper index: 0..3 correspond to TABS order
+  const STEP_ORDER: TabId[] = ['identificacion', 'compra', 'personalizados', 'asignaciones'];
+  const [stepIndex, setStepIndex] = useState<number>(0);
+  const [stepError, setStepError] = useState<string | null>(null);
 
   // ── Estado: campos básicos ──
   const [categoria,        setCategoria]        = useState("");
@@ -380,6 +384,41 @@ const RegisterAssetModal = ({
 
   useEffect(() => { setCategoria(''); setDynamicFields({}); setAssetId(''); setFabricante(''); }, [selectedGroupId]);
 
+  // Keep activeTab in sync with stepIndex and viceversa
+  useEffect(() => {
+    const tab = STEP_ORDER[Math.max(0, Math.min(STEP_ORDER.length - 1, stepIndex))];
+    if (tab && tab !== activeTab) setActiveTab(tab);
+  }, [stepIndex]);
+
+  useEffect(() => {
+    const idx = STEP_ORDER.indexOf(activeTab);
+    if (idx >= 0 && idx !== stepIndex) setStepIndex(idx);
+  }, [activeTab]);
+
+  // Validation for advancing steps
+  const isStep0Valid = () => {
+    return Boolean(
+      (selectedGroupId && String(selectedGroupId).trim()) &&
+      (categoria && String(categoria).trim()) &&
+      (fabricante && String(fabricante).trim()) &&
+      (area && String(area).trim())
+    );
+  };
+
+  const getMissingStep0Fields = () => {
+    const missing: string[] = [];
+    if (!area || !String(area).trim()) missing.push('Área');
+    if (!selectedGroupId || !String(selectedGroupId).trim()) missing.push('Grupo de Activo');
+    if (!categoria || !String(categoria).trim()) missing.push('Tipo de Activo');
+    if (!fabricante || !String(fabricante).trim()) missing.push('Marca');
+    return missing;
+  };
+
+  const canAdvanceFromStep = (si: number) => {
+    if (si === 0) return isStep0Valid();
+    return true;
+  };
+
   // Cargar componentes dinámicos cuando cambia la categoría seleccionada
   useEffect(() => {
     let mounted = true;
@@ -574,6 +613,19 @@ const RegisterAssetModal = ({
     if (isSubmitting) { console.warn('⚠️ Ya se está procesando un submit, ignorando...'); return; }
     const targetSedeId = sedeId ?? selectedSedeId;
     if (!empresaId || !targetSedeId) { alert('Error: No se puede crear activo sin empresa o sede'); return; }
+    // If not on final step, advance to next step instead of submitting
+    const lastIndex = STEP_ORDER.length - 1;
+    if (stepIndex < lastIndex) {
+      // Validate current step before advancing
+      if (!canAdvanceFromStep(stepIndex)) {
+        const missing = getMissingStep0Fields();
+        setStepError(missing.length ? `Faltan campos obligatorios: ${missing.join(', ')}.` : 'Completa los campos requeridos antes de avanzar.');
+        return;
+      }
+      setStepIndex(si => Math.min(lastIndex, si + 1));
+      return;
+    }
+    // final step: proceed with create/update
     if (editingAsset) { setShowMotivoModal(true); return; }
     await procesarCreacion(empresaId, targetSedeId);
   };
@@ -747,6 +799,12 @@ const RegisterAssetModal = ({
 
   // ── Derivados ────────────────────────────────────────────────────────────
   if (!isOpen) return null;
+
+  // Small CSS for modal animation and prettier popup
+  const modalStyles = `
+    @keyframes modalEnter { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    .animate-modal-enter { animation: modalEnter 220ms cubic-bezier(.2,.9,.3,1) both; }
+  `;
 
   const editingAssetId = editingAsset
     ? String((editingAsset as Record<string, unknown>)['asset_id'] ?? (editingAsset as Record<string, unknown>)['id'] ?? (editingAsset as Record<string, unknown>)['_id'] ?? '')
@@ -1303,11 +1361,12 @@ const RegisterAssetModal = ({
   };
 
   return (
-    <div className="fixed inset-0 flex items-start justify-center pt-8 bg-black/50 backdrop-blur-sm" style={{ zIndex: 99999 }} role="dialog" aria-modal="true">
-      <div className="bg-slate-50 rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+    <div className="fixed inset-0 flex items-center justify-center p-6 bg-black/60 backdrop-blur-md" style={{ zIndex: 99999 }} role="dialog" aria-modal="true">
+      <style>{modalStyles}</style>
+      <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden transform-gpu animate-modal-enter border border-slate-100">
 
         {/* ── Header ── */}
-        <div className="bg-gradient-to-r from-blue-600 to-cyan-500 px-6 py-4 flex items-center justify-between rounded-t-2xl flex-shrink-0">
+        <div className="bg-gradient-to-r from-blue-600 to-cyan-500 px-6 py-5 flex items-center justify-between rounded-t-3xl flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center text-white text-lg">
               {editingAsset ? '✏️' : '➕'}
@@ -1316,21 +1375,31 @@ const RegisterAssetModal = ({
               <h3 className="text-white font-bold text-lg leading-tight">
                 {editingAsset ? 'Editar Activo' : 'Registrar Activo'}
               </h3>
+              <p className="text-blue-100 text-xs mt-1">Formulario por pasos — completa la información requerida</p>
               {editingAsset && editingAssetId && (
-                <p className="text-blue-100 text-xs">ID: {editingAssetId}</p>
+                <p className="text-blue-100 text-xs mt-1">ID: {editingAssetId}</p>
               )}
             </div>
           </div>
-          <button onClick={onClose} className="text-white/70 hover:text-white hover:bg-white/10 w-8 h-8 rounded-lg flex items-center justify-center transition text-lg">✕</button>
+          <button onClick={onClose} aria-label="Cerrar" className="text-white/90 hover:text-white hover:bg-white/10 w-9 h-9 rounded-lg flex items-center justify-center transition text-lg">✕</button>
         </div>
 
         {/* ── Tabs ── */}
-        <div className="bg-white border-b border-slate-200 px-6 flex gap-1 flex-shrink-0">
+        <div className="bg-white border-b border-slate-100 px-6 flex gap-1 flex-shrink-0">
           {TABS.map(tab => (
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                const targetIdx = STEP_ORDER.indexOf(tab.id);
+                // if trying to advance forward, validate current step
+                if (targetIdx > stepIndex && !canAdvanceFromStep(stepIndex)) {
+                  const missing = getMissingStep0Fields();
+                  setStepError(missing.length ? `Faltan campos obligatorios: ${missing.join(', ')}.` : 'Completa los campos requeridos antes de avanzar.');
+                  return;
+                }
+                setActiveTab(tab.id); setStepIndex(targetIdx);
+              }}
               className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap
                 ${activeTab === tab.id
                   ? 'border-blue-500 text-blue-600'
@@ -1345,6 +1414,7 @@ const RegisterAssetModal = ({
         {/* ── Contenido ── */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           <div className="flex-1 overflow-y-auto px-6 py-5">
+            {/* stepError ahora se muestra como un pop-up modal bonito (ver abajo) */}
             {activeTab === 'identificacion'  && renderIdentificacion()}
             {activeTab === 'compra'          && renderCompra()}
             {activeTab === 'personalizados'  && renderPersonalizados()}
@@ -1352,24 +1422,38 @@ const RegisterAssetModal = ({
           </div>
 
           {/* ── Footer: acciones ── */}
-          <div className="bg-white border-t border-slate-200 px-6 py-4 flex items-center justify-between flex-shrink-0 rounded-b-2xl">
+          <div className="bg-white border-t border-slate-100 px-6 py-4 flex items-center justify-between flex-shrink-0 rounded-b-3xl">
             <div className="flex gap-1.5">
               {TABS.map((tab, i) => (
-                <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
+                <button key={tab.id} type="button" onClick={() => {
+                  const targetIdx = STEP_ORDER.indexOf(tab.id);
+                  if (targetIdx > stepIndex && !canAdvanceFromStep(stepIndex)) { const missing = getMissingStep0Fields(); setStepError(missing.length ? `Faltan campos obligatorios: ${missing.join(', ')}.` : 'Completa los campos requeridos antes de avanzar.'); return; }
+                  setActiveTab(tab.id); setStepIndex(targetIdx);
+                }}
                   className={`w-2 h-2 rounded-full transition-all ${activeTab === tab.id ? 'bg-blue-500 w-5' : 'bg-slate-300'}`} />
               ))}
             </div>
             <div className="flex gap-3">
               <button type="button" onClick={onClose} disabled={isSubmitting}
-                className="px-5 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition disabled:opacity-50">
+                className="px-4 py-2 border border-slate-100 rounded-full text-sm font-medium text-slate-600 hover:bg-slate-50 transition disabled:opacity-50">
                 Cancelar
               </button>
-              <button type="submit" disabled={isSubmitting}
-                className="px-6 py-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+              {/* If not final step, the main button advances the stepper; final step submits the form */}
+              <button type={stepIndex === STEP_ORDER.length - 1 ? 'submit' : 'button'} disabled={isSubmitting}
+                onClick={() => {
+                  const last = STEP_ORDER.length - 1;
+                  if (stepIndex < last) {
+                    if (!canAdvanceFromStep(stepIndex)) { const missing = getMissingStep0Fields(); setStepError(missing.length ? `Faltan campos obligatorios: ${missing.join(', ')}.` : 'Completa los campos requeridos antes de avanzar.'); return; }
+                    setStepIndex(si => Math.min(last, si + 1));
+                  }
+                }}
+                className="px-6 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white rounded-full font-semibold text-sm shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
                 {isSubmitting ? (
                   <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>Procesando…</>
                 ) : (
-                  editingAsset ? '✅ Actualizar Activo' : '➕ Registrar Activo'
+                  stepIndex === STEP_ORDER.length - 1
+                    ? (editingAsset ? '✅ Actualizar Activo' : '➕ Registrar Activo')
+                    : 'Siguiente'
                 )}
               </button>
             </div>
@@ -1422,6 +1506,28 @@ const RegisterAssetModal = ({
                     : 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow hover:shadow-md hover:from-blue-700 hover:to-cyan-600'}`}>
                 ✅ Confirmar Actualización
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Popup de error de step (estilizado) ── */}
+      {stepError && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100001]">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 border border-red-100">
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-red-50 rounded-t-2xl bg-red-50">
+              <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-red-100 text-red-700">⚠️</div>
+              <div>
+                <h4 className="text-red-800 font-semibold">Campos requeridos</h4>
+                <p className="text-xs text-red-600">Completa los campos requeridos antes de continuar</p>
+              </div>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-slate-700">{stepError}</p>
+            </div>
+            <div className="px-4 py-3 flex justify-end gap-2 border-t border-red-50 rounded-b-2xl">
+              <button type="button" onClick={() => setStepError(null)} className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50">Cerrar</button>
+              <button type="button" onClick={() => { setStepError(null); }} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold">Entendido</button>
             </div>
           </div>
         </div>

@@ -23,15 +23,15 @@ const MarcasPage = () => {
 
   const filtered = useMemo(() => {
     const q = String(query || '').toLowerCase().trim();
-    // Require a tipo filter: if none selected, return empty list
-    if (!selectedTipoFilter) return [];
-    // start from marcas
+    // start from marcas (show all by default)
     let list = marcas || [];
-    // filter by tipo (categoria)
-    const selectedCat = categorias.find(c => String(c.id) === String(selectedTipoFilter));
-    const selId = String(selectedCat?.id ?? '');
-    const selName = String(selectedCat?.nombre ?? '');
-    list = list.filter(m => Array.isArray(m.categorias) && m.categorias.some(c => String(c) === selId || String(c) === selName));
+    // if a tipo filter is selected, reduce to marcas that belong to that categoria
+    if (selectedTipoFilter) {
+      const selectedCat = categorias.find(c => String(c.id) === String(selectedTipoFilter));
+      const selId = String(selectedCat?.id ?? '');
+      const selName = String(selectedCat?.nombre ?? '');
+      list = list.filter(m => Array.isArray(m.categorias) && m.categorias.some(c => String(c) === selId || String(c) === selName));
+    }
     if (!q) return list;
     return list.filter(m => (m.nombre || '').toLowerCase().includes(q));
   }, [marcas, query, selectedTipoFilter, categorias]);
@@ -343,7 +343,7 @@ const MarcasPage = () => {
               <h2 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#0d2d5e', letterSpacing: '-.03em', margin: 0, lineHeight: 1.1 }}>
                 Marcas
                 <span style={{ fontSize: '.75rem', fontWeight: 700, background: '#ddeeff', color: '#1458b8', borderRadius: '20px', padding: '.15rem .6rem', marginLeft: '.5rem', verticalAlign: 'middle' }}>
-                  {filtered.length}
+                  {selectedTipoFilter ? filtered.length : (marcas || []).length}
                 </span>
               </h2>
               <p style={{ fontSize: '.85rem', color: '#5a7fa8', margin: '.35rem 0 0', fontWeight: 400 }}>
@@ -384,16 +384,13 @@ const MarcasPage = () => {
               <div style={{ flex: 1 }} />
             </div>
 
-          { !selectedTipoFilter && (
-            <div style={{ padding: '1rem 1.25rem', color: '#6b7280' }}>
-              Selecciona un "Tipo de Activo" arriba para ver las marcas relacionadas.
-            </div>
-          )}
+          {/* Always show the table; the filter will narrow results when selected */}
             <div style={{ overflowX: 'auto' }}>
               <table className="mp-table">
                 <thead>
                   <tr>
                     <th>Nombre</th>
+                    <th>Tipos de Activo</th>
                     <th>Estado</th>
                     <th style={{ width: '110px' }}>Acciones</th>
                   </tr>
@@ -406,6 +403,18 @@ const MarcasPage = () => {
                           <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#1458b8', flexShrink: 0 }} />
                           <span style={{ fontWeight: 700, color: '#0d2d5e', fontSize: '.9rem' }}>{m.nombre}</span>
                         </div>
+                      </td>
+                      <td>
+                        {(Array.isArray(m.categorias) && m.categorias.length > 0) ? (
+                          m.categorias.map((cIdOrName: any, idx: number) => {
+                            // try to resolve to category name
+                            const found = categorias.find(x => String(x.id) === String(cIdOrName) || String(x.nombre).toLowerCase() === String(cIdOrName).toLowerCase());
+                            const label = found ? found.nombre : String(cIdOrName || '')
+                            return <span key={idx} className="mp-cat-chip" style={{ marginRight: '.35rem' }}>{label}</span>;
+                          })
+                        ) : (
+                          <span className="text-slate-400 text-xs italic">Sin tipos</span>
+                        )}
                       </td>
                       <td>
                         <span className={`mp-badge-activo ${m.activo ? 'si' : 'no'}`}>
