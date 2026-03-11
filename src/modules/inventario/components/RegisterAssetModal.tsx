@@ -1381,7 +1381,7 @@ const RegisterAssetModal = ({
               )}
             </div>
           </div>
-          <button onClick={onClose} aria-label="Cerrar" className="text-white/90 hover:text-white hover:bg-white/10 w-9 h-9 rounded-lg flex items-center justify-center transition text-lg">✕</button>
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="text-white/90 hover:text-white hover:bg-white/10 w-9 h-9 rounded-lg flex items-center justify-center transition text-lg">✕</button>
         </div>
 
         {/* ── Tabs ── */}
@@ -1412,7 +1412,7 @@ const RegisterAssetModal = ({
         </div>
 
         {/* ── Contenido ── */}
-        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+        <div role="form" className="flex flex-col flex-1 overflow-hidden">
           <div className="flex-1 overflow-y-auto px-6 py-5">
             {/* stepError ahora se muestra como un pop-up modal bonito (ver abajo) */}
             {activeTab === 'identificacion'  && renderIdentificacion()}
@@ -1439,13 +1439,20 @@ const RegisterAssetModal = ({
                 Cancelar
               </button>
               {/* If not final step, the main button advances the stepper; final step submits the form */}
-              <button type={stepIndex === STEP_ORDER.length - 1 ? 'submit' : 'button'} disabled={isSubmitting}
-                onClick={() => {
+              <button type="button" disabled={isSubmitting}
+                onClick={async () => {
                   const last = STEP_ORDER.length - 1;
                   if (stepIndex < last) {
                     if (!canAdvanceFromStep(stepIndex)) { const missing = getMissingStep0Fields(); setStepError(missing.length ? `Faltan campos obligatorios: ${missing.join(', ')}.` : 'Completa los campos requeridos antes de avanzar.'); return; }
                     setStepIndex(si => Math.min(last, si + 1));
+                    return;
                   }
+                  // Final step: only create/update when user explicitly clicks the final button
+                  if (isSubmitting) return;
+                  const targetSedeId = sedeId ?? selectedSedeId;
+                  if (!empresaId || !targetSedeId) { alert('Error: No se puede crear activo sin empresa o sede'); return; }
+                  if (editingAsset) { setShowMotivoModal(true); return; }
+                  await procesarCreacion(empresaId, targetSedeId);
                 }}
                 className="px-6 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white rounded-full font-semibold text-sm shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
                 {isSubmitting ? (
@@ -1458,7 +1465,7 @@ const RegisterAssetModal = ({
               </button>
             </div>
           </div>
-        </form>
+          </div>
       </div>
 
       {/* ── Modal Motivo de Actualización ── */}
