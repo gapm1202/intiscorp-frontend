@@ -38,10 +38,52 @@ export async function getEmpresas(filters?: Record<string, string | number | und
   return data;
 }
 
+// crearWizard - POST /api/empresas/crear-wizard (transactional full-create)
+export async function crearWizard(payload: {
+  nombre: string;
+  ruc?: string;
+  codigoCliente?: string;
+  direccionFiscal?: string;
+  direccionOperativa?: string;
+  ciudad?: string;
+  provincia?: string;
+  sector?: string;
+  paginaWeb?: string;
+  observaciones?: string;
+  contrasenaPortalSoporte?: string;
+  sedes?: Array<Record<string, any>>; // includes tempId
+  usuarios?: Array<Record<string, any>>; // includes tempId and temp sedeId
+  contactosAdmin?: Array<Record<string, any>>;
+  contactosTecnicos?: Array<Record<string, any>>;
+  responsablesSede?: Array<Record<string, any>>;
+}) {
+  const url = `${API_BASE}/api/empresas/crear-wizard`;
+  const token = getToken();
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token && { "Authorization": `Bearer ${token}` })
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("❌ Error crear-wizard:", text);
+    throw new Error(`Error crear-wizard: ${res.status} ${res.statusText} - ${text}`);
+  }
+
+  const data = await res.json();
+  return data;
+}
+
 // createEmpresa - POST /api/empresas/
 export async function createEmpresa(empresaData: {
   nombre: string;
   ruc?: string;
+  codigoCliente?: string;
   direccionFiscal?: string;
   direccionOperativa?: string;
   ciudad?: string;
@@ -49,6 +91,7 @@ export async function createEmpresa(empresaData: {
   sector?: string;
   paginaWeb?: string;
   estadoContrato?: string;
+  contrasenaPortalSoporte?: string;
   adminNombre?: string;
   adminCargo?: string;
   adminTelefono?: string;
@@ -112,6 +155,7 @@ export async function getEmpresaById(empresaId: string | number) {
 export async function updateEmpresa(empresaId: string | number, empresaData: {
   nombre?: string;
   ruc?: string;
+  codigoCliente?: string;
   direccionFiscal?: string;
   direccionOperativa?: string;
   ciudad?: string;
@@ -119,6 +163,7 @@ export async function updateEmpresa(empresaId: string | number, empresaData: {
   sector?: string;
   paginaWeb?: string;
   estadoContrato?: string;
+  contrasenaPortalSoporte?: string;
   adminNombre?: string;
   adminCargo?: string;
   adminTelefono?: string;
@@ -130,6 +175,9 @@ export async function updateEmpresa(empresaId: string | number, empresaData: {
   tecTelefono2?: string;
   tecEmail?: string;
   nivelAutorizacion?: string;
+  contactosAdmin?: Array<{ usuarioId?: string; nombre?: string; autorizacionFacturacion?: boolean }>;
+  contactosTecnicos?: Array<{ usuarioId?: string; nombre?: string; horarioDisponible?: string; contactoPrincipal?: boolean; autorizaCambiosCriticos?: boolean; supervisionCoordinacion?: boolean; nivelAutorizacion?: string }>;
+  responsablesSede?: Array<{ usuarioId?: string; sedeId?: string; autorizaIngresoTecnico?: boolean; autorizaMantenimientoFueraHorario?: boolean; supervisionCoordinacion?: boolean }>;
 }, motivo?: string) {
   const url = `${API_BASE}/api/empresas/${empresaId}`;
   const token = getToken();

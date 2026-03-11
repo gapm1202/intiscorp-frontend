@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getEmpresas } from "@/modules/empresas/services/empresasService";
-import CreateEmpresaModal from "../components/CreateEmpresaModal";
+import CreateEmpresaWizard from "../components/wizard/CreateEmpresaWizard";
 
 interface Empresa {
   id?: number;
@@ -288,7 +288,7 @@ const EmpresasList = () => {
       )}
     </div>
 
-    <CreateEmpresaModal
+    <CreateEmpresaWizard
       isOpen={isModalOpen}
       onClose={() => setIsModalOpen(false)}
       onSuccess={() => fetchEmpresas(filterName, filterRuc)}
