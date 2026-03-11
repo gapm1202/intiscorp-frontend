@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Visita, EstadoVisita } from '../types';
 import { actualizarVisita, cancelarVisita } from '../services/visitasService';
+import ConfirmModal from '../../../components/ui/ConfirmModal';
 
 interface VisitasTableViewProps {
   visitas: Visita[];
@@ -47,22 +48,33 @@ export default function VisitasTableView({
     }));
   };
 
-  const handleIniciarVisita = async (visita: Visita) => {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [selectedVisita, setSelectedVisita] = useState<Visita | null>(null);
+
+  const openConfirm = (visita: Visita) => {
     if (visita.estado !== 'PROGRAMADA') return;
+    if (!esDiaProgramado(visita.fechaProgramada)) return;
+    setSelectedVisita(visita);
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmStart = async () => {
+    if (!selectedVisita) return;
 
     setLoading(true);
     try {
-      await actualizarVisita(visita._id, { estado: 'EN_PROCESO' });
+      await actualizarVisita(selectedVisita._id, { estado: 'EN_PROCESO' });
       onRefresh();
-      
-      // Redirigir al detalle del ticket si existe
-      if (visita.ticketId) {
-        navigate(`/admin/tickets/${visita.ticketId}`);
+
+      if (selectedVisita.ticketId) {
+        navigate(`/admin/tickets/${selectedVisita.ticketId}`);
       }
     } catch (error) {
       console.error('Error starting visita:', error);
     } finally {
       setLoading(false);
+      setConfirmOpen(false);
+      setSelectedVisita(null);
     }
   };
 
@@ -221,7 +233,7 @@ export default function VisitasTableView({
                     <div className="flex justify-center gap-2">
                       {visita.estado === 'PROGRAMADA' && esDiaProgramado(visita.fechaProgramada) && (
                         <button
-                          onClick={() => handleIniciarVisita(visita)}
+                          onClick={() => openConfirm(visita)}
                           disabled={loading}
                           className="text-blue-600 hover:text-blue-900 disabled:opacity-50 transition"
                           title="Iniciar atención"
@@ -256,6 +268,8 @@ export default function VisitasTableView({
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                             </button>
                           )}
+
+                          {/* modal instance removed from here - rendered globally below */}
                         </div>
                       )}
 
@@ -288,6 +302,15 @@ export default function VisitasTableView({
       <div className="bg-gray-50 border-t border-gray-200 px-6 py-3 mt-4 text-sm text-gray-600">
         Total: {visitas.length} visita{visitas.length !== 1 ? 's' : ''}
       </div>
+      {/* Confirm modal for starting atención (global instance) */}
+      <ConfirmModal
+        open={confirmOpen}
+        title="Iniciar atención"
+        message="¿Estás seguro de que quieres iniciar esta atención?"
+        onConfirm={handleConfirmStart}
+        onCancel={() => setConfirmOpen(false)}
+        loading={loading}
+      />
     </div>
   );
 }

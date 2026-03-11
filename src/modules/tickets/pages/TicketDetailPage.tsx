@@ -235,23 +235,24 @@ export default function TicketDetailPage() {
       showErrorToast(errorMessage);
     }
   };
+
   const getEstadoColor = (estado: string) => {
     const colors: Record<string, string> = {
-      'ESPERA': 'bg-yellow-50 text-yellow-700 border-yellow-300',
-      'EN_TRIAGE': 'bg-blue-50 text-blue-700 border-blue-300',
-      'ABIERTO': 'bg-green-50 text-green-700 border-green-300',
-      'EN_PROCESO': 'bg-purple-50 text-purple-700 border-purple-300',
-      'PENDIENTE': 'bg-orange-50 text-orange-700 border-orange-300',
-      'PENDIENTE_CLIENTE': 'bg-orange-50 text-orange-700 border-orange-300',
-      'RESUELTO': 'bg-teal-50 text-teal-700 border-teal-300',
-      'CERRADO': 'bg-gray-50 text-gray-700 border-gray-300',
-      'CANCELADO': 'bg-red-50 text-red-700 border-red-300'
+      'ESPERA': 'bg-amber-100 text-amber-800 border border-amber-300 font-semibold',
+      'EN_TRIAGE': 'bg-blue-100 text-blue-800 border border-blue-300 font-semibold',
+      'ABIERTO': 'bg-emerald-100 text-emerald-800 border border-emerald-300 font-semibold',
+      'EN_PROCESO': 'bg-sky-100 text-sky-800 border border-sky-300 font-semibold',
+      'PENDIENTE': 'bg-orange-100 text-orange-800 border border-orange-300 font-semibold',
+      'PENDIENTE_CLIENTE': 'bg-orange-100 text-orange-800 border border-orange-300 font-semibold',
+      'RESUELTO': 'bg-teal-100 text-teal-800 border border-teal-300 font-semibold',
+      'CERRADO': 'bg-slate-100 text-slate-700 border border-slate-300 font-semibold',
+      'CANCELADO': 'bg-red-100 text-red-800 border border-red-300 font-semibold'
     };
-    return colors[estado] || 'bg-slate-50 text-slate-700 border-slate-300';
+    return colors[estado] || 'bg-slate-100 text-slate-700 border border-slate-300 font-semibold';
   };
 
   const getSLAColorClass = (pct?: number, paused?: boolean) => {
-    if (paused) return 'bg-gray-400';
+    if (paused) return 'bg-slate-400';
     const raw = typeof pct === 'number' ? pct : 0;
     if (raw < 70) return 'bg-emerald-500';
     if (raw >= 70 && raw < 90) return 'bg-amber-500';
@@ -261,16 +262,16 @@ export default function TicketDetailPage() {
 
   const getPrioridadColor = (prioridad: string) => {
     const colors: Record<string, string> = {
-      'CRITICA': 'bg-linear-to-r from-rose-600 to-red-600 text-white border-red-700 shadow-lg shadow-red-200',
-      'ALTA': 'bg-linear-to-r from-orange-500 to-amber-500 text-white border-orange-600 shadow-lg shadow-orange-200',
-      'MEDIA': 'bg-linear-to-r from-blue-500 to-cyan-500 text-white border-blue-600 shadow-lg shadow-blue-200',
-      'BAJA': 'bg-linear-to-r from-emerald-500 to-teal-500 text-white border-emerald-600 shadow-lg shadow-emerald-200',
-      'urgente': 'bg-linear-to-r from-rose-600 to-red-600 text-white border-red-700 shadow-lg shadow-red-200',
-      'alta': 'bg-linear-to-r from-orange-500 to-amber-500 text-white border-orange-600 shadow-lg shadow-orange-200',
-      'media': 'bg-linear-to-r from-blue-500 to-cyan-500 text-white border-blue-600 shadow-lg shadow-blue-200',
-      'baja': 'bg-linear-to-r from-emerald-500 to-teal-500 text-white border-emerald-600 shadow-lg shadow-emerald-200'
+      'CRITICA': 'bg-rose-600 text-white border border-rose-700 font-bold',
+      'ALTA': 'bg-orange-500 text-white border border-orange-600 font-bold',
+      'MEDIA': 'bg-blue-600 text-white border border-blue-700 font-bold',
+      'BAJA': 'bg-emerald-600 text-white border border-emerald-700 font-bold',
+      'urgente': 'bg-rose-600 text-white border border-rose-700 font-bold',
+      'alta': 'bg-orange-500 text-white border border-orange-600 font-bold',
+      'media': 'bg-blue-600 text-white border border-blue-700 font-bold',
+      'baja': 'bg-emerald-600 text-white border border-emerald-700 font-bold'
     };
-    return colors[prioridad] || 'bg-linear-to-r from-slate-500 to-gray-500 text-white border-slate-600';
+    return colors[prioridad] || 'bg-slate-600 text-white border border-slate-700 font-bold';
   };
 
   const getEstadoSLAInfo = (estadoSLA: string) => {
@@ -464,10 +465,10 @@ export default function TicketDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-[400px]">
+      <div className="flex justify-center items-center min-h-[400px] bg-slate-50">
         <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <p className="text-gray-600">Cargando detalle del ticket...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600"></div>
+          <p className="text-blue-700 font-medium">Cargando detalle del ticket...</p>
         </div>
       </div>
     );
@@ -475,18 +476,20 @@ export default function TicketDetailPage() {
 
   if (error || !ticket) {
     return (
-      <div className="p-6">
-        <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6">
+      <div className="p-6 bg-slate-50 min-h-screen">
+        <div className="bg-white border-2 border-red-200 rounded-xl p-6 shadow">
           <div className="flex items-center gap-3 mb-3">
-            <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <h3 className="text-red-800 font-semibold text-lg">Error al cargar el ticket</h3>
+            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+              <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h3 className="text-red-800 font-bold text-lg">Error al cargar el ticket</h3>
           </div>
-          <p className="text-red-600 mb-4">{error || 'Ticket no encontrado'}</p>
+          <p className="text-red-700 mb-4 font-medium">{error || 'Ticket no encontrado'}</p>
           <button
             onClick={() => navigate('/admin/tickets')}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors inline-flex items-center gap-2"
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors inline-flex items-center gap-2 font-semibold"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -499,360 +502,306 @@ export default function TicketDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 50%, #f0f9ff 100%)' }}>
       <div className="p-6 max-w-7xl mx-auto">
+
         {/* Header con botones de acción */}
         <div className="mb-6">
           <button
             onClick={() => navigate('/admin/tickets')}
-            className="text-gray-600 hover:text-gray-900 mb-4 flex items-center gap-2 transition-colors"
+            className="text-blue-600 hover:text-blue-800 mb-5 flex items-center gap-2 transition-colors font-semibold text-sm group"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            <span className="font-medium">Volver a tickets</span>
+            <span className="w-7 h-7 rounded-full bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+              </svg>
+            </span>
+            Volver a tickets
           </button>
           
-            <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
-              <div className="flex-1">
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                  {ticket.codigo_ticket || `Ticket #${ticket.id}`}
-                </h1>
-                <p className="text-sm text-gray-500 flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Creado el {new Date(ticket.fecha_creacion).toLocaleString('es-PE', {
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </p>
-                <div className="flex flex-col sm:flex-row gap-2 mt-3">
-                  <div className="flex items-center gap-2">
-                    <span className={`px-3 py-1 rounded text-sm font-medium ${getEstadoColor(ticket.estado)}`}>
-                      {ticket.estado.replace('_', ' ')}
-                    </span>
-                    <span className={`px-3 py-1 rounded text-sm font-medium ${getPrioridadColor(ticket.prioridad)}`}>
-                      {ticket.prioridad}
-                    </span>
+          {/* Card principal del ticket */}
+          <div className="bg-white rounded-2xl shadow-lg border border-blue-100 overflow-hidden">
+            {/* Franja superior de color */}
+            <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-sky-400 to-cyan-400" />
+
+            <div className="p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex-1">
+                  {/* Código + fecha */}
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className="text-xs font-bold tracking-widest text-blue-400 uppercase">Ticket</span>
                   </div>
+                  <h1 className="text-2xl font-extrabold text-blue-900 mb-1 tracking-tight">
+                    {ticket.codigo_ticket || `#${ticket.id}`}
+                  </h1>
+                  <p className="text-sm text-slate-500 flex items-center gap-1.5 mb-3">
+                    <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Creado el {new Date(ticket.fecha_creacion).toLocaleString('es-PE', {
+                      day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    })}
+                  </p>
 
-                  {/* Compact SLA bar inside detail header (solo si aplica_sla es true) */}
-                  <div className="flex-1 flex items-center">
-                    {ticket.aplica_sla && ticket.estado === 'ABIERTO' && (
-                      <div className="ml-2 w-full max-w-md">
-                        <div className="flex items-center justify-between">
-                          <div className="text-xs text-gray-500">Tiempo de Respuesta</div>
-                          <div className="text-xs text-gray-600">{typeof ticket.porcentaje_tiempo_respuesta === 'number' ? `${ticket.porcentaje_tiempo_respuesta.toFixed(1)}%` : 'N/A'}</div>
-                        </div>
-                        <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-1">
-                          <div className={`${getSLAColorClass(ticket.porcentaje_tiempo_respuesta, ticket.pausado)} absolute top-0 left-0 h-full`} style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_respuesta ?? 0))}%` }} />
-                        </div>
-                      </div>
-                    )}
+                  {/* Badges de estado y prioridad + barra SLA */}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-3 py-1 rounded-full text-xs ${getEstadoColor(ticket.estado)}`}>
+                        {ticket.estado.replace('_', ' ')}
+                      </span>
+                      <span className={`px-3 py-1 rounded-full text-xs ${getPrioridadColor(ticket.prioridad)}`}>
+                        {ticket.prioridad}
+                      </span>
+                    </div>
 
-                    {ticket.aplica_sla && ticket.estado === 'EN_PROCESO' && (
-                      <div className="ml-2 w-full max-w-md">
-                        <div className="flex items-center justify-between">
-                          <div className="text-xs text-gray-500">Tiempo de Resolución</div>
-                          <div className="text-xs text-gray-600">{typeof ticket.porcentaje_tiempo_resolucion === 'number' ? `${ticket.porcentaje_tiempo_resolucion.toFixed(1)}%` : 'N/A'}</div>
+                    {/* Compact SLA bar */}
+                    <div className="flex-1 flex items-center">
+                      {ticket.aplica_sla && ticket.estado === 'ABIERTO' && (
+                        <div className="ml-2 w-full max-w-md">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-blue-600">Tiempo de Respuesta</span>
+                            <span className="text-xs font-bold text-blue-800">{typeof ticket.porcentaje_tiempo_respuesta === 'number' ? `${ticket.porcentaje_tiempo_respuesta.toFixed(1)}%` : 'N/A'}</span>
+                          </div>
+                          <div className="relative w-full h-2 bg-blue-100 rounded-full overflow-hidden">
+                            <div className={`${getSLAColorClass(ticket.porcentaje_tiempo_respuesta, ticket.pausado)} absolute top-0 left-0 h-full rounded-full transition-all`} style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_respuesta ?? 0))}%` }} />
+                          </div>
                         </div>
-                        <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-1">
-                          <div className={`${getSLAColorClass(ticket.porcentaje_tiempo_resolucion, ticket.pausado)} absolute top-0 left-0 h-full`} style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_resolucion ?? 0))}%` }} />
+                      )}
+                      {ticket.aplica_sla && ticket.estado === 'EN_PROCESO' && (
+                        <div className="ml-2 w-full max-w-md">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-blue-600">Tiempo de Resolución</span>
+                            <span className="text-xs font-bold text-blue-800">{typeof ticket.porcentaje_tiempo_resolucion === 'number' ? `${ticket.porcentaje_tiempo_resolucion.toFixed(1)}%` : 'N/A'}</span>
+                          </div>
+                          <div className="relative w-full h-2 bg-blue-100 rounded-full overflow-hidden">
+                            <div className={`${getSLAColorClass(ticket.porcentaje_tiempo_resolucion, ticket.pausado)} absolute top-0 left-0 h-full rounded-full transition-all`} style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_resolucion ?? 0))}%` }} />
+                          </div>
                         </div>
-                      </div>
-                    )}
-
-                    {/* Mostrar mensaje informativo para tickets sin SLA */}
-                    {!ticket.aplica_sla && ['ESPERA', 'EN_TRIAGE'].includes(ticket.estado) && (
-                      <div className="ml-2">
-                        <span className="text-xs text-gray-500 italic">⏳ Sin SLA - Esperando configuración</span>
-                      </div>
-                    )}
+                      )}
+                      {!ticket.aplica_sla && ['ESPERA', 'EN_TRIAGE'].includes(ticket.estado) && (
+                        <div className="ml-2">
+                          <span className="text-xs text-blue-400 italic">⏳ Sin SLA — Esperando configuración</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                </div>
+
+                {/* Botones de acción */}
+                <div className="flex flex-wrap gap-2 sm:ml-4">
+                  {ticket.origen === 'PORTAL_PUBLICO' && ticket.estado === 'ESPERA' && (
+                    <button 
+                      onClick={handleCogerTicket}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-all text-sm font-bold shadow-md shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {actionLoading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      )}
+                      Iniciar Triaje
+                    </button>
+                  )}
+
+                  {ticket.origen === 'PORTAL_PUBLICO' && ['ESPERA', 'EN_TRIAGE'].includes(ticket.estado) && (
+                    <button
+                      onClick={() => setShowConfigurarModal(true)}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-sm font-bold shadow-md shadow-indigo-200 flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                      {ticket.estado === 'EN_TRIAGE' ? 'Guardar Configuración' : 'Configurar'}
+                    </button>
+                  )}
+
+                  {ticket.estado === 'ABIERTO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id && (
+                    <button 
+                      onClick={handleCogerTicket}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all text-sm font-bold shadow-md shadow-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {actionLoading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                      )}
+                      Iniciar Atención
+                    </button>
+                  )}
+
+                  {ticket.estado === 'EN_PROCESO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id &&
+                   (ticket.origen !== 'PORTAL_PUBLICO' || ticket.configurado_por || ticket.configurado_at) && (
+                    <button 
+                      onClick={handleMarcarResuelto}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all text-sm font-bold shadow-md shadow-teal-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {actionLoading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      )}
+                      Culminar ticket
+                    </button>
+                  )}
+
+                  {ticket.estado === 'EN_PROCESO' && ticket.modalidad === 'REMOTO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id && (
+                    <button 
+                      onClick={() => setShowPasarPresencialModal(true)}
+                      disabled={!contratoActivo}
+                      className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-all text-sm font-bold shadow-md shadow-violet-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      title={!contratoActivo ? 'No hay contrato activo para esta empresa' : 'Programar visita presencial'}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                      Pasar a Presencial
+                    </button>
+                  )}
+
+                  {user && ((user.rol && user.rol.toLowerCase().includes('admin')) || (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)) && (
+                    <button 
+                      onClick={handleEditarTicket}
+                      className="px-4 py-2 bg-white border-2 border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition-all text-sm font-bold"
+                    >
+                      Editar
+                    </button>
+                  )}
+
+                  {ticket.aplica_sla && user && ((user.rol && user.rol.toLowerCase().includes('admin')) || (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)) && (
+                    <button 
+                      onClick={() => setShowPausarSLAModal(true)}
+                      className="px-4 py-2 bg-white border-2 border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition-all text-sm font-bold"
+                    >
+                      {ticket.pausado ? 'Reanudar SLA' : 'Pausar SLA'}
+                    </button>
+                  )}
+
+                  <button 
+                    onClick={() => setShowHistorialModal(true)}
+                    className="px-4 py-2 bg-white border-2 border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition-all text-sm font-bold"
+                  >
+                    Historial
+                  </button>
+
+                  {ticket.estado !== 'CERRADO' && ticket.estado !== 'CANCELADO' && user && ((user.rol && user.rol.toLowerCase().includes('admin')) || (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)) && (
+                    <button 
+                      onClick={() => setShowCancelarModal(true)}
+                      className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-all text-sm font-bold shadow-md shadow-rose-200"
+                    >
+                      Cancelar Ticket
+                    </button>
+                  )}
+
+                  {user && user.rol && user.rol.toLowerCase().includes('admin') && ticket.tecnico_asignado_id != null && (
+                    <button
+                      onClick={() => setShowAsignarModal(true)}
+                      className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-all text-sm font-bold shadow-md shadow-amber-200"
+                    >
+                      Reasignar técnico
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Botones de acción */}
-              <div className="mt-4 sm:mt-0 sm:ml-6 flex flex-wrap gap-2">
-                {/* Asignación de técnico ahora se hace desde la tabla de tickets */}
-
-                {/* Botón "Iniciar Triaje" - Visible solo para tickets PORTAL_PUBLICO en ESPERA */}
-                {ticket.origen === 'PORTAL_PUBLICO' && ticket.estado === 'ESPERA' && (
-                  <button 
-                    onClick={handleCogerTicket}
-                    disabled={actionLoading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {actionLoading ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    )}
-                    Iniciar Triaje
-                  </button>
-                )}
-
-                {/* Botón "Configurar" - Visible para tickets PORTAL_PUBLICO en ESPERA o EN_TRIAGE */}
-                {ticket.origen === 'PORTAL_PUBLICO' && ['ESPERA', 'EN_TRIAGE'].includes(ticket.estado) && (
-                  <button
-                    onClick={() => setShowConfigurarModal(true)}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-sm font-medium flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {ticket.estado === 'EN_TRIAGE' ? 'Guardar Configuración' : 'Configurar'}
-                  </button>
-                )}
-
-                {/* Botón "Iniciar Atención" - Visible para tickets en estado ABIERTO (todos los orígenes) */}
-                {ticket.estado === 'ABIERTO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id && (
-                  <button 
-                    onClick={handleCogerTicket}
-                    disabled={actionLoading}
-                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {actionLoading ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                    )}
-                    Iniciar Atención
-                  </button>
-                )}
-
-                {/* Botón "Culminar ticket" - Solo si está EN_PROCESO y es el técnico asignado */}
-                {ticket.estado === 'EN_PROCESO' && 
-                 ticket.tecnico_asignado && 
-                 user && 
-                 ticket.tecnico_asignado.id === user.id &&
-                 (ticket.origen !== 'PORTAL_PUBLICO' || ticket.configurado_por || ticket.configurado_at) && (
-                  <button 
-                    onClick={handleMarcarResuelto}
-                    disabled={actionLoading}
-                    className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {actionLoading ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                    Culminar ticket
-                  </button>
-                )}
-
-                {/* Botón "Pasar a Presencial" - Solo si está EN_PROCESO, modalidad REMOTO y es el técnico asignado */}
-                {ticket.estado === 'EN_PROCESO' && 
-                 ticket.modalidad === 'REMOTO' &&
-                 ticket.tecnico_asignado && 
-                 user && 
-                 ticket.tecnico_asignado.id === user.id && (
-                  <button 
-                    onClick={() => setShowPasarPresencialModal(true)}
-                    disabled={!contratoActivo}
-                    className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    title={!contratoActivo ? 'No hay contrato activo para esta empresa' : 'Programar visita presencial'}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    Pasar a Presencial
-                  </button>
-                )}
-
-                {/* Reasignación ahora se hace desde la tabla de tickets */}
-
-                {/* Botón Editar - Para admins y técnico asignado */}
-                {user && (
-                  (user.rol && user.rol.toLowerCase().includes('admin')) ||
-                  (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)
-                ) && (
-                  <button 
-                    onClick={handleEditarTicket}
-                    className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors text-sm font-medium"
-                  >
-                    Editar
-                  </button>
-                )}
-
-                {/* Botón Pausar/Reanudar SLA - Solo si aplica_sla es true */}
-                {ticket.aplica_sla && user && (
-                  (user.rol && user.rol.toLowerCase().includes('admin')) ||
-                  (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)
-                ) && (
-                  <button 
-                    onClick={() => setShowPausarSLAModal(true)}
-                    className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors text-sm font-medium"
-                  >
-                    {ticket.pausado ? 'Reanudar SLA' : 'Pausar SLA'}
-                  </button>
-                )}
-
-                {/* Botón Historial - Todos pueden ver */}
-                <button 
-                  onClick={() => setShowHistorialModal(true)}
-                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors text-sm font-medium"
-                >
-                  Historial
-                </button>
-                {/* Botón Ver Chat/Seguimiento público (eliminado) */}
-                {/* El botón Configurar ya se movió arriba junto con los otros botones de acción */}
-
-                {/* Botón Cancelar Ticket - Solo si NO está cerrado o cancelado */}
-                {ticket.estado !== 'CERRADO' && ticket.estado !== 'CANCELADO' && user && (
-                  (user.rol && user.rol.toLowerCase().includes('admin')) ||
-                  (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)
-                ) && (
-                  <button 
-                    onClick={() => setShowCancelarModal(true)}
-                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm font-medium"
-                  >
-                    Cancelar Ticket
-                  </button>
-                )}
-                {/* Mostrar Reasignar solo si tecnico_asignado_id tiene valor */}
-                {user && user.rol && user.rol.toLowerCase().includes('admin') && ticket.tecnico_asignado_id != null && (
-                  <button
-                    onClick={() => {
-                      setShowAsignarModal(true);
-                    }}
-                    className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors text-sm font-medium"
-                  >
-                    Reasignar técnico
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* SLA Timer - Sistema de Fases (mostrar si aplica_sla es true) */}
-            {ticket.aplica_sla && (
-              <div className="mt-6">
-                {/* Mostrar cuando fase_sla_actual está definida y no es SIN_SLA */}
-                {ticket.fase_sla_actual && ticket.fase_sla_actual !== 'SIN_SLA' ? (
-                  <>
-                    {/* Fase de Respuesta: Desde ABIERTO hasta EN_PROCESO */}
-                    {ticket.fase_sla_actual === 'RESPUESTA' && (
-                      <SLATimer
-                        estadoSLA={ticket.estado_sla}
-                        label="Tiempo de Respuesta"
-                        porcentajeConsumido={ticket.porcentaje_tiempo_respuesta}
-                        tiempoTranscurridoMinutos={ticket.tiempo_respuesta_transcurrido_minutos}
-                        tiempoRestanteMinutos={ticket.tiempo_respuesta_restante_minutos}
-                        fechaLimite={ticket.fecha_limite_respuesta}
-                        slaPausado={ticket.pausado || ticket.estado_sla === 'PAUSADO'}
-                        motivoPausa={ticket.motivo_pausa}
-                        alertas={ticket.sla_alertas}
-                      />
-                    )}
-
-                    {/* Fase de Resolución: Desde EN_PROCESO hasta RESUELTO */}
-                    {ticket.fase_sla_actual === 'RESOLUCION' && (
-                      <SLATimer
-                        estadoSLA={ticket.estado_sla}
-                        label="Tiempo de Resolución"
-                        porcentajeConsumido={ticket.porcentaje_tiempo_resolucion}
-                        tiempoTranscurridoMinutos={ticket.tiempo_resolucion_transcurrido_minutos}
-                        tiempoRestanteMinutos={ticket.tiempo_resolucion_restante_minutos}
-                        fechaLimite={ticket.fecha_limite_resolucion}
-                        slaPausado={ticket.pausado || ticket.estado_sla === 'PAUSADO'}
-                        motivoPausa={ticket.motivo_pausa}
-                        alertas={ticket.sla_alertas}
-                      />
-                    )}
-
-                    {/* Ticket Completado: Mostrar resumen de ambas fases */}
-                    {ticket.fase_sla_actual === 'COMPLETADO' && (
-                      <div className="space-y-4">
-                        <div className="bg-linear-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg p-4">
-                          <h3 className="text-sm font-semibold text-emerald-800 mb-3">✓ SLA Completado - Resumen de Fases</h3>
-                          
-                          {/* Resumen Fase de Respuesta */}
-                          <div className="mb-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium text-gray-700">Fase de Respuesta</span>
-                              <span className={`text-sm font-semibold ${
-                                (ticket.porcentaje_tiempo_respuesta ?? 0) <= 100 ? 'text-emerald-700' : 'text-rose-700'
-                              }`}>
-                                {ticket.porcentaje_tiempo_respuesta?.toFixed(1)}%
-                                {(ticket.porcentaje_tiempo_respuesta ?? 0) <= 100 ? ' ✓ Cumplido' : ' ✕ Excedido'}
-                              </span>
+              {/* SLA Timer */}
+              {ticket.aplica_sla && (
+                <div className="mt-6">
+                  {ticket.fase_sla_actual && ticket.fase_sla_actual !== 'SIN_SLA' ? (
+                    <>
+                      {ticket.fase_sla_actual === 'RESPUESTA' && (
+                        <SLATimer
+                          estadoSLA={ticket.estado_sla}
+                          label="Tiempo de Respuesta"
+                          porcentajeConsumido={ticket.porcentaje_tiempo_respuesta}
+                          tiempoTranscurridoMinutos={ticket.tiempo_respuesta_transcurrido_minutos}
+                          tiempoRestanteMinutos={ticket.tiempo_respuesta_restante_minutos}
+                          fechaLimite={ticket.fecha_limite_respuesta}
+                          slaPausado={ticket.pausado || ticket.estado_sla === 'PAUSADO'}
+                          motivoPausa={ticket.motivo_pausa}
+                          alertas={ticket.sla_alertas}
+                        />
+                      )}
+                      {ticket.fase_sla_actual === 'RESOLUCION' && (
+                        <SLATimer
+                          estadoSLA={ticket.estado_sla}
+                          label="Tiempo de Resolución"
+                          porcentajeConsumido={ticket.porcentaje_tiempo_resolucion}
+                          tiempoTranscurridoMinutos={ticket.tiempo_resolucion_transcurrido_minutos}
+                          tiempoRestanteMinutos={ticket.tiempo_resolucion_restante_minutos}
+                          fechaLimite={ticket.fecha_limite_resolucion}
+                          slaPausado={ticket.pausado || ticket.estado_sla === 'PAUSADO'}
+                          motivoPausa={ticket.motivo_pausa}
+                          alertas={ticket.sla_alertas}
+                        />
+                      )}
+                      {ticket.fase_sla_actual === 'COMPLETADO' && (
+                        <div className="space-y-4">
+                          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-4">
+                            <h3 className="text-sm font-bold text-emerald-800 mb-3">✓ SLA Completado — Resumen de Fases</h3>
+                            <div className="mb-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-semibold text-slate-700">Fase de Respuesta</span>
+                                <span className={`text-sm font-bold ${(ticket.porcentaje_tiempo_respuesta ?? 0) <= 100 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                  {ticket.porcentaje_tiempo_respuesta?.toFixed(1)}%
+                                  {(ticket.porcentaje_tiempo_respuesta ?? 0) <= 100 ? ' ✓ Cumplido' : ' ✕ Excedido'}
+                                </span>
+                              </div>
+                              <div className="text-xs font-medium text-slate-600">
+                                Tiempo transcurrido: {formatMinutes(ticket.tiempo_respuesta_transcurrido_minutos)}
+                                {ticket.tiempo_respuesta_minutos && ` de ${formatMinutes(ticket.tiempo_respuesta_minutos)}`}
+                              </div>
                             </div>
-                            <div className="text-xs text-gray-600">
-                              Tiempo transcurrido: {formatMinutes(ticket.tiempo_respuesta_transcurrido_minutos)} 
-                              {ticket.tiempo_respuesta_minutos && ` de ${formatMinutes(ticket.tiempo_respuesta_minutos)}`}
-                            </div>
-                          </div>
-
-                          {/* Resumen Fase de Resolución */}
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium text-gray-700">Fase de Resolución</span>
-                              <span className={`text-sm font-semibold ${
-                                (ticket.porcentaje_tiempo_resolucion ?? 0) <= 100 ? 'text-emerald-700' : 'text-rose-700'
-                              }`}>
-                                {ticket.porcentaje_tiempo_resolucion?.toFixed(1)}%
-                                {(ticket.porcentaje_tiempo_resolucion ?? 0) <= 100 ? ' ✓ Cumplido' : ' ✕ Excedido'}
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-600">
-                              Tiempo transcurrido: {formatMinutes(ticket.tiempo_resolucion_transcurrido_minutos)}
-                              {ticket.tiempo_resolucion_minutos && ` de ${formatMinutes(ticket.tiempo_resolucion_minutos)}`}
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-semibold text-slate-700">Fase de Resolución</span>
+                                <span className={`text-sm font-bold ${(ticket.porcentaje_tiempo_resolucion ?? 0) <= 100 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                  {ticket.porcentaje_tiempo_resolucion?.toFixed(1)}%
+                                  {(ticket.porcentaje_tiempo_resolucion ?? 0) <= 100 ? ' ✓ Cumplido' : ' ✕ Excedido'}
+                                </span>
+                              </div>
+                              <div className="text-xs font-medium text-slate-600">
+                                Tiempo transcurrido: {formatMinutes(ticket.tiempo_resolucion_transcurrido_minutos)}
+                                {ticket.tiempo_resolucion_minutos && ` de ${formatMinutes(ticket.tiempo_resolucion_minutos)}`}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <p className="text-sm text-blue-700">
-                      <span className="font-medium">⏳ Preparando SLA:</span> Este ticket tiene SLA aplicable pero aún está siendo configurado. Los datos se actualizarán cuando el ticket avance de estado.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+                      )}
+                    </>
+                  ) : (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                      <p className="text-sm text-blue-800 font-medium">
+                        <span className="font-bold">⏳ Preparando SLA:</span> Este ticket tiene SLA aplicable pero aún está siendo configurado. Los datos se actualizarán cuando el ticket avance de estado.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Grid principal */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
           {/* Columna izquierda */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-5">
             
             {/* Información General */}
-            <div className="bg-white rounded-lg shadow border border-gray-200">
-              <div className="border-b border-gray-200 px-6 py-4">
-                <h2 className="text-base font-semibold text-gray-900">Información General</h2>
+            <div className="bg-white rounded-2xl shadow-md border border-blue-100 overflow-hidden">
+              <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-sky-500 flex items-center gap-2">
+                <svg className="w-4 h-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <h2 className="text-sm font-bold text-white tracking-wide uppercase">Información General</h2>
               </div>
               <div className="p-6 grid grid-cols-2 gap-6">
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Empresa</label>
-                  <p className="text-sm text-gray-900 mt-1">{ticket.empresa_nombre || 'N/A'}</p>
+                  <label className="text-xs font-bold text-blue-500 uppercase tracking-wider">Empresa</label>
+                  <p className="text-sm font-semibold text-slate-800 mt-1">{ticket.empresa_nombre || 'N/A'}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Sede</label>
-                  <p className="text-sm text-gray-900 mt-1">{ticket.sede_nombre || 'N/A'}</p>
+                  <label className="text-xs font-bold text-blue-500 uppercase tracking-wider">Sede</label>
+                  <p className="text-sm font-semibold text-slate-800 mt-1">{ticket.sede_nombre || 'N/A'}</p>
                 </div>
                 <div className="col-span-2">
-                  <label className="text-sm font-medium text-gray-500">Título</label>
-                  <p className="text-sm text-gray-900 mt-1 font-medium">{ticket.titulo || 'N/A'}</p>
+                  <label className="text-xs font-bold text-blue-500 uppercase tracking-wider">Título</label>
+                  <p className="text-base font-bold text-blue-900 mt-1">{ticket.titulo || 'N/A'}</p>
                 </div>
                 <div className="col-span-2">
-                  <label className="text-sm font-medium text-gray-500">Descripción</label>
-                  <p className="text-sm text-gray-700 mt-1 bg-gray-50 rounded p-3 border border-gray-200">
+                  <label className="text-xs font-bold text-blue-500 uppercase tracking-wider">Descripción</label>
+                  <p className="text-sm font-medium text-slate-700 mt-2 bg-blue-50 rounded-xl p-4 border border-blue-100 leading-relaxed">
                     {ticket.descripcion || 'N/A'}
                   </p>
                 </div>
@@ -860,53 +809,55 @@ export default function TicketDetailPage() {
             </div>
 
             {/* Clasificación */}
-            <div className="bg-white rounded-lg shadow border border-gray-200">
-              <div className="border-b border-gray-200 px-6 py-4">
-                <h2 className="text-base font-semibold text-gray-900">Clasificación</h2>
+            <div className="bg-white rounded-2xl shadow-md border border-blue-100 overflow-hidden">
+              <div className="px-6 py-4 bg-gradient-to-r from-sky-500 to-cyan-500 flex items-center gap-2">
+                <svg className="w-4 h-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                <h2 className="text-sm font-bold text-white tracking-wide uppercase">Clasificación</h2>
               </div>
               <div className="p-6 grid grid-cols-2 gap-6">
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Tipo de Soporte</label>
-                  <p className="text-sm text-gray-900 mt-1 capitalize">
+                  <label className="text-xs font-bold text-sky-500 uppercase tracking-wider">Tipo de Soporte</label>
+                  <p className="text-sm font-semibold text-slate-800 mt-1 capitalize">
                     {ticket.tipo_soporte === 'gestion-ti' ? 'Gestión TI' : ticket.tipo_soporte || 'N/A'}
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Tipo de Servicio</label>
-                  <p className="text-sm text-gray-900 mt-1 capitalize">{ticket.tipo_servicio || 'N/A'}</p>
+                  <label className="text-xs font-bold text-sky-500 uppercase tracking-wider">Tipo de Servicio</label>
+                  <p className="text-sm font-semibold text-slate-800 mt-1 capitalize">{ticket.tipo_servicio || 'N/A'}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Categoría</label>
-                  <p className="text-sm text-gray-900 mt-1">{ticket.categoria_nombre || 'N/A'}</p>
+                  <label className="text-xs font-bold text-sky-500 uppercase tracking-wider">Categoría</label>
+                  <p className="text-sm font-semibold text-slate-800 mt-1">{ticket.categoria_nombre || 'N/A'}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Subcategoría</label>
-                  <p className="text-sm text-gray-900 mt-1">{ticket.subcategoria_nombre || 'N/A'}</p>
+                  <label className="text-xs font-bold text-sky-500 uppercase tracking-wider">Subcategoría</label>
+                  <p className="text-sm font-semibold text-slate-800 mt-1">{ticket.subcategoria_nombre || 'N/A'}</p>
                 </div>
                 <div className="col-span-2">
-                  <label className="text-sm font-medium text-gray-500">Servicio</label>
-                  <p className="text-sm text-gray-900 mt-1">{ticket.servicio_nombre || 'N/A'}</p>
+                  <label className="text-xs font-bold text-sky-500 uppercase tracking-wider">Servicio</label>
+                  <p className="text-sm font-semibold text-slate-800 mt-1">{ticket.servicio_nombre || 'N/A'}</p>
                 </div>
               </div>
             </div>
 
             {/* Priorización */}
-            <div className="bg-white rounded-lg shadow border border-gray-200">
-              <div className="border-b border-gray-200 px-6 py-4">
-                <h2 className="text-base font-semibold text-gray-900">Priorización ITIL</h2>
+            <div className="bg-white rounded-2xl shadow-md border border-blue-100 overflow-hidden">
+              <div className="px-6 py-4 bg-gradient-to-r from-blue-700 to-blue-500 flex items-center gap-2">
+                <svg className="w-4 h-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/></svg>
+                <h2 className="text-sm font-bold text-white tracking-wide uppercase">Priorización ITIL</h2>
               </div>
               <div className="p-6 grid grid-cols-3 gap-6">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Impacto</label>
-                  <p className="text-sm text-gray-900 mt-1 font-medium">{ticket.impacto || 'N/A'}</p>
+                <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+                  <label className="text-xs font-bold text-blue-500 uppercase tracking-wider block mb-1">Impacto</label>
+                  <p className="text-sm font-bold text-blue-900">{ticket.impacto || 'N/A'}</p>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Urgencia</label>
-                  <p className="text-sm text-gray-900 mt-1 font-medium">{ticket.urgencia || 'N/A'}</p>
+                <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+                  <label className="text-xs font-bold text-blue-500 uppercase tracking-wider block mb-1">Urgencia</label>
+                  <p className="text-sm font-bold text-blue-900">{ticket.urgencia || 'N/A'}</p>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Prioridad</label>
-                  <span className={`inline-block px-3 py-1 rounded text-sm font-medium mt-1 ${getPrioridadColor(ticket.prioridad)}`}>
+                <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+                  <label className="text-xs font-bold text-blue-500 uppercase tracking-wider block mb-2">Prioridad</label>
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs ${getPrioridadColor(ticket.prioridad)}`}>
                     {ticket.prioridad}
                   </span>
                 </div>
@@ -915,22 +866,19 @@ export default function TicketDetailPage() {
 
             {/* Activos */}
             {ticket.activos && ticket.activos.length > 0 && (
-              <div className="bg-white rounded-lg shadow border border-gray-200">
-                <div className="border-b border-gray-200 px-6 py-4">
-                  <h2 className="text-base font-semibold text-gray-900">Activos Asociados ({ticket.activos.length})</h2>
+              <div className="bg-white rounded-2xl shadow-md border border-blue-100 overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-cyan-600 to-sky-500 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/></svg>
+                  <h2 className="text-sm font-bold text-white tracking-wide uppercase">Activos Asociados</h2>
+                  <span className="ml-auto bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">{ticket.activos.length}</span>
                 </div>
-                <div className="p-6">
+                <div className="p-5">
                   <div className="space-y-3">
                     {ticket.activos.map((activo: any, index: number) => {
                       const getFirst = (...vals: any[]) => {
                         for (const v of vals) {
                           if (v === null || v === undefined) continue;
-                          try {
-                            const s = String(v).trim();
-                            if (s) return s;
-                          } catch (e) {
-                            // ignore
-                          }
+                          try { const s = String(v).trim(); if (s) return s; } catch (e) {}
                         }
                         return '';
                       };
@@ -941,19 +889,9 @@ export default function TicketDetailPage() {
                       })();
 
                       const code = getFirst(
-                        activo.codigo_acceso_remoto,
-                        activo.codigoAccesoRemoto,
-                        activo.anydesk,
-                        activo.any_desk,
-                        activo.anyDesk,
-                        activo.activo?.codigo_acceso_remoto,
-                        activo.propiedades?.codigo_acceso_remoto,
-                        activo.detalles?.codigo_acceso_remoto,
-                        assetDetail?.codigo_acceso_remoto,
-                        assetDetail?.codigoAccesoRemoto,
-                        assetDetail?.anydesk,
-                        assetDetail?.any_desk,
-                        assetDetail?.anyDesk
+                        activo.codigo_acceso_remoto, activo.codigoAccesoRemoto, activo.anydesk, activo.any_desk, activo.anyDesk,
+                        activo.activo?.codigo_acceso_remoto, activo.propiedades?.codigo_acceso_remoto, activo.detalles?.codigo_acceso_remoto,
+                        assetDetail?.codigo_acceso_remoto, assetDetail?.codigoAccesoRemoto, assetDetail?.anydesk, assetDetail?.any_desk, assetDetail?.anyDesk
                       );
                       const usuario = ticket.usuario_nombre || '';
                       const telefono = ticket.usuario_telefono || '';
@@ -965,67 +903,57 @@ export default function TicketDetailPage() {
                           await navigator.clipboard.writeText(text);
                           showSuccessToast(`${label || 'Texto'} copiado al portapapeles`);
                         } catch (e) {
-                          console.error('copy error', e);
                           showErrorToast('No se pudo copiar al portapapeles');
                         }
                       };
 
                       return (
-                        <div key={index} className="flex items-start gap-3 p-3 bg-white rounded border border-gray-200 shadow-sm">
-                          <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
-                            <span className="text-blue-600 font-semibold">{avatarInitial}</span>
+                        <div key={index} className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-sky-400 flex items-center justify-center shrink-0 shadow">
+                            <span className="text-white font-bold text-sm">{avatarInitial}</span>
                           </div>
-
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-4">
                               <div className="min-w-0">
-                                <p className="text-sm font-semibold text-gray-900 truncate">{activo.activo_nombre || activo.nombre || 'Activo'}</p>
-                                <p className="text-xs text-gray-500 font-mono truncate">{activo.activo_codigo || activo.codigo}</p>
-
-                                <div className="mt-2 flex flex-col sm:flex-row sm:items-center sm:gap-4 text-sm text-gray-600">
+                                <p className="text-sm font-bold text-blue-900 truncate">{activo.activo_nombre || activo.nombre || 'Activo'}</p>
+                                <p className="text-xs font-mono text-blue-500 truncate">{activo.activo_codigo || activo.codigo}</p>
+                                <div className="mt-2 flex flex-col sm:flex-row sm:items-center sm:gap-4 text-sm">
                                   {usuario && (
-                                    <div className="flex items-center gap-2 truncate">
-                                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A10 10 0 1118.88 6.196 10 10 0 015.12 17.804zM15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                    <div className="flex items-center gap-1.5 text-slate-700 font-medium">
+                                      <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A10 10 0 1118.88 6.196 10 10 0 015.12 17.804zM15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                                       <span className="truncate">{usuario}</span>
                                     </div>
                                   )}
-
                                   {telefono && (
-                                    <a href={`tel:${telefono}`} className="flex items-center gap-2 text-sky-600 hover:text-sky-800 truncate">
+                                    <a href={`tel:${telefono}`} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 font-semibold">
                                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h2.18a2 2 0 011.72.894l1.24 1.86a2 2 0 01-.45 2.48l-1.27 1.08a11.03 11.03 0 005.516 5.516l1.08-1.27a2 2 0 012.48-.45l1.86 1.24A2 2 0 0121 18.82V21a2 2 0 01-2 2H5a2 2 0 01-2-2V5z"/></svg>
-                                      <span className="truncate">{telefono}</span>
+                                      <span>{telefono}</span>
                                     </a>
                                   )}
                                 </div>
                               </div>
-
-                              <div className="ml-2 sm:ml-4 shrink-0 text-right">
+                              <div className="shrink-0">
                                 {code ? (
-                                  <div className="w-full sm:w-auto flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                                    <div className="shrink-0 flex items-center justify-center w-9 h-9 rounded bg-sky-50">
-                                      <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0-1.657 1.343-3 3-3s3 1.343 3 3M6 11c0-3.866 3.582-7 8-7s8 3.134 8 7v3a2 2 0 01-2 2h-1"/></svg>
+                                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-blue-200 shadow-sm">
+                                    <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
+                                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0-1.657 1.343-3 3-3s3 1.343 3 3M6 11c0-3.866 3.582-7 8-7s8 3.134 8 7v3a2 2 0 01-2 2h-1"/></svg>
                                     </div>
-
-                                    <div className="flex-1 text-left sm:text-right min-w-0">
-                                      <div className="text-xs text-gray-500">Código Acceso Remoto</div>
-                                      <div className="mt-1 text-sm font-mono text-gray-900 truncate wrap-break-word">{code}</div>
+                                    <div className="min-w-0">
+                                      <div className="text-xs font-semibold text-blue-500">Acceso Remoto</div>
+                                      <div className="text-sm font-bold font-mono text-blue-900">{code}</div>
                                     </div>
-
-                                    <div className="flex items-center">
-                                      <button onClick={() => handleCopy(code, 'Código')} className="inline-flex items-center gap-2 px-3 py-1.5 bg-sky-600 text-white rounded-md hover:bg-sky-700 transition-colors text-xs">
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V9H3v10a2 2 0 002 2z"/></svg>
-                                        Copiar
-                                      </button>
-                                    </div>
+                                    <button onClick={() => handleCopy(code, 'Código')} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-bold flex items-center gap-1">
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                      Copiar
+                                    </button>
                                   </div>
                                 ) : (
-                                  <div className="text-xs text-gray-400 italic">Sin código de acceso</div>
+                                  <span className="text-xs text-slate-400 italic">Sin código de acceso</span>
                                 )}
                               </div>
                             </div>
-
                             {activo.activo_tipo && (
-                              <div className="mt-2 text-xs text-gray-500">{activo.activo_tipo}</div>
+                              <div className="mt-2 text-xs font-medium text-blue-500">{activo.activo_tipo}</div>
                             )}
                           </div>
                         </div>
@@ -1036,28 +964,30 @@ export default function TicketDetailPage() {
               </div>
             )}
 
-            {/* Usuarios Reportan */}
+            {/* Usuarios Afectados */}
             {ticket.usuarios_reporta && ticket.usuarios_reporta.length > 0 && (
-              <div className="bg-white rounded-lg shadow border border-gray-200">
-                <div className="border-b border-gray-200 px-6 py-4">
-                  <h2 className="text-base font-semibold text-gray-900">Usuarios Afectados ({ticket.usuarios_reporta.length})</h2>
+              <div className="bg-white rounded-2xl shadow-md border border-blue-100 overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-sky-600 to-blue-500 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                  <h2 className="text-sm font-bold text-white tracking-wide uppercase">Usuarios Afectados</h2>
+                  <span className="ml-auto bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">{ticket.usuarios_reporta.length}</span>
                 </div>
-                <div className="p-6">
+                <div className="p-5">
                   <div className="space-y-3">
                     {ticket.usuarios_reporta.map((usuario: any, index: number) => (
-                      <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-200">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                          <span className="text-blue-600 font-semibold text-sm">
+                      <div key={index} className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-400 to-blue-500 flex items-center justify-center shrink-0">
+                          <span className="text-white font-bold text-sm">
                             {(usuario.usuario_nombre || usuario.nombre)?.charAt(0).toUpperCase()}
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">{usuario.usuario_nombre || usuario.nombre}</p>
+                          <p className="text-sm font-bold text-blue-900">{usuario.usuario_nombre || usuario.nombre}</p>
                           {(usuario.usuario_correo || usuario.email) && (
-                            <p className="text-xs text-gray-500">{usuario.usuario_correo || usuario.email}</p>
+                            <p className="text-xs font-medium text-blue-500">{usuario.usuario_correo || usuario.email}</p>
                           )}
                           {usuario.usuario_dni && (
-                            <p className="text-xs text-gray-500">DNI: {usuario.usuario_dni}</p>
+                            <p className="text-xs font-medium text-slate-500">DNI: {usuario.usuario_dni}</p>
                           )}
                         </div>
                       </div>
@@ -1069,11 +999,13 @@ export default function TicketDetailPage() {
 
             {/* Adjuntos */}
             {ticket.adjuntos && ticket.adjuntos.length > 0 && (
-              <div className="bg-white rounded-lg shadow border border-gray-200">
-                <div className="border-b border-gray-200 px-6 py-4">
-                  <h2 className="text-base font-semibold text-gray-900">Adjuntos ({ticket.adjuntos.length})</h2>
+              <div className="bg-white rounded-2xl shadow-md border border-blue-100 overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-blue-500 to-cyan-400 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                  <h2 className="text-sm font-bold text-white tracking-wide uppercase">Adjuntos</h2>
+                  <span className="ml-auto bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">{ticket.adjuntos.length}</span>
                 </div>
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {ticket.adjuntos.map((adjunto: any, index: number) => {
                     let fileName = `Adjunto ${index + 1}`;
                     let extension = '';
@@ -1097,79 +1029,41 @@ export default function TicketDetailPage() {
                     }
 
                     return (
-                      <div
-                        key={index}
-                        className="group relative bg-gray-50 rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-all"
-                      >
+                      <div key={index} className="group relative bg-blue-50 rounded-xl border border-blue-100 overflow-hidden hover:shadow-lg hover:border-blue-300 transition-all">
                         {isImage ? (
                           <>
-                            {/* Preview de imagen */}
-                            <div 
-                              className="aspect-video bg-gray-100 cursor-pointer relative overflow-hidden"
-                              onClick={() => setImagenPreview(src)}
-                            >
-                              <img 
-                                src={src} 
-                                alt={fileName} 
-                                className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                                onError={(e) => {
-                                  e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ddd" width="100" height="100"/%3E%3Ctext fill="%23999" font-size="14" x="50%" y="50%" text-anchor="middle" dy=".3em"%3EImagen%3C/text%3E%3C/svg%3E';
-                                }}
-                              />
-                              {/* Overlay con icono de zoom */}
-                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center">
-                                <svg className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                                </svg>
+                            <div className="aspect-video bg-blue-100 cursor-pointer relative overflow-hidden" onClick={() => setImagenPreview(src)}>
+                              <img src={src} alt={fileName} className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                                onError={(e) => { e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23dbeafe" width="100" height="100"/%3E%3Ctext fill="%2393c5fd" font-size="14" x="50%" y="50%" text-anchor="middle" dy=".3em"%3EImagen%3C/text%3E%3C/svg%3E'; }} />
+                              <div className="absolute inset-0 bg-blue-900 bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center">
+                                <svg className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
                               </div>
                             </div>
-                            {/* Info y botones */}
                             <div className="p-3">
-                              <p className="text-sm font-medium text-gray-900 truncate mb-2">{fileName}</p>
+                              <p className="text-sm font-bold text-blue-900 truncate mb-2">{fileName}</p>
                               <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => setImagenPreview(src)}
-                                  className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
-                                >
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                  </svg>
+                                <button onClick={() => setImagenPreview(src)} className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-1">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                   Ver
                                 </button>
-                                <a
-                                  href={href}
-                                  download={fileName}
-                                  className="flex-1 px-3 py-1.5 bg-gray-600 text-white text-xs font-semibold rounded hover:bg-gray-700 transition-colors flex items-center justify-center gap-1"
-                                >
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                  </svg>
+                                <a href={href} download={fileName} className="flex-1 px-3 py-1.5 bg-slate-600 text-white text-xs font-bold rounded-lg hover:bg-slate-700 transition-colors flex items-center justify-center gap-1">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                                   Descargar
                                 </a>
                               </div>
                             </div>
                           </>
                         ) : (
-                          /* Archivos no-imagen */
                           <div className="p-4 flex items-center gap-3">
-                            <div className="w-12 h-12 rounded bg-blue-100 flex items-center justify-center shrink-0">
-                              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
+                            <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">{fileName}</p>
-                              <p className="text-xs text-gray-500 uppercase">{extension || 'archivo'}</p>
+                              <p className="text-sm font-bold text-blue-900 truncate">{fileName}</p>
+                              <p className="text-xs font-semibold text-blue-400 uppercase">{extension || 'archivo'}</p>
                             </div>
-                            <a
-                                href={href}
-                                download={fileName}
-                                className="px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
-                              >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                              </svg>
+                            <a href={href} download={fileName} className="px-3 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                               Descargar
                             </a>
                           </div>
@@ -1183,112 +1077,119 @@ export default function TicketDetailPage() {
           </div>
 
           {/* Columna derecha */}
-          <div className="space-y-6">
+          <div className="space-y-5">
             
             {/* Asignación */}
-            <div className="bg-white rounded-lg shadow border border-gray-200">
-              <div className="border-b border-gray-200 px-6 py-4">
-                <h3 className="text-base font-semibold text-gray-900">Asignación y Seguimiento</h3>
+            <div className="bg-white rounded-2xl shadow-md border border-blue-100 overflow-hidden">
+              <div className="px-6 py-4 bg-gradient-to-r from-blue-700 to-sky-500 flex items-center gap-2">
+                <svg className="w-4 h-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                <h3 className="text-sm font-bold text-white tracking-wide uppercase">Asignación y Seguimiento</h3>
               </div>
-              <div className="p-6 space-y-4">
+              <div className="p-5 space-y-5">
                 {ticket.modalidad_servicio && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Modalidad de Servicio</label>
-                    <p className="text-sm text-gray-900 mt-1">{ticket.modalidad_servicio}</p>
+                  <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+                    <label className="text-xs font-bold text-blue-500 uppercase tracking-wider">Modalidad de Servicio</label>
+                    <p className="text-sm font-bold text-blue-900 mt-1">{ticket.modalidad_servicio}</p>
                   </div>
                 )}
 
-                <div className="border-t border-gray-200 pt-4">
-                  <label className="text-sm font-medium text-gray-500 mb-3 block">Técnico Asignado</label>
+                {/* Técnico Asignado */}
+                <div>
+                  <label className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-2 block">Técnico Asignado</label>
                   {ticket.tecnico_asignado ? (
-                    <div className="flex items-center gap-3 p-3 bg-blue-50 rounded border border-blue-200">
-                      <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
-                        <span className="text-white font-semibold text-sm">
+                    <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-blue-50 to-sky-50 rounded-xl border border-blue-200">
+                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-600 to-sky-500 flex items-center justify-center shrink-0 shadow">
+                        <span className="text-white font-bold">
                           {ticket.tecnico_asignado.nombre?.charAt(0).toUpperCase()}
                         </span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{ticket.tecnico_asignado.nombre}</p>
+                        <p className="text-sm font-bold text-blue-900 truncate">{ticket.tecnico_asignado.nombre}</p>
                         {ticket.tecnico_asignado.email && (
-                          <p className="text-xs text-gray-600 truncate">{ticket.tecnico_asignado.email}</p>
+                          <p className="text-xs font-medium text-blue-500 truncate">{ticket.tecnico_asignado.email}</p>
                         )}
                       </div>
                     </div>
                   ) : (
-                    <div className="p-4 bg-gray-50 rounded border border-dashed border-gray-300 text-center">
-                      <p className="text-sm text-gray-400">Sin asignar</p>
+                    <div className="p-4 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 text-center">
+                      <p className="text-sm font-medium text-slate-400">Sin asignar</p>
                     </div>
                   )}
                 </div>
 
+                {/* Creado Por */}
                 {ticket.creado_por && (
-                  <div className="border-t border-gray-200 pt-4">
-                    <label className="text-sm font-medium text-gray-500 mb-3 block">Creado Por</label>
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-200">
-                      <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center shrink-0">
-                        <span className="text-gray-700 font-semibold text-xs">
+                  <div>
+                    <label className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-2 block">Creado Por</label>
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="w-9 h-9 rounded-full bg-slate-300 flex items-center justify-center shrink-0">
+                        <span className="text-slate-700 font-bold text-xs">
                           {ticket.creado_por.nombre?.charAt(0).toUpperCase()}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-900 font-medium truncate">{ticket.creado_por.nombre}</p>
+                      <p className="text-sm font-bold text-slate-700 truncate">{ticket.creado_por.nombre}</p>
                     </div>
                   </div>
                 )}
+
+                {/* Configuración */}
                 {(ticket.configurado_por || ticket.configurado_at) && (
-                  <div className="border-t border-gray-200 pt-4">
-                    <label className="text-sm font-medium text-gray-500 mb-3 block">Configuración</label>
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-200">
+                  <div>
+                    <label className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-2 block">Configuración</label>
+                    <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
                       {ticket.configurado_por && (
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center shrink-0">
-                            <span className="text-gray-700 font-semibold text-xs">
+                          <div className="w-9 h-9 rounded-full bg-blue-200 flex items-center justify-center shrink-0">
+                            <span className="text-blue-800 font-bold text-xs">
                               {ticket.configurado_por.nombre?.charAt(0).toUpperCase()}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-gray-900 font-medium truncate">{ticket.configurado_por.nombre}</p>
+                            <p className="text-sm font-bold text-blue-900 truncate">{ticket.configurado_por.nombre}</p>
                             {ticket.configurado_at && (
-                              <p className="text-xs text-gray-600 truncate">{new Date(ticket.configurado_at).toLocaleString()}</p>
+                              <p className="text-xs font-medium text-blue-500">{new Date(ticket.configurado_at).toLocaleString()}</p>
                             )}
                           </div>
                         </div>
                       )}
                       {!ticket.configurado_por && ticket.configurado_at && (
-                        <p className="text-sm text-gray-600">{new Date(ticket.configurado_at).toLocaleString()}</p>
+                        <p className="text-sm font-medium text-blue-700">{new Date(ticket.configurado_at).toLocaleString()}</p>
                       )}
                     </div>
                   </div>
                 )}
-                {/* Chat interno - sección para que admins/técnicos escriban al usuario */}
-                <div className="border-t border-gray-200 pt-4">
+
+                {/* Chat interno */}
+                <div className="border-t border-blue-100 pt-4">
                   <div className="flex items-center justify-between mb-3">
-                    <label className="text-sm font-medium text-gray-500">Chat con el usuario</label>
-                    {/* Badge de estado del chat */}
+                    <label className="text-xs font-bold text-blue-500 uppercase tracking-wider">Chat con el usuario</label>
                     {ticket.estado === 'EN_TRIAGE' && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
                         <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                        💬 Chat Activo - En Triaje
+                        Chat Activo
                       </span>
                     )}
                     {ticket.estado === 'EN_PROCESO' && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
-                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                        💬 Chat Activo - En Atención
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                        Chat Activo
                       </span>
                     )}
                     {['ESPERA', 'ABIERTO'].includes(ticket.estado) && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 border border-yellow-200">
-                        🔒 Chat Deshabilitado - Configurando
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                        🔒 Deshabilitado
                       </span>
                     )}
                     {['RESUELTO', 'CERRADO', 'CANCELADO'].includes(ticket.estado) && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200">
-                        🔒 Chat Cerrado
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                        🔒 Cerrado
                       </span>
                     )}
                   </div>
-                  <div className="bg-white rounded p-3 border border-gray-200">
-                    <div ref={chatContainerRef} className="h-[56vh] overflow-y-auto flex flex-col gap-3 p-2">
+
+                  {/* Área de mensajes */}
+                  <div className="bg-gradient-to-b from-blue-50 to-sky-50 rounded-xl border border-blue-100 overflow-hidden">
+                    <div ref={chatContainerRef} className="h-[56vh] overflow-y-auto flex flex-col gap-3 p-3">
                       {chatMessages.map((m, idx) => {
                         const tipo = String(m.emisor_tipo || '').toUpperCase();
                         const isSistema = tipo === 'SISTEMA';
@@ -1301,9 +1202,9 @@ export default function TicketDetailPage() {
                         if (isSistema) {
                           return (
                             <div key={idx} className="flex justify-center">
-                              <div className="bg-gray-100 text-gray-700 px-3 py-2 rounded-md text-sm max-w-prose text-center">
+                              <div className="bg-white/80 text-slate-600 px-3 py-2 rounded-lg text-xs max-w-prose text-center border border-blue-100 font-medium shadow-sm">
                                 {m.mensaje}
-                                <div className="text-xs text-gray-500 mt-1">{new Date(m.created_at).toLocaleString()}</div>
+                                <div className="text-xs text-slate-400 mt-1">{new Date(m.created_at).toLocaleString()}</div>
                               </div>
                             </div>
                           );
@@ -1312,14 +1213,16 @@ export default function TicketDetailPage() {
                         const isRight = isCliente;
                         return (
                           <div key={idx} className={`flex ${isRight ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`flex items-end gap-3 max-w-[80%] ${isRight ? 'flex-row-reverse' : 'flex-row'}`}>
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${isRight ? 'bg-sky-100 text-sky-800' : 'bg-blue-600 text-white'}`}>
+                            <div className={`flex items-end gap-2 max-w-[82%] ${isRight ? 'flex-row-reverse' : 'flex-row'}`}>
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 shadow ${isRight ? 'bg-sky-100 text-sky-800' : 'bg-gradient-to-br from-blue-600 to-blue-700 text-white'}`}>
                                 {initial}
                               </div>
                               <div className="flex flex-col">
-                                <div className="text-xs font-semibold text-gray-700">{displayName}</div>
-                                <div className={`mt-1 px-3 py-2 rounded-lg ${isTecnico ? 'bg-linear-to-r from-blue-600 to-sky-500 text-white' : 'bg-sky-50 border border-sky-100 text-sky-800'}`}>{m.mensaje}</div>
-                                <div className="text-xs text-gray-500 mt-1">{new Date(m.created_at).toLocaleString()}</div>
+                                <div className="text-xs font-bold text-slate-600 mb-1 px-1">{displayName}</div>
+                                <div className={`px-3 py-2 rounded-2xl text-sm font-medium shadow-sm ${isTecnico ? 'bg-gradient-to-br from-blue-600 to-sky-500 text-white rounded-bl-sm' : 'bg-white border border-sky-200 text-slate-800 rounded-br-sm'}`}>
+                                  {m.mensaje}
+                                </div>
+                                <div className="text-xs text-slate-400 mt-1 px-1">{new Date(m.created_at).toLocaleString()}</div>
                               </div>
                             </div>
                           </div>
@@ -1327,76 +1230,54 @@ export default function TicketDetailPage() {
                       })}
                     </div>
 
-                    <div className="mt-3">
-                      <div className="flex items-center gap-3">
-                        {(() => {
-                          const estadoNormalizado = normalizeEstadoLocal(ticket.estado as any);
-                          const chatHabilitado = estadoNormalizado === 'EN TRIAGE' || estadoNormalizado === 'EN PROCESO';
-                          const isCreator = !!(user && ticket.creado_por && user.id === ticket.creado_por.id);
-                          const isAssignedTech = !!(user && ticket.tecnico_asignado_id != null && user.id === ticket.tecnico_asignado_id);
-                          const isAdmin = user?.rol && user.rol.toLowerCase().includes('admin');
-                          const canSend = chatHabilitado && (isAssignedTech || isCreator || isAdmin) && !chatDisabled;
-                          
-                          // Placeholders dinámicos según el estado
-                          const getPlaceholder = () => {
-                            if (chatDisabledMessage) return chatDisabledMessage;
-                            
-                            switch (ticket.estado) {
-                              case 'ESPERA':
-                                return 'El chat estará disponible cuando el técnico inicie el triaje...';
-                              case 'EN_TRIAGE':
-                                if (canSend) {
-                                  return isAssignedTech ? 'Escribe para solicitar información del incidente...' : 'Escribe tu mensaje para proporcionar información del incidente...';
-                                }
-                                return 'El chat está activo pero no tienes permisos para enviar mensajes';
-                              case 'ABIERTO':
-                                return 'El chat no está disponible en este momento...';
-                              case 'EN_PROCESO':
-                                if (canSend) {
-                                  return isAssignedTech ? 'Escribe tu mensaje al usuario...' : 'Escribe tu mensaje al técnico...';
-                                }
-                                return 'El chat está activo pero no tienes permisos para enviar mensajes';
-                              case 'RESUELTO':
-                              case 'CERRADO':
-                              case 'CANCELADO':
-                                return 'El chat ha sido cerrado. Este ticket ya no acepta mensajes.';
-                              default:
-                                return 'Escribe tu mensaje...';
-                            }
-                          };
-                          
-                          const placeholder = getPlaceholder();
-                          
-                          return (
-                            <>
+                    {/* Input del chat */}
+                    <div className="p-3 bg-white border-t border-blue-100">
+                      {(() => {
+                        const estadoNormalizado = normalizeEstadoLocal(ticket.estado as any);
+                        const chatHabilitado = estadoNormalizado === 'EN TRIAGE' || estadoNormalizado === 'EN PROCESO';
+                        const isCreator = !!(user && ticket.creado_por && user.id === ticket.creado_por.id);
+                        const isAssignedTech = !!(user && ticket.tecnico_asignado_id != null && user.id === ticket.tecnico_asignado_id);
+                        const isAdmin = user?.rol && user.rol.toLowerCase().includes('admin');
+                        const canSend = chatHabilitado && (isAssignedTech || isCreator || isAdmin) && !chatDisabled;
+
+                        const getPlaceholder = () => {
+                          if (chatDisabledMessage) return chatDisabledMessage;
+                          switch (ticket.estado) {
+                            case 'ESPERA': return 'Chat disponible cuando el técnico inicie triaje...';
+                            case 'EN_TRIAGE': return canSend ? (isAssignedTech ? 'Solicitar información del incidente...' : 'Escribe para proporcionar información...') : 'Sin permisos para enviar mensajes';
+                            case 'ABIERTO': return 'Chat no disponible en este momento...';
+                            case 'EN_PROCESO': return canSend ? (isAssignedTech ? 'Escribe al usuario...' : 'Escribe al técnico...') : 'Sin permisos para enviar mensajes';
+                            case 'RESUELTO': case 'CERRADO': case 'CANCELADO': return 'Este ticket ya no acepta mensajes.';
+                            default: return 'Escribe tu mensaje...';
+                          }
+                        };
+
+                        return (
+                          <>
+                            <div className="flex items-center gap-2">
                               <input
                                 value={chatInput}
                                 onChange={e => setChatInput(e.target.value)}
-                                onKeyDown={async (e) => {
-                                  if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault();
-                                    await handleSendChat();
-                                  }
-                                }}
+                                onKeyDown={async (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); await handleSendChat(); } }}
                                 disabled={!canSend}
-                                placeholder={placeholder}
-                                className="flex-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-300"
+                                placeholder={getPlaceholder()}
+                                className="flex-1 px-3 py-2 text-sm font-medium border-2 border-blue-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 bg-blue-50 placeholder-slate-400 text-slate-800 disabled:opacity-60 disabled:bg-slate-50"
                               />
                               <button
                                 onClick={handleSendChat}
                                 disabled={!canSend || !chatInput.trim()}
-                                className={`px-4 py-2 rounded-md text-sm font-medium ${canSend ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all font-bold shadow ${canSend && chatInput.trim() ? 'bg-gradient-to-br from-blue-600 to-sky-500 text-white hover:from-blue-700 hover:to-sky-600 shadow-blue-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
                               >
-                                Enviar
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                               </button>
-                            </>
-                          );
-                        })()}
-                      </div>
-                      {chatDisabledMessage && (
-                        <div className="mt-2 text-sm text-red-600">{chatDisabledMessage}</div>
-                      )}
-                      <p className="text-xs text-gray-500 mt-2">Los mensajes se cargan desde el backend. El frontend no decide el emisor; renderiza según `emisor_tipo`.</p>
+                            </div>
+                            {chatDisabledMessage && (
+                              <div className="mt-2 text-xs font-semibold text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100">{chatDisabledMessage}</div>
+                            )}
+                            <p className="text-xs text-slate-400 mt-2 font-medium">Los mensajes se cargan desde el backend. El frontend renderiza según `emisor_tipo`.</p>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -1406,6 +1287,7 @@ export default function TicketDetailPage() {
         </div>
       </div>
 
+      {/* Modales — sin cambios en lógica */}
       <AsignarTecnicoModal
         isOpen={showAsignarModal}
         onClose={() => setShowAsignarModal(false)}
@@ -1417,7 +1299,6 @@ export default function TicketDetailPage() {
             await loadTicketDetail();
             showSuccessToast('Técnico asignado correctamente');
             setShowAsignarModal(false);
-            // notify other pages (e.g., TicketsPage) that assignment changed
             try { window.dispatchEvent(new CustomEvent('ticketAssigned', { detail: { ticketId: ticket.id } })); } catch (e) { /* ignore */ }
           } catch (err: any) {
             console.error('Error reasignando técnico:', err);
@@ -1429,9 +1310,6 @@ export default function TicketDetailPage() {
         ticketId={ticket?.id ?? 0}
         tecnicoActual={ticket?.tecnico_asignado ? { id: ticket.tecnico_asignado.id, nombre: ticket.tecnico_asignado.nombre } : null}
       />
-
-      {/* Modales */}
-      {/* La asignación de técnicos se realiza desde la tabla de tickets. */}
 
       <PausarSLAModal
         isOpen={showPausarSLAModal}
@@ -1462,10 +1340,8 @@ export default function TicketDetailPage() {
         initialData={ticket}
         initialAdjuntos={ticket.adjuntos}
         onUpdated={async () => { await loadTicketDetail(); setShowConfigurarModal(false); showSuccessToast('Ticket configurado correctamente'); }}
-        onSubmit={async () => { /* no-op: en modo configurar usamos editarTicket internamente */ }}
+        onSubmit={async () => { /* no-op */ }}
       />
-
-      {/* Asset detail modal removed — asset info now shown inline beside each activo */}
 
       <CancelarTicketModal
         isOpen={showCancelarModal}
@@ -1474,7 +1350,6 @@ export default function TicketDetailPage() {
         ticketCodigo={ticket.codigo_ticket}
       />
 
-      {/* Modal de Pasar a Presencial (Nueva Visita) */}
       {showPasarPresencialModal && contratoActivo && (
         <NewVisitaModal
           empresaId={String(ticket.empresa_id)}
@@ -1495,31 +1370,31 @@ export default function TicketDetailPage() {
         />
       )}
 
-      {/* Modal de Preview de Imagen */}
+      {/* Modal preview imagen */}
       {imagenPreview && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-blue-950/90 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
           onClick={() => setImagenPreview(null)}
         >
           <button
             onClick={() => setImagenPreview(null)}
-            className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-10"
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors z-10"
           >
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
           <div className="max-w-7xl max-h-full flex flex-col items-center gap-4">
             <img 
               src={imagenPreview} 
               alt="Preview" 
-              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+              className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl ring-1 ring-white/20"
               onClick={(e) => e.stopPropagation()}
             />
             <a
               href={imagenPreview}
               download
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-semibold"
+              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-sky-400 text-white rounded-xl hover:from-blue-600 hover:to-sky-500 transition-all flex items-center gap-2 font-bold shadow-lg"
               onClick={(e) => e.stopPropagation()}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

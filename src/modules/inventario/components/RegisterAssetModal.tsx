@@ -225,6 +225,9 @@ const RegisterAssetModal = ({
         setModelo(String(asset['modelo'] ?? ''));
         setSerie(String(asset['serie'] ?? ''));
         setAssetId(String(asset['assetId'] ?? asset['codigo'] ?? ''));
+        // Set selected group id when editing an asset (may be stored as grupo_id, grupoId, groupId or grupo)
+        const grp = asset['grupo_id'] ?? asset['grupoId'] ?? asset['groupId'] ?? asset['grupo'] ?? asset['group'] ?? '';
+        setSelectedGroupId(grp ? String(grp) : '');
         const areaValue = String(asset['area'] ?? '');
         setArea(areaValue);
         setProveedor(String(asset['proveedor'] ?? ''));
@@ -678,6 +681,8 @@ const RegisterAssetModal = ({
     codigoAccesoRemoto: codigoAccesoRemoto || undefined,
     usuariosAsignadosIds: usuariosAsignadosIds.length > 0 ? usuariosAsignadosIds : undefined,
     observaciones,
+    // Include selected group id (DB column: grupo_id)
+    ...(selectedGroupId ? { grupo_id: selectedGroupId } : {}),
     ...buildCategoryData(),
     camposPersonalizados: buildCamposPersonalizados(),
     camposPersonalizadosArray: buildCamposPersonalizadosArray(),
