@@ -16,6 +16,7 @@ import SLATimer from '../components/SLATimer';
 import Toast from '@/components/ui/Toast';
 import NewVisitaModal from '@/modules/visitas/components/NewVisitaModal';
 import type { Visita } from '@/modules/visitas/types';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -38,6 +39,7 @@ export default function TicketDetailPage() {
   const [showCancelarModal, setShowCancelarModal] = useState(false);
   const [showConfigurarModal, setShowConfigurarModal] = useState(false);
   const [showAsignarModal, setShowAsignarModal] = useState(false);
+  const [confirmTakeOpen, setConfirmTakeOpen] = useState(false);
   const [showPasarPresencialModal, setShowPasarPresencialModal] = useState(false);
   const [contratoActivo, setContratoActivo] = useState<any>(null);
   const [asignando, setAsignando] = useState(false);
@@ -416,16 +418,16 @@ export default function TicketDetailPage() {
 
   const handleCogerTicket = async () => {
     if (!ticket || actionLoading) return;
+    // Open confirm modal instead of native confirm
+    setConfirmTakeOpen(true);
+  };
 
-    if (!confirm('¿Estás seguro que deseas tomar este ticket? Cambiará a estado EN_PROCESO y comenzará el conteo de tiempo de atención.')) {
-      return;
-    }
-
+  const confirmTake = async () => {
+    if (!ticket) return;
     try {
+      setConfirmTakeOpen(false);
       setActionLoading(true);
-      // Llamar únicamente al endpoint `cogerTicket`; el backend controla la transición ESPERA -> EN_PROCESO.
       await cogerTicket(ticket.id);
-
       await loadTicketDetail();
       showSuccessToast('Ticket tomado correctamente. Ahora está EN_PROCESO.');
     } catch (error: any) {
@@ -1348,6 +1350,14 @@ export default function TicketDetailPage() {
         onClose={() => setShowCancelarModal(false)}
         onConfirm={handleCancelarTicket}
         ticketCodigo={ticket.codigo_ticket}
+      />
+      <ConfirmModal
+        open={confirmTakeOpen}
+        title="¿Estás seguro que deseas tomar este ticket?"
+        message="Cambiará a estado EN_PROCESO y comenzará el conteo de tiempo de atención."
+        onConfirm={confirmTake}
+        onCancel={() => setConfirmTakeOpen(false)}
+        loading={actionLoading}
       />
 
       {showPasarPresencialModal && contratoActivo && (

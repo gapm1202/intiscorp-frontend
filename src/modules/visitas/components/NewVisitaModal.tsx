@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Visita, CrearVisitaPayload, TecnicoAsignado } from '../types';
 import { crearVisita } from '../services/visitasService';
-import { getTicketById } from '@/modules/tickets/services/ticketsService';
+import { getTicketById, asignarTecnico } from '@/modules/tickets/services/ticketsService';
 
 interface NewVisitaModalProps {
   empresaId: string;
@@ -277,7 +277,22 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
       };
 
       const response = await crearVisita(payload);
-      onVisitaCreada(response.data || response);
+      const visitaCreada = response.data || response;
+
+      // Si la visita proviene de un ticket y se seleccionó un encargado, actualizar el técnico asignado del ticket
+      try {
+        if (formData.ticketId && tecnicoEncargado) {
+          const ticketIdNum = Number(formData.ticketId);
+          const tecnicoIdNum = Number(tecnicoEncargado);
+          if (!Number.isNaN(ticketIdNum) && !Number.isNaN(tecnicoIdNum)) {
+            await asignarTecnico(ticketIdNum, tecnicoIdNum, 'Asignado como encargado de visita presencial');
+          }
+        }
+      } catch (err) {
+        console.error('Error asignando técnico al ticket tras crear visita:', err);
+      }
+
+      onVisitaCreada(visitaCreada);
     } catch (error: any) {
       console.error('Error creating visita:', error);
       onError(error.message || 'Error al crear la visita');

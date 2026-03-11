@@ -7,6 +7,7 @@ import { getCategorias } from '@/modules/inventario/services/categoriasService';
 import { getUsuariosAdministrativos } from '@/modules/auth/services/userService';
 import { useAuth } from '@/hooks/useAuth';
 import CreateTicketModal from '../components/CreateTicketModal';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import AsignarTecnicoModal from '../components/AsignarTecnicoModal';
 import type { Ticket, TicketFilter } from '../types';
 
@@ -19,6 +20,8 @@ const TicketsPage = () => {
   const [page, setPage] = useState(1);
   const pageSize = 20;
   const [cogiendoTicket, setCogiendoTicket] = useState<number | null>(null);
+  const [confirmTakeOpen, setConfirmTakeOpen] = useState(false);
+  const [ticketToTake, setTicketToTake] = useState<number | null>(null);
 
   // Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -115,13 +118,17 @@ const TicketsPage = () => {
     }
   };
 
-  const handleCogerTicket = async (ticketId: number) => {
-    if (!confirm('¿Estás seguro de que deseas coger este ticket? Se te asignará automáticamente y cambiará a estado EN PROCESO.')) {
-      return;
-    }
+  const handleCogerTicket = (ticketId: number) => {
+    setTicketToTake(ticketId);
+    setConfirmTakeOpen(true);
+  };
+
+  const confirmTake = async () => {
+    if (!ticketToTake) return;
     try {
-      setCogiendoTicket(ticketId);
-      await cogerTicket(ticketId);
+      setCogiendoTicket(ticketToTake);
+      setConfirmTakeOpen(false);
+      await cogerTicket(ticketToTake);
       await loadTickets();
       alert('✅ Ticket tomado correctamente. Ahora está asignado a ti y EN PROCESO.');
     } catch (error: any) {
@@ -129,6 +136,7 @@ const TicketsPage = () => {
       alert(error.response?.data?.message || '❌ Error al tomar el ticket');
     } finally {
       setCogiendoTicket(null);
+      setTicketToTake(null);
     }
   };
 
@@ -842,6 +850,14 @@ const TicketsPage = () => {
           await createTicket(ticketData);
           await loadTickets();
         }}
+      />
+      <ConfirmModal
+        open={confirmTakeOpen}
+        title="¿Estás seguro que deseas tomar este ticket?"
+        message="Cambiará a estado EN_PROCESO y comenzará el conteo de tiempo de atención."
+        onConfirm={confirmTake}
+        onCancel={() => { setConfirmTakeOpen(false); setTicketToTake(null); }}
+        loading={ticketToTake !== null && cogiendoTicket === ticketToTake}
       />
     </div>
   );
