@@ -53,6 +53,7 @@ export interface ResumenContractualVisitas {
 export interface FiltrosVisitas {
   empresaId?: string;
   sedeId?: string;
+  ticketId?: string;
   mes?: string;
   tecnicoEncargado?: string;
   estado?: EstadoVisita;
@@ -83,6 +84,11 @@ export interface ActualizarVisitaPayload {
 }
 
 export interface FinalizarVisitaPayload {
+  fechaFinalizacion: string;
+  tecnicoFinalizadorId: number;
   cuentaComoVisitaContractual: boolean;
+  huboCambioComponente: boolean;
+  notasFinalizacion?: string;
   observacionesClausura?: string;
+  destinatariosCorreo?: string[];
 }

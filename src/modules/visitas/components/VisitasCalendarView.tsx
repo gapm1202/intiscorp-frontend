@@ -102,46 +102,71 @@ export default function VisitasCalendarView({
 
   const tipoVisitaLabel = (tipo?: string) => (tipo ? tipo.replace(/_/g, ' ') : '-');
 
+  const estadoBadgeColor = (estado: EstadoVisita) => {
+    const map: Record<EstadoVisita, string> = {
+      PROGRAMADA: 'bg-blue-600',
+      EN_PROCESO: 'bg-amber-500',
+      FINALIZADA: 'bg-emerald-600',
+      CANCELADA: 'bg-red-500',
+      PENDIENTE_PROGRAMACION: 'bg-slate-400',
+    };
+    return map[estado] ?? 'bg-slate-400';
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
-      {/* Header del Calendario */}
-      <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200 px-6 py-4">
-        <div className="flex justify-between items-center mb-4">
-          <button
-            onClick={handlePrevMonth}
-            className="p-2 hover:bg-blue-200 rounded-lg transition"
-          >
-            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          <h2 className="text-xl font-bold text-blue-900 capitalize">{monthName}</h2>
-          <button
-            onClick={handleNextMonth}
-            className="p-2 hover:bg-blue-200 rounded-lg transition"
-          >
-            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          </button>
+    <div className="bg-white rounded-xl shadow-md border border-blue-100 overflow-hidden">
+
+      {/* Header */}
+      <div className="bg-blue-700 px-6 py-4 flex justify-between items-center">
+        <button
+          onClick={handlePrevMonth}
+          className="p-2 rounded-lg hover:bg-blue-800 transition-colors text-white"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
+        <div className="flex items-center gap-3">
+          <svg className="w-5 h-5 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <h2 className="text-lg font-bold text-white capitalize tracking-wide">{monthName}</h2>
         </div>
+
+        <button
+          onClick={handleNextMonth}
+          className="p-2 rounded-lg hover:bg-blue-800 transition-colors text-white"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       </div>
 
       {/* Calendario */}
-      <div className="p-6">
-        {/* Headers de dias */}
-        <div className="grid grid-cols-7 gap-2 mb-4">
+      <div className="p-5">
+
+        {/* Headers días */}
+        <div className="grid grid-cols-7 gap-2 mb-2">
           {dayNames.map((day) => (
             <div
               key={day}
-              className="text-center font-semibold text-gray-600 py-2 text-sm uppercase"
+              className="text-center py-2 text-xs font-bold text-blue-700 uppercase tracking-widest"
             >
               {day}
             </div>
           ))}
         </div>
 
-        {/* Celdas del calendario */}
+        {/* Separador */}
+        <div className="border-t border-blue-100 mb-3" />
+
+        {/* Celdas */}
         <div className="grid grid-cols-7 gap-2 auto-rows-max">
           {days.map((day, index) => {
             if (!day) {
-              return <div key={`empty-${index}`} className="aspect-square"></div>;
+              return <div key={`empty-${index}`} className="aspect-square" />;
             }
 
             const fecha = `${currentMonth.getFullYear()}-${String(
@@ -154,25 +179,37 @@ export default function VisitasCalendarView({
             return (
               <div
                 key={day}
-                className={`aspect-square p-2 rounded-lg border-2 transition ${
+                className={`aspect-square p-1.5 rounded-lg border-2 transition-colors ${
                   isToday
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                    ? 'border-blue-600 bg-blue-50 shadow-sm'
+                    : visitasDelDia.length > 0
+                      ? 'border-sky-200 bg-sky-50 hover:bg-sky-100'
+                      : 'border-slate-100 bg-white hover:bg-slate-50'
                 }`}
               >
-                {/* Numero de dia */}
+                {/* Número de día */}
                 <div
-                  className={`text-xs font-bold mb-1 ${
-                    isToday ? 'text-blue-600' : 'text-gray-600'
+                  className={`text-xs font-bold mb-1 leading-none ${
+                    isToday
+                      ? 'text-blue-700'
+                      : visitasDelDia.length > 0
+                        ? 'text-blue-900'
+                        : 'text-slate-400'
                   }`}
                 >
-                  {day}
+                  {isToday ? (
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-700 text-white text-[10px] font-bold">
+                      {day}
+                    </span>
+                  ) : (
+                    day
+                  )}
                 </div>
 
-                {/* Visitas del dia */}
-                <div className="space-y-1 overflow-y-auto max-h-20">
+                {/* Visitas del día */}
+                <div className="space-y-0.5 overflow-y-auto max-h-16">
                   {visitasDelDia.length > 0 ? (
-                    <div>
+                    <>
                       {visitasDelDia.slice(0, 2).map((visita, idx) => (
                         <button
                           key={idx}
@@ -181,43 +218,35 @@ export default function VisitasCalendarView({
                           title={`${visita.tipoVisita} - ${visita.tecnicosAsignados.length} tecnico(s)`}
                         >
                           <div
-                            className={`text-xs px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80 transition text-white font-medium ${
-                              visita.estado === 'PROGRAMADA'
-                                ? 'bg-blue-500'
-                                : visita.estado === 'EN_PROCESO'
-                                  ? 'bg-yellow-500'
-                                  : visita.estado === 'FINALIZADA'
-                                    ? 'bg-green-500'
-                                    : visita.estado === 'CANCELADA'
-                                      ? 'bg-red-500'
-                                      : 'bg-gray-500'
-                            }`}
+                            className={`text-[10px] px-1 py-0.5 rounded truncate text-white font-semibold hover:opacity-80 transition-opacity ${estadoBadgeColor(visita.estado)}`}
                           >
                             {getEstadoIcon(visita.estado)} {tipoVisitaLabel(visita.tipoVisita).slice(0, 8)}
                           </div>
 
                           {/* Tooltip */}
-                          <div className="absolute z-10 hidden group-hover:block bottom-full left-0 mb-1 w-48 bg-gray-900 text-white text-xs rounded-lg p-3 pointer-events-none">
-                            <p className="font-semibold mb-1">{tipoVisitaLabel(visita.tipoVisita)}</p>
-                            <p className="truncate">
-                              Tecnico: {visita.tecnicosAsignados[0]?.tecnicoNombre}
-                            </p>
-                            <p className="text-gray-300">{visita.estado}</p>
+                          <div className="absolute z-10 hidden group-hover:block bottom-full left-0 mb-2 w-52 bg-blue-900 text-white text-xs rounded-lg shadow-xl pointer-events-none overflow-hidden">
+                            <div className="px-3 pt-2.5 pb-1 border-b border-blue-700">
+                              <p className="font-bold text-sm">{tipoVisitaLabel(visita.tipoVisita)}</p>
+                            </div>
+                            <div className="px-3 py-2 space-y-1">
+                              <p className="text-blue-200 text-[11px]">
+                                Técnico: <span className="text-white font-medium">{visita.tecnicosAsignados[0]?.tecnicoNombre}</span>
+                              </p>
+                              <p className="text-blue-200 text-[11px]">
+                                Estado: <span className="text-white font-medium">{visita.estado}</span>
+                              </p>
+                            </div>
                           </div>
                         </button>
                       ))}
 
                       {visitasDelDia.length > 2 && (
-                        <div className="text-xs text-gray-500 px-1 py-0.5">
-                          + {visitasDelDia.length - 2} mas
+                        <div className="text-[10px] font-semibold text-blue-600 px-1">
+                          +{visitasDelDia.length - 2} más
                         </div>
                       )}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-gray-300 h-full flex items-center justify-center">
-                      —
-                    </div>
-                  )}
+                    </>
+                  ) : null}
                 </div>
               </div>
             );
@@ -226,116 +255,130 @@ export default function VisitasCalendarView({
       </div>
 
       {/* Leyenda */}
-      <div className="bg-gray-50 border-t border-gray-200 px-6 py-4">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-gray-400"></div>
-            <span className="text-gray-600">Pendiente</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-blue-500"></div>
-            <span className="text-gray-600">Programada</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-yellow-500"></div>
-            <span className="text-gray-600">En Curso</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-green-500"></div>
-            <span className="text-gray-600">Finalizada</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-red-500"></div>
-            <span className="text-gray-600">Cancelada</span>
-          </div>
+      <div className="bg-blue-700 border-t border-blue-600 px-6 py-3">
+        <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs">
+          {[
+            { color: 'bg-slate-400', label: 'Pendiente' },
+            { color: 'bg-blue-500', label: 'Programada' },
+            { color: 'bg-amber-500', label: 'En Curso' },
+            { color: 'bg-emerald-500', label: 'Finalizada' },
+            { color: 'bg-red-500', label: 'Cancelada' },
+          ].map(({ color, label }) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <span className={`w-2.5 h-2.5 rounded-sm ${color} flex-shrink-0`} />
+              <span className="text-blue-200 font-medium">{label}</span>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Modal detalle de visita */}
       {visitaSeleccionada && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl border border-blue-100 overflow-hidden">
+
+            {/* Modal header */}
+            <div className="bg-blue-700 px-5 py-4 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Detalle de visita</h3>
-                <p className="text-xs text-slate-500">{tipoVisitaLabel(visitaSeleccionada.tipoVisita)}</p>
+                <h3 className="text-base font-bold text-white">Detalle de visita</h3>
+                <p className="text-xs text-blue-300 mt-0.5 uppercase tracking-wide font-medium">
+                  {tipoVisitaLabel(visitaSeleccionada.tipoVisita)}
+                </p>
               </div>
               <button
                 onClick={() => setVisitaSeleccionada(null)}
-                className="rounded-md p-1 text-slate-500 hover:bg-slate-100"
+                className="p-1.5 rounded-lg text-blue-300 hover:bg-blue-800 hover:text-white transition-colors"
               >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
-            <div className="space-y-4 px-5 py-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-lg bg-slate-50 p-3">
-                  <p className="text-xs text-slate-500">Fecha</p>
-                  <p className="font-semibold text-slate-900">
+            {/* Modal body */}
+            <div className="space-y-3 px-5 py-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-sky-50 border border-sky-100 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1">Fecha</p>
+                  <p className="text-sm font-semibold text-blue-900">
                     {visitaSeleccionada.fechaProgramada
                       ? formatDate(visitaSeleccionada.fechaProgramada)
                       : '-'}
                   </p>
                 </div>
-                <div className="rounded-lg bg-slate-50 p-3">
-                  <p className="text-xs text-slate-500">Estado</p>
-                  <p className="font-semibold text-slate-900">{visitaSeleccionada.estado}</p>
+                <div className="rounded-lg bg-sky-50 border border-sky-100 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1">Estado</p>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold text-white ${estadoBadgeColor(visitaSeleccionada.estado)}`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-white/60" />
+                    {visitaSeleccionada.estado}
+                  </span>
                 </div>
               </div>
 
-              <div className="rounded-lg border border-slate-200 p-3 text-sm">
-                <p className="text-xs font-semibold text-slate-500 uppercase">Tecnicos</p>
-                <div className="mt-2 space-y-1">
+              <div className="rounded-lg border border-blue-100 bg-white p-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-2">Técnicos</p>
+                <div className="space-y-1.5">
                   {(visitaSeleccionada.tecnicosAsignados ?? []).length > 0 ? (
                     visitaSeleccionada.tecnicosAsignados.map((t, index) => (
-                      <div key={t.tecnicoId ?? `tec-${index}`} className="flex items-center justify-between">
-                        <span className="text-slate-800">{t.tecnicoNombre}</span>
+                      <div
+                        key={t.tecnicoId ?? `tec-${index}`}
+                        className="flex items-center justify-between py-1.5 px-2 rounded-md bg-sky-50"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-blue-700 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                            {(t.tecnicoNombre || '?')[0]?.toUpperCase()}
+                          </div>
+                          <span className="text-sm font-medium text-blue-900">{t.tecnicoNombre}</span>
+                        </div>
                         {t.esEncargado && (
-                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                          <span className="rounded-full bg-blue-100 border border-blue-200 px-2 py-0.5 text-[10px] font-bold text-blue-700">
                             Encargado
                           </span>
                         )}
                       </div>
                     ))
                   ) : (
-                    <p className="text-slate-500">Sin tecnicos asignados</p>
+                    <p className="text-sm text-slate-400 italic">Sin técnicos asignados</p>
                   )}
                 </div>
               </div>
 
               {visitaSeleccionada.observaciones && (
-                <div className="rounded-lg border border-slate-200 p-3 text-sm">
-                  <p className="text-xs font-semibold text-slate-500 uppercase">Observaciones</p>
-                  <p className="mt-2 text-slate-700">{visitaSeleccionada.observaciones}</p>
+                <div className="rounded-lg border border-blue-100 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1">Observaciones</p>
+                  <p className="text-sm text-slate-700 mt-1">{visitaSeleccionada.observaciones}</p>
                 </div>
               )}
 
               {(visitaSeleccionada.ticketNumero || visitaSeleccionada.ticketId) && (
-                <div className="rounded-lg border border-slate-200 p-3 text-sm">
-                  <p className="text-xs font-semibold text-slate-500 uppercase">Ticket</p>
-                  <p className="mt-2 text-slate-700">
+                <div className="rounded-lg border border-blue-100 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1">Ticket</p>
+                  <p className="text-sm font-semibold text-blue-900 mt-1">
                     {visitaSeleccionada.ticketNumero || visitaSeleccionada.ticketId}
                   </p>
                 </div>
               )}
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+            {/* Modal footer */}
+            <div className="flex justify-end gap-2 border-t border-blue-100 px-5 py-3 bg-sky-50">
               {visitaSeleccionada.estado === 'EN_PROCESO' && (
                 <button
                   onClick={() => {
                     onFinalizarVisita(visitaSeleccionada);
                     setVisitaSeleccionada(null);
                   }}
-                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition-colors shadow-sm"
                 >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
                   Finalizar visita
                 </button>
               )}
               <button
                 onClick={() => setVisitaSeleccionada(null)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white hover:bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition-colors"
               >
                 Cerrar
               </button>

@@ -20,6 +20,7 @@ export async function getVisitas(parametros?: FiltrosVisitas & { limite?: number
   
   if (parametros?.empresaId) params.append('empresaId', parametros.empresaId);
   if (parametros?.sedeId) params.append('sedeId', parametros.sedeId);
+  if (parametros?.ticketId) params.append('ticketId', parametros.ticketId);
   if (parametros?.mes) params.append('mes', parametros.mes);
   if (parametros?.tecnicoEncargado) params.append('tecnicoEncargado', parametros.tecnicoEncargado);
   if (parametros?.estado) params.append('estado', parametros.estado);
@@ -155,7 +156,12 @@ export async function iniciarVisita(visitaId: string) {
 
 // PATCH finalizar visita con registro de clausura
 export async function finalizarVisita(visitaId: string, payload: FinalizarVisitaPayload) {
-  const url = `${API_BASE}/api/visitas/${visitaId}/finalizar`;
+  const visitaIdNum = Number(visitaId);
+  if (!Number.isInteger(visitaIdNum) || visitaIdNum <= 0) {
+    throw new Error('No se encontró el ID de la visita a finalizar');
+  }
+
+  const url = `${API_BASE}/api/visitas/${visitaIdNum}/finalizar`;
   const token = getToken();
 
   const res = await fetch(url, {
@@ -173,6 +179,55 @@ export async function finalizarVisita(visitaId: string, payload: FinalizarVisita
   }
 
   return await res.json();
+}
+
+export interface EnviarResumenVisitaCorreoPayload {
+  destinatarios: string[];
+  pdfBase64: string;
+  pdfFileName: string;
+  resumen: {
+    fechaVisita: string;
+    tecnicoEncargado: string;
+    observacionesClausura: string;
+    cuentaComoVisitaContractual: 'Si' | 'No';
+    huboCambioComponente: 'Si' | 'No';
+  };
+}
+
+// POST enviar correo de cierre de visita con PDF adjunto
+export async function enviarResumenVisitaCorreo(
+  visitaId: string,
+  payload: EnviarResumenVisitaCorreoPayload,
+) {
+  const token = getToken();
+  const candidates = [
+    `${API_BASE}/api/visitas/${visitaId}/notificar-cierre`,
+    `${API_BASE}/api/visitas/${visitaId}/enviar-correo-cierre`,
+  ];
+
+  let lastStatus = 0;
+  let lastBody = '';
+
+  for (const url of candidates) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+
+    lastStatus = res.status;
+    lastBody = await res.text();
+    if (res.status !== 404) break;
+  }
+
+  throw new Error(`Error sending visita closure email: ${lastStatus} - ${lastBody}`);
 }
 
 // PATCH cancelar visita

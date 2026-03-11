@@ -6,13 +6,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(() => {
     const savedUser = localStorage.getItem("user");
     if (!savedUser) return null;
-      try {
+    try {
       const parsed = JSON.parse(savedUser) as Record<string, unknown>;
       // Normalizar si el backend guardó 'role' en vez de 'rol'
       if (parsed && !parsed['rol'] && (parsed['role'] || (parsed['roles'] && (parsed['roles'] as unknown[])[0]))) {
         parsed['rol'] = parsed['role'] ?? (parsed['roles'] && (parsed['roles'] as unknown[])[0]) ?? "";
       }
-      return parsed as unknown as User;
+      const normalized: User = {
+        id: Number(parsed['id'] ?? parsed['_id'] ?? 0),
+        nombre: String(parsed['nombre'] ?? parsed['name'] ?? parsed['nombre_completo'] ?? ""),
+        email: String(parsed['email'] ?? parsed['correo'] ?? ""),
+        rol: String(parsed['rol'] ?? parsed['role'] ?? (Array.isArray(parsed['roles']) ? (parsed['roles'] as unknown[])[0] : "") ?? ""),
+      };
+
+      if (!Number.isInteger(normalized.id) || normalized.id <= 0) {
+        return null;
+      }
+
+      return normalized;
     } catch {
       return null;
     }

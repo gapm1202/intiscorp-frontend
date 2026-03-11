@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
 import { getWarrantyInfo } from "@/modules/inventario/utils/warranty";
 import { formatAssetCode, getCompanyPrefix, getCategoryPrefix } from "@/utils/helpers";
@@ -79,6 +79,7 @@ const RegisterAssetModal = ({
   const [selectedSedeId,   setSelectedSedeId]   = useState<string | undefined>(sedeId);
 
   useEffect(() => { if (sedeId) setSelectedSedeId(sedeId); }, [sedeId]);
+  useEffect(() => { if (!isOpen) hasInitRef.current = false; }, [isOpen]);
 
   // ── Estado: Laptop ──
   const [lapCpu,          setLapCpu]          = useState("");
@@ -155,6 +156,7 @@ const RegisterAssetModal = ({
   const [marcasList,                 setMarcasList]                 = useState<MarcaItemAPI[]>([]);
 
   const getFieldKey = (label: string) => String(label || '').trim().replace(/\s+/g, '_');
+  const hasInitRef = useRef(false);
 
   // ── Effects: toda la lógica original sin cambios ──────────────────────────
   useEffect(() => {
@@ -216,18 +218,37 @@ const RegisterAssetModal = ({
     } catch { Promise.resolve().then(() => setAntiguedadCalculada('')); }
   }, [fechaCompra, fechaCompraAprox, tipoDocumentoCompra]);
 
+  // Initialize form when modal opens or when the editing asset id changes.
   useEffect(() => {
-    if (isOpen && editingAsset) {
-      Promise.resolve().then(() => {
-        const asset = editingAsset as Record<string, unknown>;
-        setCategoria(String(asset['categoria'] ?? ''));
-        setFabricante(String(asset['fabricante'] ?? ''));
+    const asset = editingAsset as Record<string, unknown> | null;
+    const editingId = asset ? (asset['activo_id'] ?? asset['_id'] ?? asset['id'] ?? asset['assetId'] ?? asset['codigo'] ?? null) : null;
+    if (!isOpen || !asset || !editingId) return;
+    if (hasInitRef.current) return;
+    hasInitRef.current = true;
+
+    // Run once asynchronously to avoid blocking render and to batch state updates
+    Promise.resolve().then(() => {
+        // Categoria: backend may store either the category name or its id/codigo/_id
+        const rawCat = asset['categoria'] ?? asset['categoria_id'] ?? asset['categoriaId'] ?? asset['categoriaCodigo'] ?? null;
+        let catToSet = '';
+        if (rawCat) {
+          const foundCat = categories.find(c => String(c.nombre) === String(rawCat) || String((c as any).id) === String(rawCat) || String((c as any)._id) === String(rawCat) || String((c as any).codigo) === String(rawCat));
+          catToSet = foundCat ? String(foundCat.nombre) : String(rawCat);
+        }
+        setCategoria(catToSet);
+
+        // Fabricante: try to set to marca name if possible; may be resolved later when marcasList loads
+        const rawMarca = asset['fabricante'] ?? asset['marca'] ?? asset['fabricante_id'] ?? asset['fabricanteId'] ?? null;
+        setFabricante(rawMarca ? String(rawMarca) : '');
         setModelo(String(asset['modelo'] ?? ''));
         setSerie(String(asset['serie'] ?? ''));
         setAssetId(String(asset['assetId'] ?? asset['codigo'] ?? ''));
         // Set selected group id when editing an asset (may be stored as grupo_id, grupoId, groupId or grupo)
         const grp = asset['grupo_id'] ?? asset['grupoId'] ?? asset['groupId'] ?? asset['grupo'] ?? asset['group'] ?? '';
         setSelectedGroupId(grp ? String(grp) : '');
+        // Also set selectedSedeId from editingAsset in case sedeId prop was not provided
+        const assetSedeId = String(asset['sede_id'] ?? asset['sedeId'] ?? '');
+        if (assetSedeId && !sedeId) setSelectedSedeId(assetSedeId);
         const areaValue = String(asset['area'] ?? '');
         setArea(areaValue);
         setProveedor(String(asset['proveedor'] ?? ''));
@@ -382,10 +403,29 @@ const RegisterAssetModal = ({
           } catch (err) { console.error('Error parsing fotos:', err); }
         }
       });
-    }
-  }, [isOpen, editingAsset, areas]);
+  // Depend only on modal open and editing asset id (not whole object); hasInitRef prevents re-runs
+  }, [isOpen, editingAsset ? (editingAsset['activo_id'] ?? editingAsset['_id'] ?? editingAsset['id'] ?? editingAsset['assetId'] ?? editingAsset['codigo'] ?? null) : null]);
 
-  useEffect(() => { setCategoria(''); setDynamicFields({}); setAssetId(''); setFabricante(''); }, [selectedGroupId]);
+  // When marcasList loads, if we're editing and fabricante is an id, try to map it to the marca name
+  useEffect(() => {
+    if (!isOpen || !editingAsset || !Array.isArray(marcasList) || marcasList.length === 0) return;
+    const rawMarca = editingAsset['fabricante'] ?? editingAsset['marca'] ?? editingAsset['fabricante_id'] ?? editingAsset['fabricanteId'] ?? null;
+    if (!rawMarca) return;
+    // If fabricante already matches an option label, skip
+    const exists = fabricantesFromMarcas.some(m => String(m.nombre) === String(fabricante) || String(m.id) === String(fabricante));
+    if (exists) return;
+    const match = marcasList.find(m => String(m.id) === String(rawMarca) || String(m.nombre) === String(rawMarca));
+    if (match) setFabricante(String(match.nombre ?? match.id));
+  }, [marcasList, isOpen, editingAsset]);
+
+  useEffect(() => {
+    // Only clear when changing group for a NEW asset; if editingAsset is present, keep existing values
+    if (editingAsset) return;
+    setCategoria('');
+    setDynamicFields({});
+    setAssetId('');
+    setFabricante('');
+  }, [selectedGroupId, editingAsset]);
 
   // Keep activeTab in sync with stepIndex and viceversa
   useEffect(() => {
@@ -444,7 +484,7 @@ const RegisterAssetModal = ({
     };
     if (categoria) load();
     return () => { mounted = false; };
-  }, [categoria, categories, editingAsset]);
+  }, [categoria, categories]);
 
   // Inicializar instancias dinámicas cuando cambian los componentes cargados o los valores dinámicos (modo edición)
   useEffect(() => {
@@ -815,7 +855,11 @@ const RegisterAssetModal = ({
     ? String((editingAsset as Record<string, unknown>)['asset_id'] ?? (editingAsset as Record<string, unknown>)['id'] ?? (editingAsset as Record<string, unknown>)['_id'] ?? '')
     : '';
 
-  const sedeDisplay = sedeNombre ?? sedes?.find(s => String(s._id ?? s.id) === String(sedeId))?.nombre ?? sedeId ?? '';
+  const sedeDisplay = sedeNombre
+    || sedes?.find(s => String(s._id) === String(sedeId) || String(s.id) === String(sedeId))?.nombre
+    || (editing?.['sede_nombre'] as string)
+    || (editing?.['sedeNombre'] as string)
+    || sedeId || '';
 
   const editing = (editingAsset ?? null) as Record<string, unknown> | null;
   const computedWarranty = getWarrantyInfo({

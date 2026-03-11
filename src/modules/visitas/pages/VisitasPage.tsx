@@ -253,7 +253,16 @@ export default function VisitasPage() {
   };
 
   const handleFinalizarVisita = (visita: Visita) => {
-    setVisitaSeleccionada(visita);
+    const visitaId = Number((visita as any)?._id ?? (visita as any)?.id);
+    if (!Number.isInteger(visitaId) || visitaId <= 0) {
+      mostrarToast('No se encontró el ID de la visita a finalizar', 'error');
+      return;
+    }
+
+    setVisitaSeleccionada({
+      ...visita,
+      _id: String(visitaId),
+    });
     setShowFinalizarModal(true);
   };
 

@@ -78,7 +78,6 @@ export default function VisitasTableView({
     }
   };
 
-  // Verificar si hoy es el día programado (o después)
   const esDiaProgramado = (fechaProgramada: string) => {
     if (!fechaProgramada) return false;
     const hoy = new Date();
@@ -125,48 +124,79 @@ export default function VisitasTableView({
 
   if (visitas.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-md border border-gray-200 p-12 text-center">
-        <div className="text-gray-400 mb-3">
-          <p className="text-lg font-medium">No hay visitas registradas</p>
-          <p className="text-sm">Selecciona filtros o crea una nueva visita</p>
+      <div className="bg-white rounded-xl border border-blue-100 shadow-sm p-16 text-center">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-sky-50 mb-4">
+          <svg className="w-7 h-7 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
         </div>
+        <p className="text-base font-semibold text-blue-900">No hay visitas registradas</p>
+        <p className="text-sm text-slate-500 mt-1">Selecciona filtros o crea una nueva visita</p>
       </div>
     );
   }
 
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortConfig.key !== column) {
+      return (
+        <svg className="w-3.5 h-3.5 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+      );
+    }
+    return (
+      <svg className="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+          d={sortConfig.direction === 'asc' ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
+      </svg>
+    );
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-visible border border-gray-200">
+    <div className="bg-white rounded-xl shadow-md border border-blue-100 overflow-visible">
+
+      {/* Table */}
       <div className="overflow-x-auto overflow-y-visible pb-12">
-        <table className="w-full">
-          <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-            <tr>
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-blue-700">
               <th
                 onClick={() => handleSort('fechaProgramada')}
-                className="px-8 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-200 transition"
+                className="px-6 py-3.5 text-left text-xs font-bold text-white uppercase tracking-widest cursor-pointer hover:bg-blue-800 transition-colors select-none"
               >
                 <div className="flex items-center gap-2">
+                  <svg className="w-3.5 h-3.5 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
                   Fecha
-                  {sortConfig.key === 'fechaProgramada' && (
-                    <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                  )}
+                  <SortIcon column="fechaProgramada" />
                 </div>
               </th>
-              <th className="px-8 py-3 text-left text-sm font-semibold text-gray-700">Tipo</th>
-              <th className="px-8 py-3 text-left text-sm font-semibold text-gray-700">Técnico(s)</th>
-              <th className="px-8 py-3 text-left text-sm font-semibold text-gray-700">Encargado</th>
+              <th className="px-6 py-3.5 text-left text-xs font-bold text-white uppercase tracking-widest">
+                Tipo de Visita
+              </th>
+              <th className="px-6 py-3.5 text-left text-xs font-bold text-white uppercase tracking-widest">
+                Técnico(s)
+              </th>
+              <th className="px-6 py-3.5 text-left text-xs font-bold text-white uppercase tracking-widest">
+                Encargado
+              </th>
               <th
                 onClick={() => handleSort('estado')}
-                className="px-8 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-200 transition"
+                className="px-6 py-3.5 text-left text-xs font-bold text-white uppercase tracking-widest cursor-pointer hover:bg-blue-800 transition-colors select-none"
               >
                 <div className="flex items-center gap-2">
                   Estado
-                  {sortConfig.key === 'estado' && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                  <SortIcon column="estado" />
                 </div>
               </th>
-              <th className="px-8 py-3 text-center text-sm font-semibold text-gray-700">Acciones</th>
+              <th className="px-6 py-3.5 text-center text-xs font-bold text-white uppercase tracking-widest">
+                Acciones
+              </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+
+          <tbody>
             {sortedVisitas.map((visita, visitaIndex) => {
               const tecnicosAsignados = visita.tecnicosAsignados ?? [];
               const tecnicosCount = visita.tecnicosAsignadosCount ?? tecnicosAsignados.length;
@@ -181,34 +211,62 @@ export default function VisitasTableView({
                 visita.estado === 'PROGRAMADA' || visita.estado === 'EN_PROCESO' || visita.estado === 'PENDIENTE_PROGRAMACION';
 
               return (
-                <tr key={visita._id ?? `${visita.fechaProgramada}-${visitaIndex}`} className="hover:bg-gray-50 transition">
-                  <td className="px-8 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
+                <tr
+                  key={visita._id ?? `${visita.fechaProgramada}-${visitaIndex}`}
+                  className="border-b border-blue-50 hover:bg-sky-50 transition-colors duration-150"
+                >
+                  {/* Fecha */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-semibold text-blue-900">
                       {formatDate(visita.fechaProgramada)}
                     </div>
                     {visita.horaProgramada && (
-                      <div className="text-xs text-gray-500">{formatTime(visita.horaProgramada)}</div>
+                      <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {formatTime(visita.horaProgramada)}
+                      </div>
                     )}
                   </td>
 
-                  <td className="px-8 py-4 whitespace-nowrap">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                  {/* Tipo */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold bg-sky-100 text-sky-800 border border-sky-200 uppercase tracking-wide">
                       {tipoVisitaLabel}
                     </span>
                   </td>
 
-                  <td className="px-8 py-4">
-                    <div className="relative inline-block group text-sm text-gray-700">
-                      <span className="underline decoration-dotted decoration-gray-300 underline-offset-2">
-                        {tecnicosCount > 0
-                          ? `${tecnicosCount} tecnico${tecnicosCount !== 1 ? 's' : ''}`
-                          : '-'}
-                      </span>
-                      <div className="absolute left-0 top-full z-20 hidden min-w-[12rem] translate-y-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-lg group-hover:block">
-                        <div className="text-[10px] font-semibold uppercase text-slate-400">Tecnicos</div>
-                        <div className="mt-1 space-y-1">
+                  {/* Técnicos */}
+                  <td className="px-6 py-4">
+                    <div className="relative inline-block group">
+                      <div className="flex items-center gap-1.5 cursor-default">
+                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">
+                          {tecnicosCount > 0 ? tecnicosCount : '–'}
+                        </div>
+                        <span className="text-sm text-blue-800 font-medium">
+                          {tecnicosCount > 0
+                            ? `técnico${tecnicosCount !== 1 ? 's' : ''}`
+                            : '-'}
+                        </span>
+                        {tecnicosCount > 0 && (
+                          <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        )}
+                      </div>
+                      {/* Tooltip */}
+                      <div className="absolute left-0 top-full z-30 hidden min-w-[14rem] mt-2 rounded-lg border border-blue-100 bg-white shadow-xl group-hover:block">
+                        <div className="px-3 pt-2.5 pb-1 border-b border-blue-50">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500">Técnicos asignados</p>
+                        </div>
+                        <div className="p-2 space-y-1">
                           {tooltipTecnicos.map((nombre, index) => (
-                            <div key={`${visita._id ?? visitaIndex}-tooltip-${index}`} className="rounded bg-slate-50 px-2 py-1">
+                            <div
+                              key={`${visita._id ?? visitaIndex}-tooltip-${index}`}
+                              className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-sky-50 text-sm text-blue-900 font-medium"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-sky-400 flex-shrink-0" />
                               {nombre}
                             </div>
                           ))}
@@ -217,59 +275,79 @@ export default function VisitasTableView({
                     </div>
                   </td>
 
-                  <td className="px-8 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {visita.encargadoNombre || encargado?.tecnicoNombre || '-'}
+                  {/* Encargado */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                        {(visita.encargadoNombre || encargado?.tecnicoNombre || '?')[0]?.toUpperCase()}
+                      </div>
+                      <span className="text-sm font-medium text-blue-900">
+                        {visita.encargadoNombre || encargado?.tecnicoNombre || '-'}
+                      </span>
                     </div>
                   </td>
 
-                  <td className="px-8 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${estadoColor[visita.estado]}`}>
+                  {/* Estado */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-md text-xs font-bold border ${estadoColor[visita.estado]}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70 mr-1.5" />
                       {visita.estado}
                     </span>
                   </td>
 
-                  <td className="px-8 py-4 text-center">
-                    <div className="flex justify-center gap-2">
+                  {/* Acciones */}
+                  <td className="px-6 py-4">
+                    <div className="flex justify-center items-center gap-1.5">
+
                       {visita.estado === 'PROGRAMADA' && esDiaProgramado(visita.fechaProgramada) && (
                         <button
                           onClick={() => openConfirm(visita)}
                           disabled={loading}
-                          className="text-blue-600 hover:text-blue-900 disabled:opacity-50 transition"
                           title="Iniciar atención"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-sm"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Iniciar
                         </button>
                       )}
 
                       {visita.estado === 'PROGRAMADA' && !esDiaProgramado(visita.fechaProgramada) && (
-                        <span className="text-gray-400 text-xs italic" title="Se habilitará el día programado">
-                          Programada
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 text-slate-500 text-xs font-medium border border-slate-200" title="Se habilitará el día programado">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Pendiente
                         </span>
                       )}
 
                       {visita.estado === 'EN_PROCESO' && (
-                        <div className="flex gap-2">
+                        <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => onFinalizarVisita(visita)}
                             disabled={loading}
-                            className="text-green-600 hover:text-green-900 disabled:opacity-50 transition"
                             title="Finalizar visita"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-sm"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Finalizar
                           </button>
                           {visita.ticketId && (
                             <button
                               onClick={() => navigate(`/admin/tickets/${visita.ticketId}`)}
                               disabled={loading}
-                              className="text-blue-600 hover:text-blue-900 disabled:opacity-50 transition"
                               title="Ver detalle del ticket"
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-50 transition-colors"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
                             </button>
                           )}
-
-                          {/* modal instance removed from here - rendered globally below */}
                         </div>
                       )}
 
@@ -277,18 +355,23 @@ export default function VisitasTableView({
                         <button
                           onClick={() => handleCancelarVisita(visita)}
                           disabled={loading}
-                          className="text-red-600 hover:text-red-900 disabled:opacity-50 transition"
                           title="Cancelar visita"
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3H4v2h16V7h-2.5z" /></svg>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3H4v2h16V7h-2.5z" />
+                          </svg>
                         </button>
                       )}
 
                       {!puedeCambiarEstado && (
-                        <span className="text-gray-400 cursor-not-allowed" title="No se puede modificar este estado">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3H4v2h16V7h-2.5z" /></svg>
+                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-md text-slate-300 cursor-not-allowed" title="No se puede modificar este estado">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3H4v2h16V7h-2.5z" />
+                          </svg>
                         </span>
                       )}
+
                     </div>
                   </td>
                 </tr>
@@ -298,11 +381,18 @@ export default function VisitasTableView({
         </table>
       </div>
 
-      {/* Pie de página con información */}
-      <div className="bg-gray-50 border-t border-gray-200 px-6 py-3 mt-4 text-sm text-gray-600">
-        Total: {visitas.length} visita{visitas.length !== 1 ? 's' : ''}
+      {/* Footer */}
+      <div className="flex items-center justify-between bg-blue-700 border-t border-blue-600 px-6 py-2.5 rounded-b-xl">
+        <div className="flex items-center gap-2 text-xs text-blue-200">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          <span className="font-medium text-white">{visitas.length}</span>
+          <span>visita{visitas.length !== 1 ? 's' : ''} en total</span>
+        </div>
       </div>
-      {/* Confirm modal for starting atención (global instance) */}
+
+      {/* Confirm modal */}
       <ConfirmModal
         open={confirmOpen}
         title="Iniciar atención"

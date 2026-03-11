@@ -4,6 +4,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getTicketById, cogerTicket, cambiarEstado, pausarSLA, reanudarSLA, editarTicket, getMensajes, postMensaje, asignarTecnico } from '../services/ticketsService';
 import { getInventarioBySede } from '@/modules/inventario/services/inventarioService';
 import { getContratoActivo } from '@/modules/empresas/services/contratosService';
+import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
+import { getAreasByEmpresa } from '@/modules/inventario/services/areasService';
+import { getCategorias, type Category } from '@/modules/inventario/services/categoriasService';
+import axiosClient from '@/api/axiosClient';
 import type { Ticket } from '../types';
 import { useAuth } from '@/hooks/useAuth';
 import PausarSLAModal from '../components/PausarSLAModal';
@@ -16,6 +20,9 @@ import SLATimer from '../components/SLATimer';
 import Toast from '@/components/ui/Toast';
 import NewVisitaModal from '@/modules/visitas/components/NewVisitaModal';
 import type { Visita } from '@/modules/visitas/types';
+import FinalizarVisitaModal from '@/modules/visitas/components/FinalizarVisitaModal';
+import { getVisitas } from '@/modules/visitas/services/visitasService';
+import RegisterAssetModal from '@/modules/inventario/components/RegisterAssetModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
 export default function TicketDetailPage() {
@@ -41,6 +48,15 @@ export default function TicketDetailPage() {
   const [showAsignarModal, setShowAsignarModal] = useState(false);
   const [confirmTakeOpen, setConfirmTakeOpen] = useState(false);
   const [showPasarPresencialModal, setShowPasarPresencialModal] = useState(false);
+  const [showFinalizarVisitaModal, setShowFinalizarVisitaModal] = useState(false);
+  const [visitaToFinalizar, setVisitaToFinalizar] = useState<Visita | null>(null);
+  const [showEditAssetModal, setShowEditAssetModal] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<any | null>(null);
+  const [editAssetSedes, setEditAssetSedes] = useState<any[]>([]);
+  const [editAssetAreas, setEditAssetAreas] = useState<any[]>([]);
+  const [editAssetCategories, setEditAssetCategories] = useState<Category[]>([]);
+  const [editAssetGroups, setEditAssetGroups] = useState<Array<{ id?: string; nombre?: string; codigo?: string }>>([]);
+  const editAssetKeyRef = useRef(0);
   const [contratoActivo, setContratoActivo] = useState<any>(null);
   const [asignando, setAsignando] = useState(false);
   const [imagenPreview, setImagenPreview] = useState<string | null>(null);
@@ -59,6 +75,41 @@ export default function TicketDetailPage() {
     setToastMessage(message);
     setToastType('success');
     setShowToast(true);
+  };
+
+  const handleCulminarTicket = async () => {
+    if (!ticket || actionLoading) return;
+
+    // If ticket is presencial, try to find an associated visita in EN_PROCESO
+    try {
+      if (String(ticket.modalidad).toUpperCase() === 'PRESENCIAL') {
+        const visitas = await getVisitas({ ticketId: String(ticket.id), estado: 'EN_PROCESO' });
+        if (Array.isArray(visitas) && visitas.length > 0) {
+          const visita = visitas[0] as Record<string, unknown>;
+          const visitaId = Number(visita['_id'] ?? visita['id']);
+          if (!Number.isInteger(visitaId) || visitaId <= 0) {
+            showErrorToast('No se encontró el ID de la visita a finalizar');
+            return;
+          }
+
+          setVisitaToFinalizar({
+            ...(visita as Partial<Visita>),
+            _id: String(visitaId),
+          } as Visita);
+          setShowFinalizarVisitaModal(true);
+          return;
+        } else {
+          showErrorToast('No se encontró una visita presencial iniciada para este ticket');
+          return;
+        }
+      }
+    } catch (err: any) {
+      console.error('Error buscando visita para culminar:', err);
+      // fallthrough to normal resolve flow
+    }
+
+    // Fallback: marcar como resuelto (flujo remoto o sin visita)
+    await handleMarcarResuelto();
   };
 
   const showErrorToast = (message: string) => {
@@ -126,11 +177,14 @@ export default function TicketDetailPage() {
   useEffect(() => {
     const idNum = id ? Number(id) : null;
     if (!idNum) return;
+    // Suspend polling while modals are open to avoid re-renders
+    if (showPasarPresencialModal || showFinalizarVisitaModal || showEditAssetModal) return;
+
     const interval = setInterval(() => {
       loadTicketDetail();
     }, 30000);
     return () => clearInterval(interval);
-  }, [id, loadTicketDetail]);
+  }, [id, loadTicketDetail, showPasarPresencialModal, showFinalizarVisitaModal, showEditAssetModal]);
 
   // Normalize estado helper (local)
   const normalizeEstadoLocal = (raw?: string | null) => {
@@ -155,13 +209,17 @@ export default function TicketDetailPage() {
 
     // primera carga inmediata
     fetchMsgs();
+
+    // Suspend chat polling while modals are open to avoid re-renders
+    if (showPasarPresencialModal || showFinalizarVisitaModal || showEditAssetModal) return () => { cancelled = true; };
+
     // polling cada 3 segundos
     const intervalId = setInterval(fetchMsgs, 3000);
     return () => {
       cancelled = true;
       clearInterval(intervalId);
     };
-  }, [ticket]);
+  }, [ticket, showPasarPresencialModal, showFinalizarVisitaModal, showEditAssetModal]);
 
   // Cargar detalles del inventario (solo para los activos asociados al ticket)
   useEffect(() => {
@@ -465,7 +523,7 @@ export default function TicketDetailPage() {
     }
   };
 
-  if (loading) {
+  if (loading && !ticket) {
     return (
       <div className="flex justify-center items-center min-h-[400px] bg-slate-50">
         <div className="flex flex-col items-center gap-4">
@@ -630,7 +688,7 @@ export default function TicketDetailPage() {
                   {ticket.estado === 'EN_PROCESO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id &&
                    (ticket.origen !== 'PORTAL_PUBLICO' || ticket.configurado_por || ticket.configurado_at) && (
                     <button 
-                      onClick={handleMarcarResuelto}
+                      onClick={handleCulminarTicket}
                       disabled={actionLoading}
                       className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all text-sm font-bold shadow-md shadow-teal-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
@@ -1376,6 +1434,111 @@ export default function TicketDetailPage() {
             tipoVisita: 'POR_TICKET',
             ticketId: String(ticket.id),
             ticketCodigo: ticket.codigo_ticket
+          }}
+        />
+      )}
+
+      {showFinalizarVisitaModal && visitaToFinalizar && (
+        <FinalizarVisitaModal
+          visita={visitaToFinalizar}
+          onClose={() => setShowFinalizarVisitaModal(false)}
+          onVisitaFinalizada={async (v: Visita) => {
+            setShowFinalizarVisitaModal(false);
+            showSuccessToast('Visita finalizada correctamente');
+            await loadTicketDetail();
+          }}
+          onError={(err) => showErrorToast(err)}
+          onAbrirModalEditarActivo={async (activo: any) => {
+            try {
+              const empresaId = activo.empresa_id;
+              const sedeId = activo.sede_id;
+              if (!empresaId || !sedeId) return;
+
+              const empresaNombre = ticket?.empresa_nombre || '';
+              const [sedesRes, areasRes, categoriasRes, gruposRes] = await Promise.all([
+                getSedesByEmpresa(String(empresaId)),
+                getAreasByEmpresa(String(empresaId)),
+                getCategorias(),
+                axiosClient.get('/api/gestion-grupos-categorias'),
+              ]);
+              const sedesArray = Array.isArray(sedesRes) ? sedesRes : ((sedesRes as any)?.data || []);
+              const areasArray = Array.isArray(areasRes) ? areasRes : ((areasRes as any)?.data || []);
+              const categoriasArray = Array.isArray(categoriasRes) ? categoriasRes : ((categoriasRes as any)?.data || []);
+              // Parse groups response
+              let gruposData: any = gruposRes.data;
+              if (gruposData && typeof gruposData === 'object' && !Array.isArray(gruposData)) {
+                if (Array.isArray(gruposData.data)) gruposData = gruposData.data;
+                else if (Array.isArray(gruposData.results)) gruposData = gruposData.results;
+              }
+              const gruposArray = Array.isArray(gruposData)
+                ? gruposData.filter((g: any) => g.activo !== false).map((g: any) => ({
+                    id: String(g.id ?? g._id ?? g.uuid ?? ''), nombre: g.nombre, codigo: g.codigo,
+                  }))
+                : [];
+
+              // Find sede matching by _id or id
+              const sede = sedesArray.find((s: any) =>
+                String(s._id) === String(sedeId) || String(s.id) === String(sedeId)
+              );
+              const sedeNombre = sede?.nombre || ticket?.sede_nombre || '';
+
+              setEditAssetSedes(sedesArray);
+              setEditAssetAreas(areasArray);
+              setEditAssetCategories(categoriasArray);
+              setEditAssetGroups(gruposArray);
+
+              // Fetch full inventory to find complete asset data
+              const inventario = await getInventarioBySede(empresaId, sedeId);
+              const activosList = Array.isArray(inventario) ? inventario : (inventario?.data || []);
+              const activoCompleto = activosList.find((item: any) =>
+                String(item.id) === String(activo.activo_id) ||
+                String(item.codigo) === String(activo.activo_codigo) ||
+                String(item.assetId) === String(activo.activo_codigo)
+              );
+
+              const base = activoCompleto || activo;
+              const activoEnriquecido = {
+                ...base,
+                // Always preserve snake_case IDs from the original activo (ticket context)
+                // because activoCompleto from inventory may only have camelCase variants
+                empresa_id: activo.empresa_id,
+                sede_id: activo.sede_id,
+                empresa_nombre: empresaNombre,
+                empresaNombre,
+                sede_nombre: sedeNombre,
+                sedeNombre,
+                _areasDisponibles: areasArray,
+              };
+
+              editAssetKeyRef.current += 1;
+              setEditingAsset(activoEnriquecido);
+              setShowEditAssetModal(true);
+            } catch (err) {
+              console.error('Error al cargar activo para edición:', err);
+            }
+          }}
+        />
+      )}
+
+      {showEditAssetModal && editingAsset && (
+        <RegisterAssetModal
+          key={`edit-asset-${editAssetKeyRef.current}`}
+          isOpen={showEditAssetModal}
+          onClose={() => { setShowEditAssetModal(false); setEditingAsset(null); }}
+          editingAsset={editingAsset}
+          empresaId={String(editingAsset.empresa_id || editingAsset.empresaId || '')}
+          sedeId={String(editingAsset.sede_id || editingAsset.sedeId || '')}
+          empresaNombre={editingAsset.empresaNombre || editingAsset.empresa_nombre}
+          sedeNombre={editingAsset.sedeNombre || editingAsset.sede_nombre || ticket?.sede_nombre}
+          sedes={editAssetSedes}
+          areas={editAssetAreas}
+          categories={editAssetCategories}
+          groups={editAssetGroups}
+          onSuccess={async () => {
+            setShowEditAssetModal(false);
+            setEditingAsset(null);
+            showSuccessToast('Activo actualizado correctamente');
+            await loadTicketDetail();
           }}
         />
       )}
