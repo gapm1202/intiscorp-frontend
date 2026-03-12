@@ -24,6 +24,7 @@ import FinalizarVisitaModal from '@/modules/visitas/components/FinalizarVisitaMo
 import { getVisitas } from '@/modules/visitas/services/visitasService';
 import RegisterAssetModal from '@/modules/inventario/components/RegisterAssetModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import TicketKnowledgePanel, { type KBEntry } from '../components/TicketKnowledgePanel';
 
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -64,6 +65,7 @@ export default function TicketDetailPage() {
   const [assetMap, setAssetMap] = useState<Record<string, any>>({});
   const [chatDisabled, setChatDisabled] = useState(false);
   const [chatDisabledMessage, setChatDisabledMessage] = useState<string | null>(null);
+  const [selectedKbEntry, setSelectedKbEntry] = useState<KBEntry | null>(null);
   // Chat interno (proviene del backend): { emisor_tipo, emisor_nombre, mensaje, created_at }
   const [chatMessages, setChatMessages] = useState<Array<{ emisor_tipo: string; emisor_nombre?: string; mensaje: string; created_at: string }>>([]);
   const [chatInput, setChatInput] = useState('');
@@ -687,16 +689,24 @@ export default function TicketDetailPage() {
 
                   {ticket.estado === 'EN_PROCESO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id &&
                    (ticket.origen !== 'PORTAL_PUBLICO' || ticket.configurado_por || ticket.configurado_at) && (
-                    <button 
-                      onClick={handleCulminarTicket}
-                      disabled={actionLoading}
-                      className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all text-sm font-bold shadow-md shadow-teal-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {actionLoading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    <div style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                      <button 
+                        onClick={handleCulminarTicket}
+                        disabled={actionLoading || !selectedKbEntry}
+                        title={!selectedKbEntry ? 'Selecciona una entrada de la Base de Conocimiento para habilitar este botón' : undefined}
+                        className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all text-sm font-bold shadow-md shadow-teal-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {actionLoading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        )}
+                        Culminar ticket
+                      </button>
+                      {!selectedKbEntry && (
+                        <span style={{ fontSize: '.68rem', color: '#0f766e', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          Requiere entrada KB seleccionada
+                        </span>
                       )}
-                      Culminar ticket
-                    </button>
+                    </div>
                   )}
 
                   {ticket.estado === 'EN_PROCESO' && ticket.modalidad === 'REMOTO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id && (
@@ -1138,6 +1148,14 @@ export default function TicketDetailPage() {
 
           {/* Columna derecha */}
           <div className="space-y-5">
+
+            {/* Base de Conocimiento */}
+            {ticket.estado === 'EN_PROCESO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id && (
+              <TicketKnowledgePanel
+                selectedEntry={selectedKbEntry}
+                onEntrySelected={setSelectedKbEntry}
+              />
+            )}
             
             {/* Asignación */}
             <div className="bg-white rounded-2xl shadow-md border border-blue-100 overflow-hidden">
