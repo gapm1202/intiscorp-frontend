@@ -1,4 +1,5 @@
 import React, { useRef, useCallback, useState, useEffect } from 'react';
+import Toast from '@/components/ui/Toast';
 import {
   getCategorias,
   createCategoria,
@@ -325,7 +326,7 @@ export default function BaseConocimientosPage() {
   // Modal crear categoría
   const [showCrearCat, setShowCrearCat]   = useState(false);
   const [newCatName, setNewCatName]       = useState('');
-  const [newSubName, setNewSubName]       = useState('');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Wizard
   const [wizardOpen, setWizardOpen]       = useState(false);
@@ -335,6 +336,9 @@ export default function BaseConocimientosPage() {
   const [editingContent, setEditingContent] = useState('');
   const [wizardTitulo, setWizardTitulo] = useState('');   // title input in step 2
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [showNewSubModal, setShowNewSubModal] = useState(false);
+  const [newSubModalName, setNewSubModalName] = useState('');
+  const [newSubParent, setNewSubParent] = useState<Category | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editorKey, setEditorKey] = useState(0);     // increment to force remount
   const [loadingEdit, setLoadingEdit] = useState(false);
@@ -348,29 +352,41 @@ export default function BaseConocimientosPage() {
 
   /* ── Logic ── */
   const addCategory = () => {
-    if (!newCatName.trim()) return;
+    const name = newCatName.trim();
+    if (!name) return;
+    // prevent duplicates (case-insensitive)
+    const norm = name.toLowerCase();
+    if (categories.some(c => String(c.name || '').trim().toLowerCase() === norm)) {
+      setToast({ message: 'Ya existe una categoría con ese nombre', type: 'error' });
+      return;
+    }
     (async () => {
       try {
-        const resp: any = await createCategoria(newCatName.trim());
+        const resp: any = await createCategoria(name);
         const newCat = {
           id: resp.id ?? resp.uuid ?? `c_${Date.now()}`,
-          name: resp.nombre ?? resp.name ?? newCatName.trim(),
+          name: resp.nombre ?? resp.name ?? name,
           subcategories: (resp.subcategorias || resp.subcategories || []).map((s: any) => ({ id: s.id ?? s.uuid ?? String(Date.now()), name: s.nombre ?? s.name }))
         } as Category;
-        // if API didn't return initial sub, add local one
-        if (newSubName.trim() && newCat.subcategories.length === 0) newCat.subcategories = [{ id: `${newCat.id}_s1`, name: newSubName.trim() }];
         setCategories(s => [...s, newCat]);
-        setNewCatName(''); setNewSubName(''); setShowCrearCat(false);
+        setNewCatName(''); setShowCrearCat(false);
       } catch (err) { console.error(err); alert('Error creando categoría'); }
     })();
   };
 
   const addSubcategory = (catId: string, name: string) => {
-    if (!name.trim()) return;
+    const sname = name.trim();
+    if (!sname) return;
+    // prevent duplicate subcategory within the same category (case-insensitive)
+    const cat = categories.find(c => c.id === catId);
+    if (cat && cat.subcategories.some(s => String(s.name || '').trim().toLowerCase() === sname.toLowerCase())) {
+      setToast({ message: 'Ya existe una subcategoría con ese nombre en esta categoría', type: 'error' });
+      return;
+    }
     (async () => {
       try {
-        const resp: any = await createSubcategoria(catId, name.trim());
-        const newSub = { id: resp.id ?? resp.uuid ?? `${catId}_s_${Date.now()}`, name: resp.nombre ?? resp.name ?? name.trim() };
+        const resp: any = await createSubcategoria(catId, sname);
+        const newSub = { id: resp.id ?? resp.uuid ?? `${catId}_s_${Date.now()}`, name: resp.nombre ?? resp.name ?? sname };
         setCategories(s => s.map(c => c.id === catId ? { ...c, subcategories: [...c.subcategories, newSub] } : c));
       } catch (err) { console.error(err); alert('Error creando subcategoría'); }
     })();
@@ -564,6 +580,11 @@ export default function BaseConocimientosPage() {
         .kb-ctx-pill .sep { color:#93c5fd; margin:0 4px; }
       `}</style>
 
+      {/* Toast notifications */}
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
+
       {/* ══════════════════════════════════════════════════════
           PAGE
       ══════════════════════════════════════════════════════ */}
@@ -648,7 +669,7 @@ export default function BaseConocimientosPage() {
                       );
                     })}
                     {/* Add subcategory */}
-                    <button onClick={() => { const n = prompt('Nueva subcategoría en ' + cat.name); if (n) addSubcategory(cat.id, n); }} style={{ width:'100%', textAlign:'left', padding:'.3rem 1.125rem .3rem 2.375rem', border:'none', fontFamily:"'DM Sans',sans-serif", fontSize:'.72rem', fontWeight:500, cursor:'pointer', background:'transparent', color:'#93c5fd', display:'flex', alignItems:'center', gap:5, transition:'color .12s' }}>
+                    <button onClick={() => { setNewSubParent(cat); setNewSubModalName(''); setShowNewSubModal(true); }} style={{ width:'100%', textAlign:'left', padding:'.3rem 1.125rem .3rem 2.375rem', border:'none', fontFamily:"'DM Sans',sans-serif", fontSize:'.72rem', fontWeight:500, cursor:'pointer', background:'transparent', color:'#93c5fd', display:'flex', alignItems:'center', gap:5, transition:'color .12s' }}>
                       <span style={{ color:'#bfdbfe', flexShrink:0 }}>└</span>
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
                       Añadir subcategoría
@@ -657,6 +678,35 @@ export default function BaseConocimientosPage() {
                 );
               })}
             </div>
+
+            {/* New Subcategory Modal */}
+            {showNewSubModal && (
+              <div style={{ position:'fixed', inset:0, display:'flex', alignItems:'center', justifyContent:'center', zIndex:1200 }}>
+                <div onClick={() => { setShowNewSubModal(false); setNewSubModalName(''); setNewSubParent(null); }} style={{ position:'absolute', inset:0, background:'rgba(13,42,88,0.45)' }} />
+                <div style={{ position:'relative', width:480, maxWidth:'94%', background:'#ffffff', borderRadius:12, boxShadow:'0 8px 30px rgba(13,42,88,0.18)', padding:18, border:`1px solid rgba(29,111,216,0.06)` }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:8 }}>
+                    <div style={{ width:44, height:44, borderRadius:10, background:'linear-gradient(180deg,#93c5fd 0%,#1d4ed8 100%)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:700 }}>+</div>
+                    <div>
+                      <div style={{ fontSize:16, fontWeight:700, color:'#0f2a52' }}>Nueva subcategoría</div>
+                      <div style={{ fontSize:12, color:'#4b6b95' }}>{newSubParent ? `en ${newSubParent.name}` : ''}</div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop:6 }}>
+                    <label style={{ display:'block', fontSize:12, color:'#37558a', marginBottom:6 }}>Nombre</label>
+                    <input autoFocus value={newSubModalName} onChange={e => setNewSubModalName(e.target.value)} placeholder="Nombre de la subcategoría" style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid #e6f0ff', outline:'none', boxShadow:'inset 0 1px 0 rgba(13,42,88,0.02)' }} />
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:14 }}>
+                    <button onClick={() => { setShowNewSubModal(false); setNewSubModalName(''); setNewSubParent(null); }} className="btn btn-ghost">Cancelar</button>
+                    <button onClick={() => {
+                      if (!newSubParent) return;
+                      if (!newSubModalName.trim()) { alert('Ingrese un nombre para la subcategoría'); return; }
+                      addSubcategory(newSubParent.id, newSubModalName.trim());
+                      setShowNewSubModal(false); setNewSubModalName(''); setNewSubParent(null);
+                    }} className="btn btn-primary">Crear</button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ─── RIGHT ENTRIES ─── */}
             <div style={{ flex:1, padding:'1.25rem 1.5rem', overflowY:'auto' }}>
@@ -778,13 +828,7 @@ export default function BaseConocimientosPage() {
                     placeholder="Ej. Recursos Humanos" className="kb-input"
                     onKeyDown={e => e.key === 'Enter' && addCategory()}/>
                 </div>
-                <div className="kb-field">
-                  <label>Subcategoría inicial&nbsp;
-                    <span style={{fontWeight:400,color:'#94a3b8',textTransform:'none',letterSpacing:0}}>(opcional)</span>
-                  </label>
-                  <input value={newSubName} onChange={e => setNewSubName(e.target.value)}
-                    placeholder="Ej. Políticas internas" className="kb-input"/>
-                </div>
+                {/* Subcategoría inicial removed per request */}
               </div>
               <div className="kb-modal-footer">
                 <button onClick={() => setShowCrearCat(false)} className="btn btn-ghost">Cancelar</button>
