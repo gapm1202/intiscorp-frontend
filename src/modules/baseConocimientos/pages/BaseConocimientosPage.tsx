@@ -339,6 +339,10 @@ export default function BaseConocimientosPage() {
   const [showNewSubModal, setShowNewSubModal] = useState(false);
   const [newSubModalName, setNewSubModalName] = useState('');
   const [newSubParent, setNewSubParent] = useState<Category | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editingCatName, setEditingCatName] = useState('');
+  const [editingSub, setEditingSub] = useState<{ catId: string; subId: string; name: string } | null>(null);
+  const [editingSubName, setEditingSubName] = useState('');
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editorKey, setEditorKey] = useState(0);     // increment to force remount
   const [loadingEdit, setLoadingEdit] = useState(false);
@@ -661,11 +665,16 @@ export default function BaseConocimientosPage() {
                       const sEntries = entries.filter(e => String(e.categoria_id) === String(cId) && String(e.subcategoria_id) === String(sId));
                       const isSubActive = filterCatId === cat.id && filterSubId === sub.id;
                       return (
-                        <button key={sub.id} onClick={() => { setFilterCatId(cat.id); setFilterSubId(sub.id); }} style={{ width:'100%', textAlign:'left', padding:'.375rem 1.125rem .375rem 2.375rem', border:'none', fontFamily:"'DM Sans',sans-serif", fontSize:'.775rem', fontWeight:500, cursor:'pointer', background: isSubActive ? '#dbeafe' : 'transparent', color: isSubActive ? '#1d4ed8' : '#475569', display:'flex', alignItems:'center', gap:6, transition:'background .12s' }}>
-                          <span style={{ color:'#bfdbfe', fontSize:'1rem', lineHeight:1, flexShrink:0 }}>├</span>
-                          {sub.name}
-                          <span style={{ marginLeft:'auto', background: isSubActive ? '#bfdbfe' : '#f0f6ff', color:'#1d6fd8', borderRadius:999, padding:'1px 6px', fontSize:'.62rem', fontFamily:"'DM Mono',monospace" }}>{sEntries.length}</span>
-                        </button>
+                        <div key={sub.id} style={{ display:'flex', alignItems:'center', gap:6, padding:'.375rem 1.125rem .375rem 2.375rem' }}>
+                          <button onClick={() => { setFilterCatId(cat.id); setFilterSubId(sub.id); }} style={{ flex:1, textAlign:'left', border:'none', background:'transparent', fontFamily:"'DM Sans',sans-serif", fontSize:'.775rem', fontWeight:500, cursor:'pointer', color: isSubActive ? '#1d4ed8' : '#475569' }}>
+                            <span style={{ color:'#bfdbfe', fontSize:'1rem', lineHeight:1, flexShrink:0, marginRight:6 }}>├</span>
+                            {sub.name}
+                          </button>
+                          <span style={{ background: isSubActive ? '#bfdbfe' : '#f0f6ff', color:'#1d6fd8', borderRadius:999, padding:'1px 6px', fontSize:'.62rem', fontFamily:"'DM Mono',monospace" }}>{sEntries.length}</span>
+                          <button title="Editar subcategoría" onClick={() => { setEditingSub({ catId: cat.id, subId: sub.id, name: sub.name }); setEditingSubName(sub.name); }} style={{ border:'none', background:'transparent', color:'#2563eb', cursor:'pointer', padding:6 }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" strokeWidth="2"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"/><path d="M20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                          </button>
+                        </div>
                       );
                     })}
                     {/* Add subcategory */}
@@ -673,6 +682,11 @@ export default function BaseConocimientosPage() {
                       <span style={{ color:'#bfdbfe', flexShrink:0 }}>└</span>
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
                       Añadir subcategoría
+                    </button>
+                    {/* edit category button */}
+                    <button title="Editar categoría" onClick={() => { setEditingCategory(cat); setEditingCatName(cat.name); }} style={{ marginTop:6, width:'100%', textAlign:'left', padding:'.25rem 1.125rem .25rem 2.375rem', border:'none', fontFamily:"'DM Sans',sans-serif", fontSize:'.70rem', fontWeight:500, cursor:'pointer', background:'transparent', color:'#1d6fd8', display:'flex', alignItems:'center', gap:8 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" strokeWidth="2"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"/><path d="M20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                      Editar categoría
                     </button>
                   </div>
                 );
@@ -703,6 +717,78 @@ export default function BaseConocimientosPage() {
                       addSubcategory(newSubParent.id, newSubModalName.trim());
                       setShowNewSubModal(false); setNewSubModalName(''); setNewSubParent(null);
                     }} className="btn btn-primary">Crear</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Edit Category Modal */}
+            {editingCategory && (
+              <div className="kb-overlay">
+                <div className="kb-modal">
+                  <div className="kb-modal-head">
+                    <h2>Editar categoría</h2>
+                    <button onClick={() => { setEditingCategory(null); setEditingCatName(''); }} className="kb-modal-close">✕</button>
+                  </div>
+                  <div className="kb-modal-body">
+                    <div className="kb-field">
+                      <label>Nombre</label>
+                      <input value={editingCatName} onChange={e => setEditingCatName(e.target.value)} className="kb-input" />
+                    </div>
+                  </div>
+                  <div className="kb-modal-footer">
+                    <button onClick={() => { setEditingCategory(null); setEditingCatName(''); }} className="btn btn-ghost">Cancelar</button>
+                    <button onClick={async () => {
+                      const name = editingCatName.trim();
+                      if (!name) { setToast({ message: 'Ingrese un nombre válido', type: 'error' }); return; }
+                      // duplicate check
+                      if (categories.some(c => c.id !== editingCategory.id && String(c.name||'').trim().toLowerCase() === name.toLowerCase())) {
+                        setToast({ message: 'Ya existe una categoría con ese nombre', type: 'error' });
+                        return;
+                      }
+                      try {
+                        await (await import('@/modules/baseConocimientos/services/baseConocimientosService')).updateCategoria(String(editingCategory.raw?.id ?? editingCategory.id), name);
+                        setCategories(s => s.map(c => c.id === editingCategory.id ? { ...c, name } : c));
+                        setToast({ message: 'Categoría actualizada', type: 'success' });
+                        setEditingCategory(null); setEditingCatName('');
+                      } catch (err) { console.error(err); setToast({ message: 'Error actualizando categoría', type: 'error' }); }
+                    }} className="btn btn-primary">Guardar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Edit Subcategory Modal */}
+            {editingSub && (
+              <div className="kb-overlay">
+                <div className="kb-modal">
+                  <div className="kb-modal-head">
+                    <h2>Editar subcategoría</h2>
+                    <button onClick={() => { setEditingSub(null); setEditingSubName(''); }} className="kb-modal-close">✕</button>
+                  </div>
+                  <div className="kb-modal-body">
+                    <div className="kb-field">
+                      <label>Nombre</label>
+                      <input value={editingSubName} onChange={e => setEditingSubName(e.target.value)} className="kb-input" />
+                    </div>
+                  </div>
+                  <div className="kb-modal-footer">
+                    <button onClick={() => { setEditingSub(null); setEditingSubName(''); }} className="btn btn-ghost">Cancelar</button>
+                    <button onClick={async () => {
+                      const name = editingSubName.trim();
+                      if (!name) { setToast({ message: 'Ingrese un nombre válido', type: 'error' }); return; }
+                      const cat = categories.find(c => c.id === editingSub.catId);
+                      if (cat && cat.subcategories.some(s => s.id !== editingSub.subId && String(s.name||'').trim().toLowerCase() === name.toLowerCase())) {
+                        setToast({ message: 'Ya existe una subcategoría con ese nombre en esta categoría', type: 'error' });
+                        return;
+                      }
+                      try {
+                        await (await import('@/modules/baseConocimientos/services/baseConocimientosService')).updateSubcategoria(String(editingSub.subId), name);
+                        setCategories(s => s.map(c => c.id === editingSub.catId ? { ...c, subcategories: c.subcategories.map(sb => sb.id === editingSub.subId ? { ...sb, name } : sb) } : c));
+                        setToast({ message: 'Subcategoría actualizada', type: 'success' });
+                        setEditingSub(null); setEditingSubName('');
+                      } catch (err) { console.error(err); setToast({ message: 'Error actualizando subcategoría', type: 'error' }); }
+                    }} className="btn btn-primary">Guardar</button>
                   </div>
                 </div>
               </div>
