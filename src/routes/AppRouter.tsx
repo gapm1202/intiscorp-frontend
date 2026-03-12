@@ -28,6 +28,7 @@ import { UsuariosInternosPage } from "../modules/usuarios/pages/UsuariosInternos
 import UsuariosInternosFormPage from "../modules/usuarios/pages/UsuariosInternosFormPage";
 import UsuariosInternosViewPage from "../modules/usuarios/pages/UsuariosInternosViewPage";
 import VisitasPage from "../modules/visitas/pages/VisitasPage";
+import BaseConocimientosPage from "../modules/baseConocimientos/pages/BaseConocimientosPage";
 
 const AppRouter = () => {
   return (
@@ -195,6 +196,16 @@ const AppRouter = () => {
             <RoleRoute role="admin">
               <AdminLayout>
                 <VisitasPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/base-conocimientos"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <BaseConocimientosPage />
               </AdminLayout>
             </RoleRoute>
           }

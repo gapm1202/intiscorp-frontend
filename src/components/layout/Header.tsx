@@ -1,5 +1,6 @@
 import { useAuth } from "@/context/authHelpers";
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { getContratosProximosAVencer } from '@/modules/empresas/services/contratosService';
 import { useNavigate } from 'react-router-dom';
 
@@ -64,6 +65,12 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
 
   const displayName = (user && (user.nombre || (user as any).name || (user as any).nombre_completo || (user as any).email || (user as any).correo || 'Usuario')) as string;
   const initial = (displayName && displayName.length > 0) ? displayName.charAt(0).toUpperCase() : 'U';
+
+  const location = useLocation();
+
+  const readable = (seg: string) => seg.replace(/-/g, ' ').split(' ').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+  const parts = location.pathname.split('/').filter(Boolean).filter(p => p !== 'admin' && p !== 'cliente' && p !== 'tecnico');
+  const crumbs = parts.length > 0 ? parts.map(readable) : ['Dashboard'];
 
   const urgencyColor = (dias: number) => {
     if (dias <= 7) return { bg: '#fef2f2', icon: '#ef4444', badge: '#ef4444', text: '#dc2626' };
@@ -132,12 +139,15 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
             </svg>
           </button>
 
-          {/* Breadcrumb */}
+          {/* Breadcrumb (dynamic) */}
           <div style={{ flex: 1 }}>
             <nav style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, color: '#93c5d9', fontWeight: 400 }}>Dashboard</span>
-              <span style={{ fontSize: 12, color: '#bae6fd' }}>/</span>
-              <span style={{ fontSize: 12, color: '#0369a1', fontWeight: 600 }}>General</span>
+              {crumbs.map((c, idx) => (
+                <span key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12, color: idx === crumbs.length - 1 ? '#0369a1' : '#93c5d9', fontWeight: idx === crumbs.length - 1 ? 600 : 400 }}>{c}</span>
+                  {idx !== crumbs.length - 1 && <span style={{ fontSize: 12, color: '#bae6fd' }}>/</span>}
+                </span>
+              ))}
             </nav>
           </div>
 

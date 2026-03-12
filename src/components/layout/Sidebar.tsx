@@ -635,6 +635,22 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
               )}
             </li>
 
+            {/* Base de Conocimientos */}
+            <li>
+              <button
+                className="sb-nav-btn"
+                onClick={() => handleNavigation('/admin/base-conocimientos')}
+                style={navItemStyle(isActive('/admin/base-conocimientos'))}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <svg style={{ width: 17, height: 17, flexShrink: 0, color: isActive('/admin/base-conocimientos') ? '#38bdf8' : undefined }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 6v6l4 2M21 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2z" />
+                  </svg>
+                  {!collapsed && <span>Base de Conocimientos</span>}
+                </span>
+              </button>
+            </li>
+
             {/* Visitas */}
             <li>
               <button
