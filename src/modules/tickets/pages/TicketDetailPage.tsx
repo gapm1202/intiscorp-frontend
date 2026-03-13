@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 // removed API_BASE import; asset detail is shown inline now
 import { useParams, useNavigate } from 'react-router-dom';
-import { getTicketById, cogerTicket, cambiarEstado, pausarSLA, reanudarSLA, editarTicket, getMensajes, postMensaje, asignarTecnico } from '../services/ticketsService';
+import { getTicketById, getTickets, cogerTicket, cambiarEstado, pausarSLA, reanudarSLA, editarTicket, getMensajes, postMensaje, asignarTecnico } from '../services/ticketsService';
 import { getInventarioBySede } from '@/modules/inventario/services/inventarioService';
 import { getContratoActivo } from '@/modules/empresas/services/contratosService';
 import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
@@ -52,6 +52,10 @@ export default function TicketDetailPage() {
   const [showFinalizarVisitaModal, setShowFinalizarVisitaModal] = useState(false);
   const [visitaToFinalizar, setVisitaToFinalizar] = useState<Visita | null>(null);
   const [showEditAssetModal, setShowEditAssetModal] = useState(false);
+  const [showCulminarModal, setShowCulminarModal] = useState(false);
+  const [diagCierre, setDiagCierre] = useState('');
+  const [resCierre, setResCierre] = useState('');
+  const [recCierre, setRecCierre] = useState('');
   const [editingAsset, setEditingAsset] = useState<any | null>(null);
   const [editAssetSedes, setEditAssetSedes] = useState<any[]>([]);
   const [editAssetAreas, setEditAssetAreas] = useState<any[]>([]);
@@ -82,36 +86,112 @@ export default function TicketDetailPage() {
   const handleCulminarTicket = async () => {
     if (!ticket || actionLoading) return;
 
-    // If ticket is presencial, try to find an associated visita in EN_PROCESO
-    try {
-      if (String(ticket.modalidad).toUpperCase() === 'PRESENCIAL') {
-        const visitas = await getVisitas({ ticketId: String(ticket.id), estado: 'EN_PROCESO' });
-        if (Array.isArray(visitas) && visitas.length > 0) {
-          const visita = visitas[0] as Record<string, unknown>;
-          const visitaId = Number(visita['_id'] ?? visita['id']);
-          if (!Number.isInteger(visitaId) || visitaId <= 0) {
-            showErrorToast('No se encontró el ID de la visita a finalizar');
-            return;
-          }
+    const currentTicketId = String(ticket.id);
 
-          setVisitaToFinalizar({
-            ...(visita as Partial<Visita>),
-            _id: String(visitaId),
-          } as Visita);
-          setShowFinalizarVisitaModal(true);
-          return;
-        } else {
-          showErrorToast('No se encontró una visita presencial iniciada para este ticket');
+    // Detecta si el ticket tiene una visita activa (EN_PROCESO) creada
+    // desde el flujo "Pasar a presencial" (tipoVisita = POR_TICKET).
+    // Solo ese flujo debe abrir el modal FinalizarVisita.
+    try {
+      setActionLoading(true);
+      const rawVisitas = await getVisitas({
+        ticketId: currentTicketId,
+        tipoVisita: 'POR_TICKET',
+        estado: 'EN_PROCESO',
+        limite: 50,
+      });
+
+      console.log('[Culminar] ticketId buscado:', currentTicketId);
+      console.log('[Culminar] rawVisitas response:', JSON.stringify(rawVisitas, null, 2));
+
+      const visitas: any[] = Array.isArray(rawVisitas)
+        ? rawVisitas
+        : Array.isArray(rawVisitas?.data)
+          ? rawVisitas.data
+          : Array.isArray(rawVisitas?.visitas)
+            ? rawVisitas.visitas
+            : [];
+
+      console.log('[Culminar] visitas array length:', visitas.length);
+      visitas.forEach((v: any, i: number) => {
+        console.log(`[Culminar] visita[${i}]:`, {
+          _id: v?._id,
+          id: v?.id,
+          ticketId: v?.ticketId,
+          ticket_id: v?.ticket_id,
+          tipoVisita: v?.tipoVisita,
+          tipo_visita: v?.tipo_visita,
+          estado: v?.estado,
+        });
+      });
+
+      // Filtro estricto client-side: verifica estado + tipoVisita + ticketId
+      // El backend puede ignorar los filtros y devolver TODAS las visitas.
+      const visitaEnProceso = visitas.find((v: any) => {
+        const est = String(v?.estado || '').toUpperCase().replace(/[_\s]+/g, '_').trim();
+        const tipo = String(v?.tipoVisita || v?.tipo_visita || '').toUpperCase().replace(/[_\s]+/g, '_').trim();
+        const vTicketId = String(v?.ticketId ?? v?.ticket_id ?? '');
+        const matchEstado = est === 'EN_PROCESO';
+        const matchTipo = tipo === 'POR_TICKET';
+        const matchTicket = vTicketId === currentTicketId;
+        console.log('[Culminar] evaluando visita:', { id: v?._id ?? v?.id, matchEstado, matchTipo, matchTicket, vTicketId, currentTicketId });
+        return matchEstado && matchTipo && matchTicket;
+      });
+
+      if (visitaEnProceso) {
+        const visita = visitaEnProceso as Record<string, unknown>;
+        const visitaId = Number(visita['_id'] ?? visita['id']);
+        console.log('[Culminar] ✅ Visita válida encontrada, abriendo FinalizarVisitaModal. id:', visitaId);
+        if (!Number.isInteger(visitaId) || visitaId <= 0) {
+          showErrorToast('No se encontró el ID de la visita a finalizar');
           return;
         }
+
+        setVisitaToFinalizar({
+          ...(visita as Partial<Visita>),
+          _id: String(visitaId),
+        } as Visita);
+        setShowFinalizarVisitaModal(true);
+        return;
       }
+
+      console.log('[Culminar] ❌ No se encontró visita POR_TICKET + EN_PROCESO para este ticket → formulario simple');
     } catch (err: any) {
-      console.error('Error buscando visita para culminar:', err);
-      // fallthrough to normal resolve flow
+      console.warn('[Culminar] Error al verificar visitas, usando formulario simple:', err.message);
+    } finally {
+      setActionLoading(false);
     }
 
-    // Fallback: marcar como resuelto (flujo remoto o sin visita)
-    await handleMarcarResuelto();
+    // Por defecto: formulario simple (Diagnóstico / Resolución / Recomendación)
+    setDiagCierre('');
+    setResCierre('');
+    setRecCierre('');
+    setShowCulminarModal(true);
+  };
+
+  const handleSubmitCulminarRemoto = async () => {
+    if (!ticket || actionLoading) return;
+    if (!diagCierre.trim() || !resCierre.trim() || !recCierre.trim()) {
+      showErrorToast('Completa Diagnóstico, Resolución y Recomendación para culminar el ticket');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const resumen = [
+        `Diagnóstico: ${diagCierre.trim()}`,
+        `Resolución: ${resCierre.trim()}`,
+        `Recomendación: ${recCierre.trim()}`,
+      ].join('\n\n');
+      await cambiarEstado(ticket.id, 'RESUELTO', resumen);
+      await loadTicketDetail();
+      setShowCulminarModal(false);
+      showSuccessToast('Ticket culminado correctamente');
+    } catch (error: any) {
+      console.error('Error al culminar ticket remoto:', error);
+      showErrorToast(error.response?.data?.message || 'Error al culminar ticket');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const showErrorToast = (message: string) => {
@@ -1364,6 +1444,86 @@ export default function TicketDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal culminación remota */}
+      {showCulminarModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15, 30, 60, 0.65)', backdropFilter: 'blur(4px)' }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-blue-100 overflow-hidden">
+            <div className="px-6 py-4 bg-gradient-to-r from-blue-700 via-blue-600 to-sky-500 flex items-center justify-between">
+              <div>
+                <p className="text-white/70 text-xs font-semibold uppercase tracking-widest">Cierre de Ticket</p>
+                <h3 className="text-white text-lg font-extrabold tracking-tight">Culminar Ticket</h3>
+              </div>
+              <button
+                onClick={() => setShowCulminarModal(false)}
+                disabled={actionLoading}
+                className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-colors border border-white/20"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4" style={{ background: 'linear-gradient(180deg, #f0f7ff 0%, #ffffff 100%)' }}>
+              <div>
+                <label className="text-xs font-bold text-blue-500 uppercase tracking-wider">Diagnóstico</label>
+                <textarea
+                  value={diagCierre}
+                  onChange={(e) => setDiagCierre(e.target.value)}
+                  rows={3}
+                  className="mt-1 w-full px-4 py-3 text-sm font-medium text-slate-800 placeholder-slate-400 border-2 border-blue-100 rounded-xl bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none"
+                  placeholder="Describe el diagnóstico identificado..."
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-blue-500 uppercase tracking-wider">Resolución</label>
+                <textarea
+                  value={resCierre}
+                  onChange={(e) => setResCierre(e.target.value)}
+                  rows={3}
+                  className="mt-1 w-full px-4 py-3 text-sm font-medium text-slate-800 placeholder-slate-400 border-2 border-blue-100 rounded-xl bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none"
+                  placeholder="Describe la resolución aplicada..."
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-blue-500 uppercase tracking-wider">Recomendación</label>
+                <textarea
+                  value={recCierre}
+                  onChange={(e) => setRecCierre(e.target.value)}
+                  rows={3}
+                  className="mt-1 w-full px-4 py-3 text-sm font-medium text-slate-800 placeholder-slate-400 border-2 border-blue-100 rounded-xl bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none"
+                  placeholder="Agrega recomendaciones para evitar recurrencia..."
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-white border-t border-blue-100 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCulminarModal(false)}
+                disabled={actionLoading}
+                className="px-5 py-2.5 border-2 border-blue-200 text-blue-700 rounded-xl hover:bg-blue-50 hover:border-blue-400 font-bold text-sm transition-all disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitCulminarRemoto}
+                disabled={actionLoading}
+                className="px-6 py-2.5 bg-gradient-to-r from-teal-600 to-cyan-500 text-white rounded-xl hover:from-teal-700 hover:to-cyan-600 font-bold text-sm transition-all shadow-md shadow-teal-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {actionLoading && (
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block"></span>
+                )}
+                {actionLoading ? 'Culminando...' : 'Culminar ticket'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modales — sin cambios en lógica */}
       <AsignarTecnicoModal

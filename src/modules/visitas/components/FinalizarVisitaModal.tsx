@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import type { Visita, FinalizarVisitaPayload } from '../types';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { finalizarVisita, enviarResumenVisitaCorreo } from '../services/visitasService';
-import { getTicketById } from '@/modules/tickets/services/ticketsService';
+import { getTicketById, getTickets } from '@/modules/tickets/services/ticketsService';
 import { getUsuariosByEmpresa } from '@/modules/usuarios/services/usuariosService';
 import type { Usuario } from '@/modules/usuarios/services/usuariosService';
 import { useAuth } from '@/hooks/useAuth';
+import type { Ticket } from '@/modules/tickets/types';
 
 interface FinalizarVisitaModalProps {
   visita: Visita;
@@ -36,6 +37,9 @@ export default function FinalizarVisitaModal({
   const [destinatariosSeleccionados, setDestinatariosSeleccionados] = useState<string[]>([]);
   const [mostrarSelectorUsuarios, setMostrarSelectorUsuarios] = useState(false);
   const [busquedaUsuario, setBusquedaUsuario] = useState('');
+  const [ticketsResueltosDia, setTicketsResueltosDia] = useState<Ticket[]>([]);
+  const [ticketsResueltosSeleccionados, setTicketsResueltosSeleccionados] = useState<number[]>([]);
+  const [cargandoTicketsResueltos, setCargandoTicketsResueltos] = useState(false);
   const selectorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -56,6 +60,55 @@ export default function FinalizarVisitaModal({
       .catch(() => setUsuarios([]))
       .finally(() => setCargandoUsuarios(false));
   }, [visita.empresaId]);
+
+  useEffect(() => {
+    const cargarTicketsResueltosMismaFecha = async () => {
+      if (!cuentaComoVisita || !visita.empresaId || !visita.fechaProgramada) {
+        setTicketsResueltosDia([]);
+        setTicketsResueltosSeleccionados([]);
+        return;
+      }
+
+      setCargandoTicketsResueltos(true);
+      try {
+        const fechaBase = new Date(visita.fechaProgramada);
+        const fechaInicio = new Date(fechaBase);
+        fechaInicio.setHours(0, 0, 0, 0);
+        const fechaFin = new Date(fechaBase);
+        fechaFin.setHours(23, 59, 59, 999);
+
+        const empresaIdNum = Number(visita.empresaId);
+        const resp = await getTickets(
+          {
+            empresaId: Number.isFinite(empresaIdNum) ? empresaIdNum : undefined,
+            estado: 'RESUELTO',
+            fechaDesde: fechaInicio.toISOString(),
+            fechaHasta: fechaFin.toISOString(),
+          },
+          1,
+          200,
+        );
+
+        const tickets = Array.isArray(resp?.tickets) ? resp.tickets : [];
+        setTicketsResueltosDia(tickets);
+        setTicketsResueltosSeleccionados(tickets.map((t) => Number(t.id)).filter((id) => Number.isInteger(id) && id > 0));
+      } catch (err) {
+        console.error('Error cargando tickets resueltos del día:', err);
+        setTicketsResueltosDia([]);
+        setTicketsResueltosSeleccionados([]);
+      } finally {
+        setCargandoTicketsResueltos(false);
+      }
+    };
+
+    cargarTicketsResueltosMismaFecha();
+  }, [cuentaComoVisita, visita.empresaId, visita.fechaProgramada]);
+
+  const toggleTicketResuelto = (ticketId: number) => {
+    setTicketsResueltosSeleccionados((prev) =>
+      prev.includes(ticketId) ? prev.filter((id) => id !== ticketId) : [...prev, ticketId]
+    );
+  };
 
   const toggleDestinatario = (correo: string) => {
     setDestinatariosSeleccionados((prev) =>
@@ -327,7 +380,7 @@ export default function FinalizarVisitaModal({
 
     setLoading(true);
     try {
-      const payload: FinalizarVisitaPayload = {
+      const payload: FinalizarVisitaPayload & { ticketsResueltosAsociados?: number[] } = {
         fechaFinalizacion: new Date().toISOString(),
         tecnicoFinalizadorId,
         ...(observaciones.trim() && { notasFinalizacion: observaciones.trim() }),
@@ -335,6 +388,7 @@ export default function FinalizarVisitaModal({
         cuentaComoVisitaContractual: cuentaComoVisita,
         huboCambioComponente: hayChangioComponente,
         ...(destinatariosSeleccionados.length > 0 && { destinatariosCorreo: destinatariosSeleccionados }),
+        ...(cuentaComoVisita && ticketsResueltosSeleccionados.length > 0 && { ticketsResueltosAsociados: ticketsResueltosSeleccionados }),
       };
 
       const response = await finalizarVisita(String(visitaId), payload);
@@ -491,6 +545,50 @@ export default function FinalizarVisitaModal({
                     <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
                   <p className="text-sm font-semibold text-amber-800">Esta visita no se contabilizará como parte del compromiso contractual, pero quedará registrada en el historial.</p>
+                </div>
+              )}
+
+              {cuentaComoVisita === true && (
+                <div className="mx-4 mb-4 bg-emerald-50 border border-emerald-200 rounded-xl overflow-hidden">
+                  <div className="px-4 py-2.5 bg-emerald-100 border-b border-emerald-200 flex items-center justify-between">
+                    <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Tickets Resueltos de la Fecha</p>
+                    {cargandoTicketsResueltos && (
+                      <span className="text-xs font-semibold text-emerald-700 inline-flex items-center gap-1.5">
+                        <span className="w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin inline-block"></span>
+                        Cargando...
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-3 space-y-2 max-h-44 overflow-y-auto">
+                    {!cargandoTicketsResueltos && ticketsResueltosDia.length === 0 && (
+                      <p className="text-sm font-semibold text-emerald-800">No se encontraron tickets resueltos para esta fecha.</p>
+                    )}
+                    {ticketsResueltosDia.map((t) => {
+                      const idNum = Number(t.id);
+                      const checked = ticketsResueltosSeleccionados.includes(idNum);
+                      return (
+                        <label key={idNum} className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${checked ? 'bg-white border-emerald-300' : 'bg-emerald-50/60 border-emerald-200 hover:bg-white'}`}>
+                          <input
+                            type="checkbox"
+                            className="sr-only"
+                            checked={checked}
+                            onChange={() => toggleTicketResuelto(idNum)}
+                          />
+                          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${checked ? 'bg-emerald-600 border-emerald-600' : 'border-emerald-400'}`}>
+                            {checked && (
+                              <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-emerald-900 truncate">{t.codigo_ticket || `#${t.id}`}</p>
+                            <p className="text-xs font-medium text-emerald-700 truncate">{t.titulo || 'Sin título'}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
