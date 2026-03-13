@@ -25,6 +25,7 @@ import { getVisitas } from '@/modules/visitas/services/visitasService';
 import RegisterAssetModal from '@/modules/inventario/components/RegisterAssetModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import TicketKnowledgePanel, { type KBEntry } from '../components/TicketKnowledgePanel';
+import { getEntrada } from '@/modules/baseConocimientos/services/baseConocimientosService';
 
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -182,11 +183,39 @@ export default function TicketDetailPage() {
         `Resolución: ${resCierre.trim()}`,
         `Recomendación: ${recCierre.trim()}`,
       ].join('\n\n');
+      const maybeKbId = selectedKbEntry?.id;
+      const isUuid = (v?: string) => !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
+      let kbEntryId: string | null = null;
+      if (maybeKbId) {
+        if (isUuid(String(maybeKbId))) {
+          kbEntryId = String(maybeKbId);
+        } else {
+          // Intento de resolver el UUID consultando la entrada completa en backend
+          try {
+            const full = await getEntrada(String(maybeKbId));
+            const candidate = full?.id ?? full?.uuid ?? full?.data?.id ?? full?.data?.uuid ?? null;
+            if (candidate && isUuid(String(candidate))) {
+              kbEntryId = String(candidate);
+            } else {
+              console.warn('[Culminar] getEntrada no devolvió un UUID válido para la entrada KB:', maybeKbId, candidate);
+            }
+          } catch (e) {
+            console.warn('[Culminar] Error al obtener entrada KB completa para resolver UUID:', maybeKbId, e);
+          }
+        }
+      }
+
+      if (maybeKbId && !kbEntryId) {
+        console.warn('[Culminar] selectedKbEntry.id no pudo resolverse a UUID; omitiendo kb_entry_id para evitar 500:', maybeKbId);
+      }
+
       await cambiarEstado(ticket.id, 'RESUELTO', {
         motivo: resumen,
         diagnostico: diagCierre.trim(),
         resolucion: resCierre.trim(),
         recomendacion: recCierre.trim(),
+        kb_entry_id: kbEntryId ?? undefined,
       });
       await loadTicketDetail();
       setShowCulminarModal(false);
@@ -619,6 +648,7 @@ export default function TicketDetailPage() {
         </div>
       </div>
     );
+
   }
 
   if (error || !ticket) {
@@ -967,6 +997,12 @@ export default function TicketDetailPage() {
                         <div className="w-1 h-4 rounded-full bg-sky-500 flex-shrink-0" />
                         <h3 className="text-xs font-semibold tracking-widest uppercase text-sky-700">Cierre del Ticket</h3>
                       </div>
+                      {ticket.kb_entry_title && (
+                        <div className="px-4 py-3 border-b border-sky-50">
+                          <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Entrada de la Base de Conocimiento</p>
+                          <p className="text-sm text-slate-700 font-semibold truncate">{ticket.kb_entry_title}</p>
+                        </div>
+                      )}
                       <div className="divide-y divide-sky-50">
                         <div className="px-4 py-3">
                           <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Diagnóstico</p>

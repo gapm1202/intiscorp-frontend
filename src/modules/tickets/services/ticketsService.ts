@@ -222,6 +222,11 @@ export async function cambiarEstado(
       if (motivo.recomendacion) body.recomendacion = motivo.recomendacion;
     }
 
+    // Soporte opcional para enviar kb_entry_id cuando viene en el payload
+    if (motivo && typeof motivo === 'object' && (motivo as any).kb_entry_id) {
+      body.kb_entry_id = (motivo as any).kb_entry_id;
+    }
+
     const response = await axiosClient.put(`/api/tickets/gestion/${ticketId}/estado`, body);
     return response.data;
   } catch (error) {
