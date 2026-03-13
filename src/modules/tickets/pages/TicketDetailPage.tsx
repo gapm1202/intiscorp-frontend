@@ -653,281 +653,361 @@ export default function TicketDetailPage() {
       <div className="p-6 max-w-7xl mx-auto">
 
         {/* Header con botones de acción */}
-        <div className="mb-6">
-          <button
-            onClick={() => navigate('/admin/tickets')}
-            className="text-blue-600 hover:text-blue-800 mb-5 flex items-center gap-2 transition-colors font-semibold text-sm group"
-          >
-            <span className="w-7 h-7 rounded-full bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-              </svg>
-            </span>
-            Volver a tickets
-          </button>
-          
-          {/* Card principal del ticket */}
-          <div className="bg-white rounded-2xl shadow-lg border border-blue-100 overflow-hidden">
-            {/* Franja superior de color */}
-            <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-sky-400 to-cyan-400" />
+       <div className="mb-6">
+  <button
+    onClick={() => navigate('/admin/tickets')}
+    className="text-sky-600 hover:text-sky-800 mb-5 flex items-center gap-2 transition-colors font-semibold text-sm group"
+  >
+    <span className="w-7 h-7 rounded-full bg-sky-100 group-hover:bg-sky-200 flex items-center justify-center transition-colors">
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+      </svg>
+    </span>
+    Volver a tickets
+  </button>
 
-            <div className="p-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex-1">
-                  {/* Código + fecha */}
-                  <div className="flex items-center gap-3 mb-1">
-                    <span className="text-xs font-bold tracking-widest text-blue-400 uppercase">Ticket</span>
+  {/* Card principal del ticket */}
+  <div className="bg-white rounded-2xl shadow-sm border border-sky-100 overflow-hidden">
+    {/* Franja superior */}
+    <div className="h-1 w-full bg-gradient-to-r from-sky-500 via-sky-400 to-cyan-400" />
+
+    <div className="p-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+
+        {/* Info principal */}
+        <div className="flex-1">
+          <span className="text-xs font-bold tracking-widest text-sky-400 uppercase">Ticket</span>
+          <h1 className="text-2xl font-extrabold text-sky-900 mt-0.5 mb-1 tracking-tight">
+            {ticket.codigo_ticket || `#${ticket.id}`}
+          </h1>
+          <p className="text-xs text-slate-400 flex items-center gap-1.5 mb-4">
+            <svg className="w-3.5 h-3.5 text-sky-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Creado el {new Date(ticket.fecha_creacion).toLocaleString('es-PE', {
+              day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+            })}
+          </p>
+
+          {/* Badges + SLA bar */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex items-center gap-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getEstadoColor(ticket.estado)}`}>
+                {ticket.estado.replace('_', ' ')}
+              </span>
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getPrioridadColor(ticket.prioridad)}`}>
+                {ticket.prioridad}
+              </span>
+            </div>
+
+            <div className="flex-1 flex items-center">
+              {ticket.aplica_sla && ticket.estado === 'ABIERTO' && (
+                <div className="ml-2 w-full max-w-md">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-semibold text-sky-600">Tiempo de Respuesta</span>
+                    <span className="text-xs font-bold text-sky-800">
+                      {typeof ticket.porcentaje_tiempo_respuesta === 'number' ? `${ticket.porcentaje_tiempo_respuesta.toFixed(1)}%` : 'N/A'}
+                    </span>
                   </div>
-                  <h1 className="text-2xl font-extrabold text-blue-900 mb-1 tracking-tight">
-                    {ticket.codigo_ticket || `#${ticket.id}`}
-                  </h1>
-                  <p className="text-sm text-slate-500 flex items-center gap-1.5 mb-3">
-                    <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Creado el {new Date(ticket.fecha_creacion).toLocaleString('es-PE', {
-                      day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                    })}
-                  </p>
-
-                  {/* Badges de estado y prioridad + barra SLA */}
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`px-3 py-1 rounded-full text-xs ${getEstadoColor(ticket.estado)}`}>
-                        {ticket.estado.replace('_', ' ')}
-                      </span>
-                      <span className={`px-3 py-1 rounded-full text-xs ${getPrioridadColor(ticket.prioridad)}`}>
-                        {ticket.prioridad}
-                      </span>
-                    </div>
-
-                    {/* Compact SLA bar */}
-                    <div className="flex-1 flex items-center">
-                      {ticket.aplica_sla && ticket.estado === 'ABIERTO' && (
-                        <div className="ml-2 w-full max-w-md">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-semibold text-blue-600">Tiempo de Respuesta</span>
-                            <span className="text-xs font-bold text-blue-800">{typeof ticket.porcentaje_tiempo_respuesta === 'number' ? `${ticket.porcentaje_tiempo_respuesta.toFixed(1)}%` : 'N/A'}</span>
-                          </div>
-                          <div className="relative w-full h-2 bg-blue-100 rounded-full overflow-hidden">
-                            <div className={`${getSLAColorClass(ticket.porcentaje_tiempo_respuesta, ticket.pausado)} absolute top-0 left-0 h-full rounded-full transition-all`} style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_respuesta ?? 0))}%` }} />
-                          </div>
-                        </div>
-                      )}
-                      {ticket.aplica_sla && ticket.estado === 'EN_PROCESO' && (
-                        <div className="ml-2 w-full max-w-md">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-semibold text-blue-600">Tiempo de Resolución</span>
-                            <span className="text-xs font-bold text-blue-800">{typeof ticket.porcentaje_tiempo_resolucion === 'number' ? `${ticket.porcentaje_tiempo_resolucion.toFixed(1)}%` : 'N/A'}</span>
-                          </div>
-                          <div className="relative w-full h-2 bg-blue-100 rounded-full overflow-hidden">
-                            <div className={`${getSLAColorClass(ticket.porcentaje_tiempo_resolucion, ticket.pausado)} absolute top-0 left-0 h-full rounded-full transition-all`} style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_resolucion ?? 0))}%` }} />
-                          </div>
-                        </div>
-                      )}
-                      {!ticket.aplica_sla && ['ESPERA', 'EN_TRIAGE'].includes(ticket.estado) && (
-                        <div className="ml-2">
-                          <span className="text-xs text-blue-400 italic">⏳ Sin SLA — Esperando configuración</span>
-                        </div>
-                      )}
-                    </div>
+                  <div className="relative w-full h-1.5 bg-sky-100 rounded-full overflow-hidden">
+                    <div
+                      className={`${getSLAColorClass(ticket.porcentaje_tiempo_respuesta, ticket.pausado)} absolute top-0 left-0 h-full rounded-full transition-all`}
+                      style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_respuesta ?? 0))}%` }}
+                    />
                   </div>
                 </div>
-
-                {/* Botones de acción */}
-                <div className="flex flex-wrap gap-2 sm:ml-4">
-                  {ticket.origen === 'PORTAL_PUBLICO' && ticket.estado === 'ESPERA' && (
-                    <button 
-                      onClick={handleCogerTicket}
-                      disabled={actionLoading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-all text-sm font-bold shadow-md shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {actionLoading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      )}
-                      Iniciar Triaje
-                    </button>
-                  )}
-
-                  {ticket.origen === 'PORTAL_PUBLICO' && ['ESPERA', 'EN_TRIAGE'].includes(ticket.estado) && (
-                    <button
-                      onClick={() => setShowConfigurarModal(true)}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-sm font-bold shadow-md shadow-indigo-200 flex items-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                      {ticket.estado === 'EN_TRIAGE' ? 'Guardar Configuración' : 'Configurar'}
-                    </button>
-                  )}
-
-                  {ticket.estado === 'ABIERTO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id && (
-                    <button 
-                      onClick={handleCogerTicket}
-                      disabled={actionLoading}
-                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all text-sm font-bold shadow-md shadow-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {actionLoading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                      )}
-                      Iniciar Atención
-                    </button>
-                  )}
-
-                  {ticket.estado === 'EN_PROCESO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id &&
-                   (ticket.origen !== 'PORTAL_PUBLICO' || ticket.configurado_por || ticket.configurado_at) && (
-                    <div style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                      <button 
-                        onClick={handleCulminarTicket}
-                        disabled={actionLoading || !selectedKbEntry}
-                        title={!selectedKbEntry ? 'Selecciona una entrada de la Base de Conocimiento para habilitar este botón' : undefined}
-                        className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all text-sm font-bold shadow-md shadow-teal-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                      >
-                        {actionLoading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> : (
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                        )}
-                        Culminar ticket
-                      </button>
-                      {!selectedKbEntry && (
-                        <span style={{ fontSize: '.68rem', color: '#0f766e', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                          Requiere entrada KB seleccionada
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {ticket.estado === 'EN_PROCESO' && ticket.modalidad === 'REMOTO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id && (
-                    <button 
-                      onClick={() => setShowPasarPresencialModal(true)}
-                      disabled={!contratoActivo}
-                      className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-all text-sm font-bold shadow-md shadow-violet-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                      title={!contratoActivo ? 'No hay contrato activo para esta empresa' : 'Programar visita presencial'}
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                      Pasar a Presencial
-                    </button>
-                  )}
-
-                  {user && ((user.rol && user.rol.toLowerCase().includes('admin')) || (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)) && (
-                    <button 
-                      onClick={handleEditarTicket}
-                      className="px-4 py-2 bg-white border-2 border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition-all text-sm font-bold"
-                    >
-                      Editar
-                    </button>
-                  )}
-
-                  {ticket.aplica_sla && user && ((user.rol && user.rol.toLowerCase().includes('admin')) || (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)) && (
-                    <button 
-                      onClick={() => setShowPausarSLAModal(true)}
-                      className="px-4 py-2 bg-white border-2 border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition-all text-sm font-bold"
-                    >
-                      {ticket.pausado ? 'Reanudar SLA' : 'Pausar SLA'}
-                    </button>
-                  )}
-
-                  <button 
-                    onClick={() => setShowHistorialModal(true)}
-                    className="px-4 py-2 bg-white border-2 border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition-all text-sm font-bold"
-                  >
-                    Historial
-                  </button>
-
-                  {ticket.estado !== 'CERRADO' && ticket.estado !== 'CANCELADO' && user && ((user.rol && user.rol.toLowerCase().includes('admin')) || (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)) && (
-                    <button 
-                      onClick={() => setShowCancelarModal(true)}
-                      className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-all text-sm font-bold shadow-md shadow-rose-200"
-                    >
-                      Cancelar Ticket
-                    </button>
-                  )}
-
-                  {user && user.rol && user.rol.toLowerCase().includes('admin') && ticket.tecnico_asignado_id != null && (
-                    <button
-                      onClick={() => setShowAsignarModal(true)}
-                      className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-all text-sm font-bold shadow-md shadow-amber-200"
-                    >
-                      Reasignar técnico
-                    </button>
-                  )}
+              )}
+              {ticket.aplica_sla && ticket.estado === 'EN_PROCESO' && (
+                <div className="ml-2 w-full max-w-md">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-semibold text-sky-600">Tiempo de Resolución</span>
+                    <span className="text-xs font-bold text-sky-800">
+                      {typeof ticket.porcentaje_tiempo_resolucion === 'number' ? `${ticket.porcentaje_tiempo_resolucion.toFixed(1)}%` : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="relative w-full h-1.5 bg-sky-100 rounded-full overflow-hidden">
+                    <div
+                      className={`${getSLAColorClass(ticket.porcentaje_tiempo_resolucion, ticket.pausado)} absolute top-0 left-0 h-full rounded-full transition-all`}
+                      style={{ width: `${Math.max(0, Math.min(100, ticket.porcentaje_tiempo_resolucion ?? 0))}%` }}
+                    />
+                  </div>
                 </div>
-              </div>
-
-              {/* SLA Timer */}
-              {ticket.aplica_sla && (
-                <div className="mt-6">
-                  {ticket.fase_sla_actual && ticket.fase_sla_actual !== 'SIN_SLA' ? (
-                    <>
-                      {ticket.fase_sla_actual === 'RESPUESTA' && (
-                        <SLATimer
-                          estadoSLA={ticket.estado_sla}
-                          label="Tiempo de Respuesta"
-                          porcentajeConsumido={ticket.porcentaje_tiempo_respuesta}
-                          tiempoTranscurridoMinutos={ticket.tiempo_respuesta_transcurrido_minutos}
-                          tiempoRestanteMinutos={ticket.tiempo_respuesta_restante_minutos}
-                          fechaLimite={ticket.fecha_limite_respuesta}
-                          slaPausado={ticket.pausado || ticket.estado_sla === 'PAUSADO'}
-                          motivoPausa={ticket.motivo_pausa}
-                          alertas={ticket.sla_alertas}
-                        />
-                      )}
-                      {ticket.fase_sla_actual === 'RESOLUCION' && (
-                        <SLATimer
-                          estadoSLA={ticket.estado_sla}
-                          label="Tiempo de Resolución"
-                          porcentajeConsumido={ticket.porcentaje_tiempo_resolucion}
-                          tiempoTranscurridoMinutos={ticket.tiempo_resolucion_transcurrido_minutos}
-                          tiempoRestanteMinutos={ticket.tiempo_resolucion_restante_minutos}
-                          fechaLimite={ticket.fecha_limite_resolucion}
-                          slaPausado={ticket.pausado || ticket.estado_sla === 'PAUSADO'}
-                          motivoPausa={ticket.motivo_pausa}
-                          alertas={ticket.sla_alertas}
-                        />
-                      )}
-                      {ticket.fase_sla_actual === 'COMPLETADO' && (
-                        <div className="space-y-4">
-                          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-4">
-                            <h3 className="text-sm font-bold text-emerald-800 mb-3">✓ SLA Completado — Resumen de Fases</h3>
-                            <div className="mb-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-semibold text-slate-700">Fase de Respuesta</span>
-                                <span className={`text-sm font-bold ${(ticket.porcentaje_tiempo_respuesta ?? 0) <= 100 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                                  {ticket.porcentaje_tiempo_respuesta?.toFixed(1)}%
-                                  {(ticket.porcentaje_tiempo_respuesta ?? 0) <= 100 ? ' ✓ Cumplido' : ' ✕ Excedido'}
-                                </span>
-                              </div>
-                              <div className="text-xs font-medium text-slate-600">
-                                Tiempo transcurrido: {formatMinutes(ticket.tiempo_respuesta_transcurrido_minutos)}
-                                {ticket.tiempo_respuesta_minutos && ` de ${formatMinutes(ticket.tiempo_respuesta_minutos)}`}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-semibold text-slate-700">Fase de Resolución</span>
-                                <span className={`text-sm font-bold ${(ticket.porcentaje_tiempo_resolucion ?? 0) <= 100 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                                  {ticket.porcentaje_tiempo_resolucion?.toFixed(1)}%
-                                  {(ticket.porcentaje_tiempo_resolucion ?? 0) <= 100 ? ' ✓ Cumplido' : ' ✕ Excedido'}
-                                </span>
-                              </div>
-                              <div className="text-xs font-medium text-slate-600">
-                                Tiempo transcurrido: {formatMinutes(ticket.tiempo_resolucion_transcurrido_minutos)}
-                                {ticket.tiempo_resolucion_minutos && ` de ${formatMinutes(ticket.tiempo_resolucion_minutos)}`}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                      <p className="text-sm text-blue-800 font-medium">
-                        <span className="font-bold">⏳ Preparando SLA:</span> Este ticket tiene SLA aplicable pero aún está siendo configurado. Los datos se actualizarán cuando el ticket avance de estado.
-                      </p>
-                    </div>
-                  )}
+              )}
+              {!ticket.aplica_sla && ['ESPERA', 'EN_TRIAGE'].includes(ticket.estado) && (
+                <div className="ml-2">
+                  <span className="text-xs text-sky-400 italic">⏳ Sin SLA — Esperando configuración</span>
                 </div>
               )}
             </div>
           </div>
         </div>
+
+        {/* Botones de acción */}
+        <div className="flex flex-wrap gap-2 sm:ml-4">
+          {ticket.origen === 'PORTAL_PUBLICO' && ticket.estado === 'ESPERA' && (
+            <button
+              onClick={handleCogerTicket}
+              disabled={actionLoading}
+              className="px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 active:bg-sky-800 transition-all text-sm font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {actionLoading
+                ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              }
+              Iniciar Triaje
+            </button>
+          )}
+
+          {ticket.origen === 'PORTAL_PUBLICO' && ['ESPERA', 'EN_TRIAGE'].includes(ticket.estado) && (
+            <button
+              onClick={() => setShowConfigurarModal(true)}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-sm font-bold shadow-sm flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              {ticket.estado === 'EN_TRIAGE' ? 'Guardar Configuración' : 'Configurar'}
+            </button>
+          )}
+
+          {ticket.estado === 'ABIERTO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id && (
+            <button
+              onClick={handleCogerTicket}
+              disabled={actionLoading}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all text-sm font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {actionLoading
+                ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              }
+              Iniciar Atención
+            </button>
+          )}
+
+          {ticket.estado === 'EN_PROCESO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id &&
+            (ticket.origen !== 'PORTAL_PUBLICO' || ticket.configurado_por || ticket.configurado_at) && (
+            <div style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+              <button
+                onClick={handleCulminarTicket}
+                disabled={actionLoading || !selectedKbEntry}
+                title={!selectedKbEntry ? 'Selecciona una entrada de la Base de Conocimiento para habilitar este botón' : undefined}
+                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all text-sm font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {actionLoading
+                  ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                }
+                Culminar ticket
+              </button>
+              {!selectedKbEntry && (
+                <span style={{ fontSize: '.68rem', color: '#0f766e', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  Requiere entrada KB seleccionada
+                </span>
+              )}
+            </div>
+          )}
+
+          {ticket.estado === 'EN_PROCESO' && ticket.modalidad === 'REMOTO' && ticket.tecnico_asignado && user && ticket.tecnico_asignado.id === user.id && (
+            <button
+              onClick={() => setShowPasarPresencialModal(true)}
+              disabled={!contratoActivo}
+              className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-all text-sm font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              title={!contratoActivo ? 'No hay contrato activo para esta empresa' : 'Programar visita presencial'}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              Pasar a Presencial
+            </button>
+          )}
+
+          {/* Botones secundarios (outline) */}
+          {user && ((user.rol && user.rol.toLowerCase().includes('admin')) || (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)) && (
+            <button
+              onClick={handleEditarTicket}
+              className="px-4 py-2 bg-white border border-sky-200 text-sky-700 rounded-lg hover:bg-sky-50 hover:border-sky-400 transition-all text-sm font-semibold"
+            >
+              Editar
+            </button>
+          )}
+
+          {ticket.aplica_sla && user && ((user.rol && user.rol.toLowerCase().includes('admin')) || (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)) && (
+            <button
+              onClick={() => setShowPausarSLAModal(true)}
+              className="px-4 py-2 bg-white border border-sky-200 text-sky-700 rounded-lg hover:bg-sky-50 hover:border-sky-400 transition-all text-sm font-semibold"
+            >
+              {ticket.pausado ? 'Reanudar SLA' : 'Pausar SLA'}
+            </button>
+          )}
+
+          <button
+            onClick={() => setShowHistorialModal(true)}
+            className="px-4 py-2 bg-white border border-sky-200 text-sky-700 rounded-lg hover:bg-sky-50 hover:border-sky-400 transition-all text-sm font-semibold"
+          >
+            Historial
+          </button>
+
+          {ticket.estado !== 'CERRADO' && ticket.estado !== 'CANCELADO' && user && ((user.rol && user.rol.toLowerCase().includes('admin')) || (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)) && (
+            <button
+              onClick={() => setShowCancelarModal(true)}
+              className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-all text-sm font-bold shadow-sm"
+            >
+              Cancelar Ticket
+            </button>
+          )}
+
+          {user && user.rol && user.rol.toLowerCase().includes('admin') && ticket.tecnico_asignado_id != null && (
+            <button
+              onClick={() => setShowAsignarModal(true)}
+              className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-all text-sm font-bold shadow-sm"
+            >
+              Reasignar técnico
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* SLA Timer */}
+      {ticket.aplica_sla && (
+        <div className="mt-6 pt-5 border-t border-sky-50">
+          {ticket.fase_sla_actual && ticket.fase_sla_actual !== 'SIN_SLA' ? (
+            <>
+              {ticket.fase_sla_actual === 'RESPUESTA' && (
+                <SLATimer
+                  estadoSLA={ticket.estado_sla}
+                  label="Tiempo de Respuesta"
+                  porcentajeConsumido={ticket.porcentaje_tiempo_respuesta}
+                  tiempoTranscurridoMinutos={ticket.tiempo_respuesta_transcurrido_minutos}
+                  tiempoRestanteMinutos={ticket.tiempo_respuesta_restante_minutos}
+                  fechaLimite={ticket.fecha_limite_respuesta}
+                  slaPausado={ticket.pausado || ticket.estado_sla === 'PAUSADO'}
+                  motivoPausa={ticket.motivo_pausa}
+                  alertas={ticket.sla_alertas}
+                />
+              )}
+              {ticket.fase_sla_actual === 'RESOLUCION' && (
+                <SLATimer
+                  estadoSLA={ticket.estado_sla}
+                  label="Tiempo de Resolución"
+                  porcentajeConsumido={ticket.porcentaje_tiempo_resolucion}
+                  tiempoTranscurridoMinutos={ticket.tiempo_resolucion_transcurrido_minutos}
+                  tiempoRestanteMinutos={ticket.tiempo_resolucion_restante_minutos}
+                  fechaLimite={ticket.fecha_limite_resolucion}
+                  slaPausado={ticket.pausado || ticket.estado_sla === 'PAUSADO'}
+                  motivoPausa={ticket.motivo_pausa}
+                  alertas={ticket.sla_alertas}
+                />
+              )}
+
+              {ticket.fase_sla_actual === 'COMPLETADO' && (
+                <div className="space-y-3">
+                  {/* Header */}
+                  <div className="flex items-center gap-2 pb-2 border-b border-sky-100">
+                    <div className="w-5 h-5 rounded-full bg-sky-500 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xs font-semibold tracking-widest uppercase text-sky-700">
+                      SLA Completado — Resumen de Fases
+                    </h3>
+                  </div>
+
+                  {/* Fase Respuesta */}
+                  <div className="bg-white border border-sky-100 rounded-xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold tracking-wide uppercase text-slate-400">Fase de Respuesta</span>
+                      <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border ${
+                        (ticket.porcentaje_tiempo_respuesta ?? 0) <= 100
+                          ? 'bg-sky-50 text-sky-700 border-sky-200'
+                          : 'bg-rose-50 text-rose-700 border-rose-200'
+                      }`}>
+                        {(ticket.porcentaje_tiempo_respuesta ?? 0) <= 100 ? '✓' : '✕'}
+                        {' '}{ticket.porcentaje_tiempo_respuesta?.toFixed(1)}%
+                        {(ticket.porcentaje_tiempo_respuesta ?? 0) <= 100 ? ' Cumplido' : ' Excedido'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Tiempo transcurrido:{' '}
+                      <span className="font-semibold text-slate-700">{formatMinutes(ticket.tiempo_respuesta_transcurrido_minutos)}</span>
+                      {ticket.tiempo_respuesta_minutos && (
+                        <span className="text-slate-400"> de {formatMinutes(ticket.tiempo_respuesta_minutos)}</span>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Fase Resolución */}
+                  <div className="bg-white border border-sky-100 rounded-xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold tracking-wide uppercase text-slate-400">Fase de Resolución</span>
+                      <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border ${
+                        (ticket.porcentaje_tiempo_resolucion ?? 0) <= 100
+                          ? 'bg-sky-50 text-sky-700 border-sky-200'
+                          : 'bg-rose-50 text-rose-700 border-rose-200'
+                      }`}>
+                        {(ticket.porcentaje_tiempo_resolucion ?? 0) <= 100 ? '✓' : '✕'}
+                        {' '}{ticket.porcentaje_tiempo_resolucion?.toFixed(1)}%
+                        {(ticket.porcentaje_tiempo_resolucion ?? 0) <= 100 ? ' Cumplido' : ' Excedido'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Tiempo transcurrido:{' '}
+                      <span className="font-semibold text-slate-700">{formatMinutes(ticket.tiempo_resolucion_transcurrido_minutos)}</span>
+                      {ticket.tiempo_resolucion_minutos && (
+                        <span className="text-slate-400"> de {formatMinutes(ticket.tiempo_resolucion_minutos)}</span>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Cierre del Ticket */}
+                  {ticket && ticket.estado === 'RESUELTO' && (
+                    <div className="bg-white rounded-xl border border-sky-100 shadow-sm overflow-hidden">
+                      <div className="px-4 py-3 bg-sky-50 border-b border-sky-100 flex items-center gap-2">
+                        <div className="w-1 h-4 rounded-full bg-sky-500 flex-shrink-0" />
+                        <h3 className="text-xs font-semibold tracking-widest uppercase text-sky-700">Cierre del Ticket</h3>
+                      </div>
+                      <div className="divide-y divide-sky-50">
+                        <div className="px-4 py-3">
+                          <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Diagnóstico</p>
+                          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                            {ticket.diagnostico || ticket.notas_finalizacion || ticket.observaciones_clausura || 'N/A'}
+                          </p>
+                        </div>
+                        <div className="px-4 py-3">
+                          <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Resolución</p>
+                          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                            {ticket.resolucion || ticket.notas_finalizacion || ticket.observaciones_clausura || 'N/A'}
+                          </p>
+                        </div>
+                        <div className="px-4 py-3">
+                          <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Recomendación</p>
+                          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                            {ticket.recomendacion || ticket.notas_finalizacion || ticket.observaciones_clausura || 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="bg-sky-50 border border-sky-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-sky-400 text-base leading-none mt-0.5">⏳</span>
+                <p className="text-sm text-sky-800">
+                  <span className="font-semibold">Preparando SLA:</span>{' '}
+                  Este ticket tiene SLA aplicable pero aún está siendo configurado. Los datos se actualizarán cuando el ticket avance de estado.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  </div>
+</div>
 
         {/* Grid principal */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
