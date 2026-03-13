@@ -24,7 +24,9 @@ export default function FinalizarVisitaModal({
   onAbrirModalEditarActivo,
 }: FinalizarVisitaModalProps) {
   const { user } = useAuth();
-  const [observaciones, setObservaciones] = useState('');
+  const [diagnostico, setDiagnostico] = useState('');
+  const [resolucion, setResolucion] = useState('');
+  const [recomendacion, setRecomendacion] = useState('');
   const [cuentaComoVisita, setCuentaComoVisita] = useState<boolean | null>(null);
   const [hayChangioComponente, setHayChangioComponente] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
@@ -283,30 +285,32 @@ export default function FinalizarVisitaModal({
     y -= 16;
 
     // ══════════════════════════════════════════════════════
-    // SECCIÓN 5: Observaciones
+    // SECCIÓN 5: Diagnóstico / Resolución / Recomendación
     // ══════════════════════════════════════════════════════
-    y = drawSectionTitle('Observaciones de Clausura', y);
-    const obsText = observaciones.trim() || 'Sin observaciones.';
-    // Dibujar caja de observaciones
-    const obsBoxH = Math.max(50, Math.ceil(obsText.length / 75) * 16 + 20);
-    page.drawRectangle({ x: MX, y: y - obsBoxH + 14, width: contentW, height: obsBoxH, color: blueLight, borderColor: rgb(0.78, 0.85, 0.95), borderWidth: 1 });
-
-    // Wrap text manualmente
     const maxCharsPerLine = 75;
-    const obsLines: string[] = [];
-    for (let i = 0; i < obsText.length; i += maxCharsPerLine) {
-      obsLines.push(obsText.slice(i, i + maxCharsPerLine));
-    }
-    let obsY = y;
-    for (const line of obsLines.slice(0, 6)) { // max 6 líneas
-      page.drawText(line, { x: MX + 10, y: obsY, size: 9.5, font: fontRegular, color: gray });
-      obsY -= 14;
-    }
-    if (obsLines.length > 6) {
-      page.drawText('...', { x: MX + 10, y: obsY, size: 9.5, font: fontRegular, color: grayLight });
-    }
+    const drawFieldBox = (label: string, text: string) => {
+      y = drawSectionTitle(label, y);
+      const fieldText = text.trim() || 'No especificado.';
+      const fieldBoxH = Math.max(36, Math.ceil(fieldText.length / maxCharsPerLine) * 14 + 18);
+      page.drawRectangle({ x: MX, y: y - fieldBoxH + 14, width: contentW, height: fieldBoxH, color: blueLight, borderColor: rgb(0.78, 0.85, 0.95), borderWidth: 1 });
+      const fieldLines: string[] = [];
+      for (let i = 0; i < fieldText.length; i += maxCharsPerLine) {
+        fieldLines.push(fieldText.slice(i, i + maxCharsPerLine));
+      }
+      let fieldY = y;
+      for (const line of fieldLines.slice(0, 4)) {
+        page.drawText(line, { x: MX + 10, y: fieldY, size: 9.5, font: fontRegular, color: gray });
+        fieldY -= 14;
+      }
+      if (fieldLines.length > 4) {
+        page.drawText('...', { x: MX + 10, y: fieldY, size: 9.5, font: fontRegular, color: grayLight });
+      }
+      y = y - fieldBoxH - 6;
+    };
 
-    y = y - obsBoxH - 8;
+    drawFieldBox('Diagnóstico', diagnostico);
+    drawFieldBox('Resolución', resolucion);
+    drawFieldBox('Recomendación', recomendacion);
 
     // ── Footer ──
     const footerY = 32;
@@ -369,6 +373,7 @@ export default function FinalizarVisitaModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!diagnostico.trim() || !resolucion.trim() || !recomendacion.trim()) { onError('Completa Diagnóstico, Resolución y Recomendación para finalizar la visita'); return; }
     if (cuentaComoVisita === null) { onError('Debes indicar si cuenta como visita contractual'); return; }
     if (hayChangioComponente === null) { onError('Debes indicar si se realizó cambio de componente'); return; }
 
@@ -380,11 +385,20 @@ export default function FinalizarVisitaModal({
 
     setLoading(true);
     try {
-      const payload: FinalizarVisitaPayload & { ticketsResueltosAsociados?: number[] } = {
+      const resumenClausura = [
+        `Diagnóstico: ${diagnostico.trim()}`,
+        `Resolución: ${resolucion.trim()}`,
+        `Recomendación: ${recomendacion.trim()}`,
+      ].join('\n\n');
+
+      const payload: FinalizarVisitaPayload & { ticketsResueltosAsociados?: number[]; diagnostico?: string; resolucion?: string; recomendacion?: string } = {
         fechaFinalizacion: new Date().toISOString(),
         tecnicoFinalizadorId,
-        ...(observaciones.trim() && { notasFinalizacion: observaciones.trim() }),
-        observacionesClausura: observaciones,
+        notasFinalizacion: resumenClausura,
+        observacionesClausura: resumenClausura,
+        diagnostico: diagnostico.trim(),
+        resolucion: resolucion.trim(),
+        recomendacion: recomendacion.trim(),
         cuentaComoVisitaContractual: cuentaComoVisita,
         huboCambioComponente: hayChangioComponente,
         ...(destinatariosSeleccionados.length > 0 && { destinatariosCorreo: destinatariosSeleccionados }),
@@ -404,7 +418,7 @@ export default function FinalizarVisitaModal({
             resumen: {
               fechaVisita: new Date(visita.fechaProgramada).toLocaleDateString('es-ES'),
               tecnicoEncargado: visita.tecnicosAsignados.find((t) => t.esEncargado)?.tecnicoNombre || 'N/A',
-              observacionesClausura: observaciones || '',
+              observacionesClausura: `Diagnóstico: ${diagnostico.trim()}\nResolución: ${resolucion.trim()}\nRecomendación: ${recomendacion.trim()}`,
               cuentaComoVisitaContractual: cuentaComoVisita ? 'Si' : 'No',
               huboCambioComponente: hayChangioComponente ? 'Si' : 'No',
             },
@@ -491,22 +505,45 @@ export default function FinalizarVisitaModal({
               </div>
             </div>
 
-            {/* Observaciones */}
+            {/* Diagnóstico / Resolución / Recomendación */}
             <div className="bg-white rounded-2xl border border-blue-100 shadow-sm overflow-hidden">
               <div className="px-4 py-3 bg-gradient-to-r from-sky-500 to-cyan-500 flex items-center gap-2">
                 <svg className="w-4 h-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wide">Observaciones de Clausura</h3>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wide">Cierre de Visita</h3>
               </div>
-              <div className="p-4">
-                <textarea
-                  value={observaciones}
-                  onChange={(e) => setObservaciones(e.target.value)}
-                  placeholder="Describe el resultado de la visita, actividades realizadas, incidencias, etc..."
-                  rows={4}
-                  className="w-full px-4 py-3 text-sm font-medium text-slate-800 placeholder-slate-400 border-2 border-blue-100 rounded-xl bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none transition-colors"
-                />
+              <div className="p-4 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">Diagnóstico <span className="text-rose-500">*</span></label>
+                  <textarea
+                    value={diagnostico}
+                    onChange={(e) => setDiagnostico(e.target.value)}
+                    placeholder="Describe el diagnóstico identificado..."
+                    rows={3}
+                    className="w-full px-4 py-3 text-sm font-medium text-slate-800 placeholder-slate-400 border-2 border-blue-100 rounded-xl bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">Resolución <span className="text-rose-500">*</span></label>
+                  <textarea
+                    value={resolucion}
+                    onChange={(e) => setResolucion(e.target.value)}
+                    placeholder="Describe la resolución aplicada..."
+                    rows={3}
+                    className="w-full px-4 py-3 text-sm font-medium text-slate-800 placeholder-slate-400 border-2 border-blue-100 rounded-xl bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">Recomendación <span className="text-rose-500">*</span></label>
+                  <textarea
+                    value={recomendacion}
+                    onChange={(e) => setRecomendacion(e.target.value)}
+                    placeholder="Agrega recomendaciones para evitar recurrencia..."
+                    rows={3}
+                    className="w-full px-4 py-3 text-sm font-medium text-slate-800 placeholder-slate-400 border-2 border-blue-100 rounded-xl bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none transition-colors"
+                  />
+                </div>
               </div>
             </div>
 
