@@ -52,6 +52,8 @@ export default function SeguimientoTicketPage() {
     };
 
     fetchMsgs();
+    const estadoNorm = normalizeEstado(ticket.estado as any);
+    if (estadoNorm === 'RESUELTO' || estadoNorm === 'CERRADO' || estadoNorm === 'CANCELADO') return () => { cancelled = true; };
     const id = setInterval(fetchMsgs, 3000);
     return () => { cancelled = true; clearInterval(id); };
   }, [ticket]);

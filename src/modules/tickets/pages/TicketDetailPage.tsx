@@ -296,6 +296,10 @@ export default function TicketDetailPage() {
     // Suspend polling while modals are open to avoid re-renders
     if (showPasarPresencialModal || showFinalizarVisitaModal || showEditAssetModal) return;
 
+    // Do not start polling if the ticket has been resolved/closed/cancelled
+    const estadoNorm = ticket?.estado ? String(ticket.estado).toUpperCase().replace(/[_\s]+/g, ' ').trim() : '';
+    if (estadoNorm === 'RESUELTO' || estadoNorm === 'CERRADO' || estadoNorm === 'CANCELADO') return;
+
     const interval = setInterval(() => {
       loadTicketDetail();
     }, 30000);
@@ -328,6 +332,10 @@ export default function TicketDetailPage() {
 
     // Suspend chat polling while modals are open to avoid re-renders
     if (showPasarPresencialModal || showFinalizarVisitaModal || showEditAssetModal) return () => { cancelled = true; };
+
+    // Do not poll chat if ticket already resolved/closed/cancelled
+    const estadoNorm = ticket?.estado ? String(ticket.estado).toUpperCase().replace(/[_\s]+/g, ' ').trim() : '';
+    if (estadoNorm === 'RESUELTO' || estadoNorm === 'CERRADO' || estadoNorm === 'CANCELADO') return () => { cancelled = true; };
 
     // polling cada 3 segundos
     const intervalId = setInterval(fetchMsgs, 3000);
@@ -903,7 +911,7 @@ export default function TicketDetailPage() {
         <div className="mt-6 pt-5 border-t border-sky-50">
           {ticket.fase_sla_actual && ticket.fase_sla_actual !== 'SIN_SLA' ? (
             <>
-              {ticket.fase_sla_actual === 'RESPUESTA' && (
+              {ticket.fase_sla_actual === 'RESPUESTA' && normalizeEstadoLocal(ticket.estado) !== 'RESUELTO' && (
                 <SLATimer
                   estadoSLA={ticket.estado_sla}
                   label="Tiempo de Respuesta"
@@ -916,7 +924,7 @@ export default function TicketDetailPage() {
                   alertas={ticket.sla_alertas}
                 />
               )}
-              {ticket.fase_sla_actual === 'RESOLUCION' && (
+              {ticket.fase_sla_actual === 'RESOLUCION' && normalizeEstadoLocal(ticket.estado) !== 'RESUELTO' && (
                 <SLATimer
                   estadoSLA={ticket.estado_sla}
                   label="Tiempo de Resolución"
@@ -999,7 +1007,7 @@ export default function TicketDetailPage() {
                       </div>
                       {ticket.kb_entry_title && (
                         <div className="px-4 py-3 border-b border-sky-50">
-                          <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Entrada de la Base de Conocimiento</p>
+                          <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Archivo seleccionado de la Base de Conocimiento</p>
                           <p className="text-sm text-slate-700 font-semibold truncate">{ticket.kb_entry_title}</p>
                         </div>
                       )}
