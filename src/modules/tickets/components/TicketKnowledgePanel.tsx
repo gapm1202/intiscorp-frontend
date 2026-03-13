@@ -5,6 +5,7 @@ import {
   createEntrada,
   getEntradas,
   getEntrada,
+  searchEntradas,
   getCategoria,
 } from '@/modules/baseConocimientos/services/baseConocimientosService';
 
@@ -289,6 +290,12 @@ export default function TicketKnowledgePanel({ onEntrySelected, selectedEntry }:
   const [previewEntry, setPreviewEntry] = useState<KBEntry | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
+  // Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimeoutRef = useRef<any>(null);
+  const [filteredCategories, setFilteredCategories] = useState<Category[] | null>(null);
+
   const openPreview = useCallback(async (entry: KBEntry) => {
     // Show modal immediately with what we have, then fetch the full content
     setPreviewEntry(entry);
@@ -304,6 +311,243 @@ export default function TicketKnowledgePanel({ onEntrySelected, selectedEntry }:
       setPreviewLoading(false);
     }
   }, []);
+
+  const performSearch = useCallback(async (q: string) => {
+    try {
+      setSearchLoading(true);
+      const raw = await searchEntradas(q);
+      const ents: KBEntry[] = (raw || []).map((e: any) => ({
+        id: e.id ?? e.uuid ?? String(e.id),
+        titulo: e.titulo ?? e.title ?? 'Sin título',
+        contenido_html: e.contenido_html ?? e.contenidoHtml ?? '',
+        categoria_id: e.categoria_id ?? e.categoriaId ?? null,
+        subcategoria_id: e.subcategoria_id ?? e.subcategoriaId ?? null,
+        status: e.status ?? 'DRAFT',
+        raw: e,
+      }));
+      // Merge server results into entries (update existing or append new)
+      setEntries(prev => {
+        const map = new Map<string, KBEntry>();
+        prev.forEach(p => map.set(String(p.id), p));
+        ents.forEach(e => map.set(String(e.id), e));
+        return Array.from(map.values());
+      });
+      // Re-run local filtering with updated entries
+      setTimeout(() => performLocalSearch(q), 20);
+    } catch (err) {
+      console.error('Error buscando entradas:', err);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const fold = (s: string) =>
+    String(s || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+  const accentPattern = (term: string) => {
+    const map: Record<string, string> = {
+      a: '[aáàäâã]',
+      e: '[eéèëê]',
+      i: '[iíìïî]',
+      o: '[oóòöôõ]',
+      u: '[uúùüû]',
+      n: '[nñ]',
+      c: '[cç]',
+    };
+    return term
+      .split('')
+      .map(ch => map[ch.toLowerCase()] ?? escapeRegExp(ch))
+      .join('');
+  };
+
+  const performLocalSearch = useCallback((q: string) => {
+    const qTrim = q.trim();
+    if (!qTrim) { setFilteredCategories(null); return; }
+    const qi = fold(qTrim);
+    const qWords = qi.split(/\s+/).filter(Boolean);
+    const containsQuery = (text: string) => fold(text).includes(qi);
+    const containsAnyWord = (text: string) => {
+      const ft = fold(text);
+      return qWords.some(w => ft.includes(w));
+    };
+
+    // Defensive copy to avoid mutating original categories
+    const categoriesCopy: Category[] = categories.map(c => ({ ...c, subcategories: c.subcategories.map(sc => ({ ...sc })) }));
+
+    const categoryResults: { cat: Category; matchCount: number; newSubcats: Subcategory[] }[] = [];
+
+    // Improved scoring heuristic
+    const scoreEntry = (e: KBEntry, cat: Category, sub: Subcategory) => {
+      const t = fold(String(e.titulo || ''));
+      const b = fold(String(e.contenido_html || ''));
+      const cn = fold(String(cat.name || ''));
+      const sn = fold(String(sub.name || ''));
+      let score = 0;
+      if (t.startsWith(qi)) score += 12;
+      if (t.includes(qi)) score += 7;
+      if (b.includes(qi)) score += 4;
+      if (cn.includes(qi)) score += 2;
+      if (sn.includes(qi)) score += 2;
+      // word matches give small boost
+      for (const w of qWords) {
+        if (t.includes(w) && !t.startsWith(w)) score += 1;
+        if (b.includes(w) && !b.includes(qi)) score += 0.5;
+      }
+      return score;
+    };
+
+    categoriesCopy.forEach(cat => {
+      let catMatchCount = 0;
+      const newSubcats: Subcategory[] = [];
+      const totalEntriesInCat = entries.filter(e => String(e.categoria_id) === String(cat.raw?.id ?? cat.id)).length;
+      const catNameMatches = containsQuery(cat.name) || containsAnyWord(cat.name);
+      (cat as any).__nameMatched = catNameMatches;
+
+      cat.subcategories.forEach(sub => {
+        const targetEntries = entries.filter(e => String(e.categoria_id) === String(cat.raw?.id ?? cat.id) && String(e.subcategoria_id) === String(sub.raw?.id ?? sub.id));
+        const scored = targetEntries.map(e => ({ e, score: scoreEntry(e, cat, sub) }));
+        const matching = scored.filter(s => s.score > 0).sort((a,b) => b.score - a.score);
+        const nonMatching = scored.filter(s => s.score === 0).map(s => s.e);
+        const subNameMatches = containsQuery(sub.name) || containsAnyWord(sub.name);
+
+        // attach ordered ids and match count
+        (sub as any).__orderedEntryIds = [...matching.map(m => m.e.id), ...nonMatching.map(e => e.id)];
+        (sub as any).__matchCount = matching.length;
+        (sub as any).__nameMatched = subNameMatches;
+
+        // If subcategory name matches but there are no matching entries, show all its entries
+        if (subNameMatches && (sub as any).__matchCount === 0) {
+          (sub as any).__orderedEntryIds = targetEntries.map(te => te.id);
+          (sub as any).__matchCount = targetEntries.length;
+        }
+
+        // Keep only subcategories that have a direct/indirect match while searching
+        if ((sub as any).__matchCount > 0 || subNameMatches || catNameMatches) {
+          newSubcats.push(sub);
+        }
+
+        catMatchCount += (sub as any).__matchCount || 0;
+      });
+
+      // If category name matches, include the category and surface its entries (even if no entry matches)
+      if (catNameMatches) {
+        // mark each sub with all entries if they currently have no matches
+        newSubcats.forEach(sub => {
+          const targetEntries = entries.filter(e => String(e.categoria_id) === String(cat.raw?.id ?? cat.id) && String(e.subcategoria_id) === String(sub.raw?.id ?? sub.id));
+          if (!((sub as any).__matchCount) || (sub as any).__matchCount === 0) {
+            (sub as any).__orderedEntryIds = targetEntries.map(te => te.id);
+            (sub as any).__matchCount = targetEntries.length;
+          }
+        });
+        catMatchCount = Math.max(catMatchCount, totalEntriesInCat);
+      }
+
+      (cat as any).__matchCount = catMatchCount;
+      categoryResults.push({ cat, matchCount: catMatchCount, newSubcats });
+    });
+
+    // Keep categories when there are entry matches OR direct name matches on category/subcategory
+    const filtered = categoryResults
+      .filter(cr =>
+        cr.matchCount > 0 ||
+        (cr.cat as any).__nameMatched ||
+        cr.newSubcats.some(sc => (sc as any).__nameMatched)
+      )
+      .sort((a,b) => b.matchCount - a.matchCount)
+      .map(cr => ({ ...cr.cat, subcategories: cr.newSubcats }));
+
+    setFilteredCategories(filtered);
+  }, [categories, entries]);
+
+  // Highlight matches inside arbitrary HTML safely using DOMParser and text node replacements
+  const highlightHtmlContent = (html: string, q: string) => {
+    if (!q || !html) return html;
+    try {
+      const qi = q.trim();
+      if (!qi) return html;
+      const words = qi.split(/\s+/).filter(Boolean).sort((a,b) => b.length - a.length);
+      if (words.length === 0) return html;
+      const regex = new RegExp(`(${words.map(accentPattern).join('|')})`, 'ig');
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
+      const root = doc.body.firstChild as HTMLElement | null;
+      if (!root) return html;
+
+      const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+      const toReplace: Text[] = [];
+      while (walker.nextNode()) {
+        const node = walker.currentNode as Text;
+        const nv = node?.nodeValue || '';
+        const nvFold = fold(nv);
+        if (words.some(w => nvFold.includes(fold(w)))) toReplace.push(node);
+      }
+
+      toReplace.forEach(textNode => {
+        const span = doc.createElement('span');
+        const parts = textNode.nodeValue?.split(regex) || [];
+        parts.forEach((part, idx) => {
+          if (part === '') return;
+          if (idx % 2 === 1) {
+            const m = doc.createElement('mark');
+            m.style.background = '#fff59d';
+            m.style.color = '#0f172a';
+            m.style.padding = '0 2px';
+            m.style.borderRadius = '2px';
+            m.textContent = part;
+            span.appendChild(m);
+          } else {
+            span.appendChild(doc.createTextNode(part));
+          }
+        });
+        textNode.parentNode?.replaceChild(span, textNode);
+      });
+
+      return root.innerHTML;
+    } catch (err) {
+      return html;
+    }
+  };
+
+  const highlightText = (text: string, q: string) => {
+    const qi = (q || '').trim();
+    if (!qi) return text;
+    try {
+      const words = qi.split(/\s+/).filter(Boolean).sort((a,b) => b.length - a.length);
+      if (words.length === 0) return text;
+      const re = new RegExp(`(${words.map(accentPattern).join('|')})`, 'ig');
+      return text.replace(re, '<mark style="background:#fff59d;color:#0f172a;padding:0 2px;border-radius:2px">$1</mark>');
+    } catch {
+      return text;
+    }
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    setSearchQuery(v);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (!v) {
+      // restore full list
+      setFilteredCategories(null);
+      searchTimeoutRef.current = setTimeout(() => loadData(), 120);
+      return;
+    }
+    // run local filtering quickly, and schedule server search
+    searchTimeoutRef.current = setTimeout(() => {
+      performLocalSearch(v);
+      performSearch(v);
+    }, 240);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    loadData();
+  };
 
   /* ── Load data ── */
   const loadData = useCallback(async () => {
@@ -363,6 +607,18 @@ export default function TicketKnowledgePanel({ onEntrySelected, selectedEntry }:
       String(e.categoria_id) === String(cId) &&
       String(e.subcategoria_id) === String(sId)
     );
+  };
+
+  const getOrderedEntriesForSub = (cat: Category, sub: Subcategory) => {
+    const all = getEntriesForSub(cat, sub);
+    const order: string[] = (sub as any).__orderedEntryIds || [];
+    if (!order || order.length === 0) return all;
+    const map = new Map(all.map(a => [String(a.id), a]));
+    const ordered: KBEntry[] = [];
+    order.forEach(id => { const it = map.get(String(id)); if (it) ordered.push(it); });
+    // include any remaining entries that weren't in the order list
+    all.forEach(a => { if (!order.includes(String(a.id))) ordered.push(a); });
+    return ordered;
   };
 
   const confirmInlineSub = async () => {
@@ -471,6 +727,8 @@ export default function TicketKnowledgePanel({ onEntrySelected, selectedEntry }:
   };
 
   const selectedCat = categories.find(c => c.id === selectedCatId);
+  const displayed = filteredCategories ?? categories;
+  const isSearching = searchQuery.trim().length > 0;
 
   /* ════════════════════════════
      RENDER
@@ -675,9 +933,32 @@ export default function TicketKnowledgePanel({ onEntrySelected, selectedEntry }:
           </div>
         )}
 
+        {/* Search */}
+        <div style={{ padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center', background: '#f8fbff', borderBottom: '1px solid #eef6ff' }}>
+          <input
+            value={searchQuery}
+            onChange={handleSearchChange}
+            placeholder="Buscar entradas..."
+            style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '1px solid #dbeafe', outline: 'none', fontSize: '.9rem' }}
+          />
+          {searchLoading ? (
+            <div style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d6fd8" strokeWidth="2.5" style={{ animation: 'spin 1s linear infinite' }}>
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+            </div>
+          ) : (
+            <button
+              onClick={clearSearch}
+              title="Limpiar búsqueda"
+              style={{ padding: '6px 9px', borderRadius: 8, border: '1px solid #e2e8f0', background: searchQuery ? '#fff' : 'transparent', cursor: 'pointer', color: '#1d4ed8', fontWeight: 600 }}
+            >{searchQuery ? 'Limpiar' : ' '} </button>
+          )}
+        </div>
+
         {/* Tree */}
         <div className="tkb-tree">
-          {loading ? (
+            {loading ? (
             <div className="tkb-empty">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" strokeWidth="2"
                 style={{ display:'block', margin:'0 auto .5rem', animation:'spin 1s linear infinite' }}>
@@ -685,14 +966,17 @@ export default function TicketKnowledgePanel({ onEntrySelected, selectedEntry }:
               </svg>
               Cargando...
             </div>
+          ) : (filteredCategories !== null && filteredCategories.length === 0) ? (
+            <div className="tkb-empty">No se encontraron entradas para "{searchQuery}".</div>
           ) : categories.length === 0 ? (
             <div className="tkb-empty">
               Sin categorías. Crea una entrada para comenzar.
             </div>
           ) : (
-            categories.map(cat => {
-              const catExpanded = expandedCatId === cat.id;
-              const catEntryCount = entries.filter(e => String(e.categoria_id) === String(cat.raw?.id ?? cat.id)).length;
+            displayed.map(cat => {
+              const catExpanded = isSearching || expandedCatId === cat.id;
+              const totalCatEntries = entries.filter(e => String(e.categoria_id) === String(cat.raw?.id ?? cat.id)).length;
+              const catEntryCount = (cat as any).__matchCount != null && searchQuery ? (cat as any).__matchCount : totalCatEntries;
               return (
                 <div key={cat.id}>
                   {/* Category row */}
@@ -706,14 +990,14 @@ export default function TicketKnowledgePanel({ onEntrySelected, selectedEntry }:
                     <svg className="tkb-cat-icon" viewBox="0 0 24 24" fill={catExpanded ? '#1d6fd8' : '#93c5fd'} stroke="none">
                       <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
                     </svg>
-                    <span className="tkb-cat-name">{cat.name}</span>
+                    <span className="tkb-cat-name" dangerouslySetInnerHTML={{ __html: highlightText(String(cat.name || ''), searchQuery) }} />
                     <span className="tkb-cat-count">{catEntryCount}</span>
                   </button>
 
                   {/* Subcategory rows */}
                   {catExpanded && cat.subcategories.map(sub => {
-                    const subExpanded = expandedSubId === sub.id;
-                    const subEntries = getEntriesForSub(cat, sub);
+                    const subExpanded = isSearching || expandedSubId === sub.id;
+                    const subEntries = getOrderedEntriesForSub(cat, sub);
                     return (
                       <div key={sub.id}>
                         <button
@@ -723,8 +1007,8 @@ export default function TicketKnowledgePanel({ onEntrySelected, selectedEntry }:
                           <svg className={`tkb-sub-chevron${subExpanded ? ' open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <path d="m9 18 6-6-6-6"/>
                           </svg>
-                          <span className="tkb-sub-name">{sub.name}</span>
-                          <span className="tkb-sub-count">{subEntries.length}</span>
+                          <span className="tkb-sub-name" dangerouslySetInnerHTML={{ __html: highlightText(String(sub.name || ''), searchQuery) }} />
+                          <span className="tkb-sub-count">{(sub as any).__matchCount != null && searchQuery ? (sub as any).__matchCount : subEntries.length}</span>
                         </button>
 
                         {/* Entry rows */}
@@ -750,9 +1034,8 @@ export default function TicketKnowledgePanel({ onEntrySelected, selectedEntry }:
                                       className={`tkb-entry-title${isSel ? ' selected' : ''}`}
                                       onClick={() => onEntrySelected(isSel ? null : entry)}
                                       title={entry.titulo}
-                                    >
-                                      {entry.titulo}
-                                    </span>
+                                      dangerouslySetInnerHTML={{ __html: highlightText(String(entry.titulo || ''), searchQuery) }}
+                                    />
                                     {isSel && (
                                       <svg className="tkb-entry-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                         <polyline points="20 6 9 17 4 12"/>
@@ -826,7 +1109,7 @@ export default function TicketKnowledgePanel({ onEntrySelected, selectedEntry }:
                 : previewEntry.contenido_html
                   ? <div
                       className="tkb-preview-content"
-                      dangerouslySetInnerHTML={{ __html: previewEntry.contenido_html }}
+                      dangerouslySetInnerHTML={{ __html: highlightHtmlContent(String(previewEntry.contenido_html || ''), searchQuery) }}
                     />
                   : <p style={{ color:'#94a3b8', fontStyle:'italic', fontSize:'.85rem' }}>Esta entrada no tiene contenido.</p>
               }
