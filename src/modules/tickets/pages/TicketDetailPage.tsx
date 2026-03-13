@@ -182,7 +182,12 @@ export default function TicketDetailPage() {
         `Resolución: ${resCierre.trim()}`,
         `Recomendación: ${recCierre.trim()}`,
       ].join('\n\n');
-      await cambiarEstado(ticket.id, 'RESUELTO', resumen);
+      await cambiarEstado(ticket.id, 'RESUELTO', {
+        motivo: resumen,
+        diagnostico: diagCierre.trim(),
+        resolucion: resCierre.trim(),
+        recomendacion: recCierre.trim(),
+      });
       await loadTicketDetail();
       setShowCulminarModal(false);
       showSuccessToast('Ticket culminado correctamente');

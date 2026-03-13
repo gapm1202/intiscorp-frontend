@@ -205,12 +205,24 @@ export async function cogerTicket(ticketId: number): Promise<Ticket> {
 }
 
 // Cambiar estado usando el endpoint de gestión
-export async function cambiarEstado(ticketId: number, nuevoEstado: string, motivo?: string): Promise<Ticket> {
+export async function cambiarEstado(
+  ticketId: number,
+  nuevoEstado: string,
+  motivo?: string | { motivo?: string; diagnostico?: string; resolucion?: string; recomendacion?: string }
+): Promise<Ticket> {
   try {
-    const response = await axiosClient.put(`/api/tickets/gestion/${ticketId}/estado`, { 
-      nuevo_estado: nuevoEstado,
-      motivo 
-    });
+    const body: Record<string, any> = { nuevo_estado: nuevoEstado };
+
+    if (typeof motivo === 'string') {
+      body.motivo = motivo;
+    } else if (motivo && typeof motivo === 'object') {
+      if (motivo.motivo) body.motivo = motivo.motivo;
+      if (motivo.diagnostico) body.diagnostico = motivo.diagnostico;
+      if (motivo.resolucion) body.resolucion = motivo.resolucion;
+      if (motivo.recomendacion) body.recomendacion = motivo.recomendacion;
+    }
+
+    const response = await axiosClient.put(`/api/tickets/gestion/${ticketId}/estado`, body);
     return response.data;
   } catch (error) {
     console.error('Error al cambiar estado:', error);
