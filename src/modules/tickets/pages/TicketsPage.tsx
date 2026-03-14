@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getTickets, createTicket, cogerTicket, asignarTecnico } from '../services/ticketsService';
+import { getTickets, createTicket, getTicketById, cogerTicket, asignarTecnico } from '../services/ticketsService';
+import { slaService } from '@/modules/sla/services/slaService';
 import { getEmpresas } from '@/modules/empresas/services/empresasService';
 import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
 import { getCategorias } from '@/modules/inventario/services/categoriasService';
@@ -206,6 +207,7 @@ const TicketsPage = () => {
       EN_TIEMPO:      'bg-emerald-100 text-emerald-800 border border-emerald-300',
       PROXIMO_VENCER: 'bg-amber-100 text-amber-800 border border-amber-300',
       VENCIDO:        'bg-rose-100 text-rose-800 border border-rose-300',
+      COMPLETADO:     'bg-emerald-100 text-emerald-800 border border-emerald-300',
       NO_APLICA:      'bg-slate-100 text-slate-500 border border-slate-200',
     };
     return classes[estadoSLA] || 'bg-slate-100 text-slate-500';
@@ -216,9 +218,21 @@ const TicketsPage = () => {
       EN_TIEMPO:      'En tiempo',
       PROXIMO_VENCER: 'Próx. a vencer',
       VENCIDO:        'Vencido',
+      COMPLETADO:     'Completado',
       NO_APLICA:      'N/A',
     };
     return labels[estadoSLA] || estadoSLA;
+  };
+
+  // Deriva el estado SLA que debe mostrarse en la lista.
+  // Si el ticket está RESUELTO/CERRADO o la fase SLA es COMPLETADO, preferimos mostrar "COMPLETADO"
+  const deriveDisplayedSLA = (ticket: any): string => {
+    if (!ticket) return ticket?.estado_sla || 'NO_APLICA';
+    const estado = ticket.estado;
+    const fase = ticket.fase_sla_actual;
+    if (fase === 'COMPLETADO') return 'COMPLETADO';
+    if (estado === 'RESUELTO' || estado === 'CERRADO') return 'COMPLETADO';
+    return ticket.estado_sla || 'NO_APLICA';
   };
 
   const getSLAColorClass = (pct?: number, paused?: boolean) => {
@@ -295,7 +309,7 @@ const TicketsPage = () => {
             },
             {
               label: 'SLA Vencido',
-              value: tickets.filter(t => t.estadoSLA === 'VENCIDO').length,
+              value: tickets.filter(t => deriveDisplayedSLA(t) === 'VENCIDO').length,
               icon: (
                 <svg className="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
               ),
@@ -597,7 +611,7 @@ const TicketsPage = () => {
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div className="flex items-center gap-1.5">
                         <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${getPrioridadBadgeClass(ticket.prioridad)}`}>{ticket.prioridad}</span>
-                        <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${getSLABadgeClass(ticket.estado_sla)}`}>{getSLALabel(ticket.estado_sla)}</span>
+                        <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${getSLABadgeClass(deriveDisplayedSLA(ticket))}`}>{getSLALabel(deriveDisplayedSLA(ticket))}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         {(Object.prototype.hasOwnProperty.call(ticket, 'tecnico_asignado_id') && ticket.tecnico_asignado_id === null) && ticket.estado === 'ABIERTO' && (
@@ -708,8 +722,8 @@ const TicketsPage = () => {
 
                         {/* SLA badge */}
                         <td className="px-5 py-4 whitespace-nowrap">
-                          <span className={`px-2.5 py-1 text-xs font-bold rounded-full ${getSLABadgeClass(ticket.estado_sla)}`}>
-                            {getSLALabel(ticket.estado_sla)}
+                          <span className={`px-2.5 py-1 text-xs font-bold rounded-full ${getSLABadgeClass(deriveDisplayedSLA(ticket))}`}>
+                            {getSLALabel(deriveDisplayedSLA(ticket))}
                           </span>
                         </td>
 
@@ -847,9 +861,47 @@ const TicketsPage = () => {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSubmit={async (ticketData) => {
-          await createTicket(ticketData);
-          await loadTickets();
-        }}
+            // Log SLA config for the empresa to verify tiempos por prioridad
+            try {
+              const resumen = await slaService.getResumen(String(ticketData.empresa_id));
+              console.log('[TicketsPage] SLA resumen para empresa', ticketData.empresa_id, resumen);
+            } catch (e) {
+              console.warn('[TicketsPage] No se pudo obtener resumen SLA para empresa', ticketData.empresa_id, e);
+            }
+
+            const created = await createTicket(ticketData);
+            console.log('[TicketsPage] createTicket response:', created);
+            try {
+              const id = (
+                created?.data?.ticket?.id ||
+                created?.data?.id ||
+                created?.ticket?.id ||
+                created?.id ||
+                created?.data?.data?.id ||
+                created?.data?.data?.ticket?.id ||
+                null
+              );
+              if (id) {
+                const detail = await getTicketById(Number(id));
+                console.log('[TicketsPage] Detalle ticket tras creación (SLA):', {
+                  aplica_sla: detail.aplica_sla,
+                  fase_sla_actual: detail.fase_sla_actual,
+                  tiempo_respuesta_minutos: detail.tiempo_respuesta_minutos,
+                  tiempo_respuesta_transcurrido_minutos: detail.tiempo_respuesta_transcurrido_minutos,
+                  tiempo_resolucion_minutos: detail.tiempo_resolucion_minutos,
+                  tiempo_resolucion_transcurrido_minutos: detail.tiempo_resolucion_transcurrido_minutos,
+                  fecha_limite_sla: detail.fecha_limite_sla,
+                  estado_sla: detail.estado_sla,
+                  prioridad: detail.prioridad
+                });
+              } else {
+                console.warn('[TicketsPage] No se encontró id del ticket en la respuesta de creación');
+              }
+            } catch (err) {
+              console.warn('No se pudo obtener detalle tras creación:', err);
+            }
+            await loadTickets();
+          }}
       />
       <ConfirmModal
         open={confirmTakeOpen}

@@ -161,10 +161,71 @@ export async function getTicketByCodigo(codigo: string): Promise<Ticket | null> 
 
 export async function createTicket(ticket: Partial<Ticket>): Promise<Ticket> {
   try {
-    const response = await axiosClient.post('/api/tickets', ticket);
+    console.log('[ticketsService] 📤 Creando ticket - payload:', ticket);
+
+    // Sanitize payload: remove undefined fields
+    const sanitized: Record<string, any> = {};
+    Object.keys(ticket || {}).forEach((k) => {
+      const v: any = (ticket as any)[k];
+      if (v === undefined) return;
+      sanitized[k] = v;
+    });
+
+    console.log('[ticketsService] sanitized payload before send:', sanitized);
+
+    // If there are File attachments, send as multipart/form-data
+    if (Array.isArray(sanitized.archivos) && sanitized.archivos.length > 0) {
+      const form = new FormData();
+      // Append files
+      (sanitized.archivos as any[]).forEach((f, i) => {
+        if (f instanceof File) form.append('archivos', f);
+        else if (typeof f === 'string') form.append('archivos', f);
+      });
+      // Append other fields as strings
+      Object.keys(sanitized).forEach((k) => {
+        if (k === 'archivos') return;
+        const val = sanitized[k];
+        if (val === null) return;
+        if (Array.isArray(val)) {
+          // append arrays as repeated fields
+          val.forEach((item) => form.append(`${k}[]`, typeof item === 'object' ? JSON.stringify(item) : String(item)));
+        } else if (typeof val === 'object') {
+          form.append(k, JSON.stringify(val));
+        } else {
+          form.append(k, String(val));
+        }
+      });
+
+      // Log FormData entries for debugging
+      try {
+        console.log('[ticketsService] FormData entries:');
+        for (const pair of (form as any).entries()) {
+          console.log(' -', pair[0], pair[1]);
+        }
+      } catch (e) {
+        console.warn('[ticketsService] No se pudo enumerar FormData entries', e);
+      }
+
+      console.log('[ticketsService] Enviando multipart/form-data con archivos');
+      const response = await axiosClient.post('/api/tickets', form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      console.log('[ticketsService] ✅ Ticket creado (multipart), respuesta:', response.data);
+      return response.data;
+    }
+
+    // Otherwise send JSON
+    console.log('[ticketsService] enviando JSON payload prioridad:', sanitized.prioridad, 'typeof:', typeof sanitized.prioridad);
+    const response = await axiosClient.post('/api/tickets', sanitized);
+    console.log('[ticketsService] ✅ Ticket creado, respuesta:', response.data);
     return response.data;
   } catch (error) {
-    console.error('Error al crear ticket:', error);
+    console.error('Error al crear ticket:', {
+      message: error?.message,
+      status: error?.response?.status,
+      data: error?.response?.data,
+      config: error?.config && { url: error.config.url, method: error.config.method, data: error.config.data }
+    });
     throw error;
   }
 }

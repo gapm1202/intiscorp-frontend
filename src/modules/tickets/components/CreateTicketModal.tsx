@@ -6,7 +6,7 @@ import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
 import { getCategorias } from '@/modules/inventario/services/categoriasService';
 import { getInventarioBySede } from '@/modules/inventario/services/inventarioService';
 import { getUsuariosInternos } from '@/modules/auth/services/userService';
-import { getSLAByEmpresa } from '@/modules/sla/services/slaService';
+import { slaService } from '@/modules/sla/services/slaService';
 import { getContratoActivo } from '@/modules/empresas/services/contratosService';
 import { getCatalogCategories, getCatalogSubcategories, getTicketTypes } from '@/modules/catalogo/services/catalogoService';
 import { getServicios } from '@/modules/catalogo/services/servicioApi';
@@ -512,7 +512,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
       setSlaStatus('loading');
       const [sedesData, slaData, empresaData] = await Promise.all([
         getSedesByEmpresa(empresaId),
-        getSLAByEmpresa(empresaId).catch(() => null),
+        slaService.getResumen(String(empresaId)).catch(() => null),
         getEmpresaById(empresaId).catch(() => null)
       ]);
       
@@ -743,6 +743,27 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
     try {
       const selectedServicio = serviciosDisponibles.find(s => String(s.id) === String(formData.servicio_id));
       const tipoServicioFinal = formData.tipo_servicio || selectedServicio?.tipoServicio || selectedServicio?.tipo_servicio || '';
+      const normalizePrioridad = (p: any) => {
+        if (!p && p !== 0) return undefined;
+        const raw = String(p).trim();
+        const up = raw.toUpperCase();
+        if (['BAJA', 'MEDIA', 'ALTA', 'CRITICA'].includes(up)) return up;
+        const map: Record<string, string> = {
+          'baja': 'BAJA',
+          'media': 'MEDIA',
+          'alta': 'ALTA',
+          'critica': 'CRITICA',
+          'crítica': 'CRITICA',
+          'crítico': 'CRITICA',
+          'critico': 'CRITICA',
+          'critical': 'CRITICA',
+          'high': 'ALTA',
+          'medium': 'MEDIA',
+          'low': 'BAJA'
+        };
+        const lower = raw.toLowerCase();
+        return map[lower] || up;
+      };
       const ticketData: Record<string, any> = {
         empresa_id: Number(formData.empresa_id),
         sede_id: Number(formData.sede_id),
@@ -755,7 +776,7 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
         subcategoria_id: Number(formData.subcategoria_id),
         impacto: formData.impacto,
         urgencia: formData.urgencia,
-        prioridad: formData.prioridad,
+        prioridad: normalizePrioridad(formData.prioridad),
         servicio_id: Number(formData.servicio_id),
         tipo_servicio: tipoServicioFinal,
         modalidad: formData.modalidad,
@@ -765,6 +786,16 @@ const CreateTicketModal = ({ isOpen, onClose, onSubmit, isConfigurar, initialDat
         origen: formData.origen,
         archivos: archivos.length > 0 ? archivos : undefined
       };
+      // Ensure prioridad is one of allowed values; if not, fallback to 'BAJA'
+      const allowedPrioridades = ['BAJA', 'MEDIA', 'ALTA', 'CRITICA'];
+      if (!allowedPrioridades.includes(String(ticketData.prioridad))) {
+        console.warn('[CreateTicketModal] prioridad inválida, aplicando fallback BAJA:', ticketData.prioridad);
+        ticketData.prioridad = 'BAJA';
+      }
+
+      ticketData.prioridad = String(ticketData.prioridad).toUpperCase();
+      console.log('[CreateTicketModal] prioridad final a enviar:', ticketData.prioridad, 'typeof:', typeof ticketData.prioridad);
+      console.log('[CreateTicketModal] Ticket payload previo a onSubmit:', ticketData);
       if (formData.tipo_ticket) ticketData.tipo_ticket = formData.tipo_ticket;
       await onSubmit(ticketData);
       resetForm();
