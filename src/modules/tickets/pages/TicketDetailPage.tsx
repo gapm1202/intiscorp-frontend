@@ -57,6 +57,9 @@ export default function TicketDetailPage() {
   const [diagCierre, setDiagCierre] = useState('');
   const [resCierre, setResCierre] = useState('');
   const [recCierre, setRecCierre] = useState('');
+  const [cierreImages, setCierreImages] = useState<File[]>([]);
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [editingAsset, setEditingAsset] = useState<any | null>(null);
   const [editAssetSedes, setEditAssetSedes] = useState<any[]>([]);
   const [editAssetAreas, setEditAssetAreas] = useState<any[]>([]);
@@ -210,13 +213,28 @@ export default function TicketDetailPage() {
         console.warn('[Culminar] selectedKbEntry.id no pudo resolverse a UUID; omitiendo kb_entry_id para evitar 500:', maybeKbId);
       }
 
-      await cambiarEstado(ticket.id, 'RESUELTO', {
+      // Prepare payload
+      const payload: any = {
         motivo: resumen,
         diagnostico: diagCierre.trim(),
         resolucion: resCierre.trim(),
         recomendacion: recCierre.trim(),
         kb_entry_id: kbEntryId ?? undefined,
-      });
+      };
+
+      // If there are images ready, send using multipart endpoint
+      if (cierreImages && cierreImages.length > 0) {
+        try {
+          // Lazy import to avoid circular issues
+          const svc = await import('../services/ticketsService');
+          await svc.cambiarEstadoConImagenes(ticket.id, 'RESUELTO', payload, cierreImages as File[]);
+        } catch (err) {
+          console.warn('Fallo al enviar imágenes con cambiarEstadoConImagenes, intentando sin imágenes:', err);
+          await cambiarEstado(ticket.id, 'RESUELTO', payload);
+        }
+      } else {
+        await cambiarEstado(ticket.id, 'RESUELTO', payload);
+      }
       await loadTicketDetail();
       setShowCulminarModal(false);
       showSuccessToast('Ticket culminado correctamente');
@@ -226,6 +244,114 @@ export default function TicketDetailPage() {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  // Helpers: image validation + processing (resize to max 1280px side, compress if >2MB)
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+  const processFile = async (file: File): Promise<File> => {
+    // If already under 2MB and within size, return as-is
+    if (file.size <= 2 * 1024 * 1024) return file;
+
+    // Resize/compress using canvas
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = (e) => reject(e);
+      i.src = URL.createObjectURL(file);
+    });
+
+    const maxSide = 1280;
+    let { width, height } = img;
+    if (Math.max(width, height) > maxSide) {
+      const ratio = maxSide / Math.max(width, height);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D not supported');
+    ctx.drawImage(img, 0, 0, width, height);
+
+    // Choose output type: prefer webp for better compression, but keep original if png
+    const outType = file.type === 'image/png' ? 'image/png' : 'image/webp';
+    // quality tune
+    const quality = 0.8;
+
+    const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve as any, outType, quality));
+    if (!blob) throw new Error('Failed to compress image');
+
+    // If still >2MB, try lower quality iteratively
+    let outBlob = blob;
+    let q = quality;
+    while (outBlob.size > 2 * 1024 * 1024 && q > 0.3) {
+      q -= 0.15;
+      // eslint-disable-next-line no-await-in-loop
+      const b = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve as any, outType, q));
+      if (b) outBlob = b;
+      else break;
+    }
+
+    // Construct a File from blob
+    const newName = file.name.replace(/\.[^.]+$/, '') + (outType === 'image/webp' ? '.webp' : file.name.match(/\.[^.]+$/)?.[0] || '.jpg');
+    return new File([outBlob], newName, { type: outType });
+  };
+
+  const handleImageInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const list = Array.from(files);
+    const newImages: File[] = [];
+    const newPreviews: string[] = [];
+
+    for (const f of list) {
+      if (newImages.length + cierreImages.length >= 3) break; // enforce max 3 total
+      if (!allowedTypes.includes(f.type)) {
+        showErrorToast('Formato no permitido. Solo JPG, PNG y WEBP.');
+        continue;
+      }
+
+      try {
+        let processed = f;
+        if (f.size > 2 * 1024 * 1024 || Math.max((await getImageDimensions(f)).width, (await getImageDimensions(f)).height) > 1280) {
+          processed = await processFile(f);
+        }
+        newImages.push(processed);
+        newPreviews.push(URL.createObjectURL(processed));
+      } catch (err) {
+        console.error('Error procesando imagen:', err);
+        showErrorToast('Error procesando imagen');
+      }
+    }
+
+    setCierreImages(prev => {
+      const merged = [...prev, ...newImages].slice(0, 3);
+      return merged;
+    });
+    setPreviewImages(prev => {
+      const merged = [...prev, ...newPreviews].slice(0, 3);
+      return merged;
+    });
+    // Reset input value to allow re-selecting same file if removed
+    e.currentTarget.value = '';
+  };
+
+  const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.width, height: img.height });
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const removeImageAt = (index: number) => {
+    setCierreImages(prev => prev.filter((_, i) => i !== index));
+    setPreviewImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const showErrorToast = (message: string) => {
@@ -253,7 +379,9 @@ export default function TicketDetailPage() {
         fecha_limite_respuesta: data.fecha_limite_respuesta,
         fecha_limite_resolucion: data.fecha_limite_resolucion
       });
-      setTicket(data);
+      // Imágenes de cierre vienen dentro del objeto ticket: response.data.data.ticket.imagenes_cierre
+      // No realizamos llamadas adicionales.
+      setTicket({ ...data } as any);
       // Reset any chat-disabled flags when reloading ticket details
       setChatDisabled(false);
       setChatDisabledMessage(null);
@@ -304,12 +432,24 @@ export default function TicketDetailPage() {
       loadTicketDetail();
     }, 30000);
     return () => clearInterval(interval);
-  }, [id, loadTicketDetail, showPasarPresencialModal, showFinalizarVisitaModal, showEditAssetModal]);
+  }, [id, loadTicketDetail, showPasarPresencialModal, showFinalizarVisitaModal, showEditAssetModal, ticket?.estado]);
 
   // Normalize estado helper (local)
   const normalizeEstadoLocal = (raw?: string | null) => {
     if (!raw) return '';
     return String(raw).toUpperCase().replace(/[_\s]+/g, ' ').trim();
+  };
+
+  // Construir URL completa para imágenes (backend puede devolver rutas relativas)
+  const buildFullUrl = (url?: string | null) => {
+    if (!url) return '';
+    const trimmed = String(url).trim();
+    if (!trimmed) return '';
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    // relative path - prefix with axios baseURL if available, else use origin
+    const base = (axiosClient && axiosClient.defaults && axiosClient.defaults.baseURL) || window.location.origin;
+    // avoid double slashes
+    return `${base.replace(/\/$/, '')}/${trimmed.replace(/^\//, '')}`;
   };
 
   // Inicializar chat interno: obtener mensajes desde backend y habilitar polling
@@ -1031,6 +1171,38 @@ export default function TicketDetailPage() {
                           </p>
                         </div>
                       </div>
+
+                      {/* Imágenes de cierre: mostrar siempre la sección y usar ticket.imagenes_cierre si existe */}
+                      <div className="p-4">
+                        <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-2">Imágenes de cierre</p>
+                        {(((ticket as any).imagenes_cierre && (ticket as any).imagenes_cierre.length > 0) || ((ticket as any).cierre_imagenes && (ticket as any).cierre_imagenes.length > 0)) ? (
+                          <div className="space-y-2">
+                            {(((ticket as any).imagenes_cierre && (ticket as any).imagenes_cierre) || (ticket as any).cierre_imagenes || []).map((img: any, i: number) => {
+                              const url = img?.url ?? img?.path ?? img?.src ?? img;
+                              const name = img?.nombre_archivo || img?.nombre || `Imagen ${i + 1}`;
+                              return (
+                                <div key={i} className="flex items-center justify-between gap-3 bg-slate-50 rounded-md p-2 border border-slate-100">
+                                  <div className="text-sm text-slate-700 truncate">{name}</div>
+                                  <div className="flex-shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        // Abrir la URL provista por el backend en una nueva pestaña
+                                        if (url) window.open(url, '_blank');
+                                      }}
+                                      className="px-3 py-1.5 bg-sky-600 text-white rounded-lg text-sm font-semibold hover:bg-sky-700"
+                                    >
+                                      Ver
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-600">No hay imágenes de cierre registradas.</p>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1627,6 +1799,33 @@ export default function TicketDetailPage() {
                   placeholder="Agrega recomendaciones para evitar recurrencia..."
                 />
               </div>
+
+              {/* Imágenes de cierre */}
+              <div>
+                <label className="text-xs font-bold text-blue-500 uppercase tracking-wider">Añadir imágenes <span className="text-xs font-medium text-slate-400">(opcional)</span></label>
+                <div className="mt-2 flex items-center gap-3">
+                  <input
+                    accept="image/jpeg,image/png,image/webp"
+                    type="file"
+                    multiple
+                    onChange={handleImageInput}
+                    disabled={cierreImages.length >= 3}
+                    className="text-sm"
+                  />
+                  <div className="text-xs text-slate-500">{cierreImages.length} / 3 imágenes</div>
+                </div>
+
+                {previewImages.length > 0 && (
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {previewImages.map((src, i) => (
+                      <div key={i} className="relative">
+                        <img src={src} onClick={() => setLightboxIndex(i)} className="w-full h-20 object-cover rounded-md cursor-pointer border border-slate-100" />
+                        <button onClick={() => removeImageAt(i)} type="button" className="absolute -top-1 -right-1 bg-rose-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs">×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="px-6 py-4 bg-white border-t border-blue-100 flex items-center justify-end gap-3">
@@ -1653,6 +1852,15 @@ export default function TicketDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Lightbox para previews locales */}
+      {lightboxIndex !== null && previewImages[lightboxIndex] && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70" onClick={() => setLightboxIndex(null)}>
+          <img src={previewImages[lightboxIndex]} className="max-h-[90vh] max-w-[90vw] rounded-md shadow-lg" />
+        </div>
+      )}
+
+      {/* remote images open in new tab; no remote lightbox needed */}
 
       {/* Modales — sin cambios en lógica */}
       <AsignarTecnicoModal

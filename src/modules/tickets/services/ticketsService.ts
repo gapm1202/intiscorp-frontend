@@ -235,6 +235,42 @@ export async function cambiarEstado(
   }
 }
 
+// Cambiar estado pero permitiendo enviar imágenes de cierre mediante multipart/form-data
+export async function cambiarEstadoConImagenes(
+  ticketId: number,
+  nuevoEstado: string,
+  motivoObj?: Record<string, any>,
+  images?: File[]
+): Promise<Ticket> {
+  try {
+    const form = new FormData();
+    form.append('nuevo_estado', nuevoEstado);
+
+    if (motivoObj) {
+      if (motivoObj.motivo) form.append('motivo', motivoObj.motivo);
+      if (motivoObj.diagnostico) form.append('diagnostico', motivoObj.diagnostico);
+      if (motivoObj.resolucion) form.append('resolucion', motivoObj.resolucion);
+      if (motivoObj.recomendacion) form.append('recomendacion', motivoObj.recomendacion);
+      if (motivoObj.kb_entry_id) form.append('kb_entry_id', String(motivoObj.kb_entry_id));
+    }
+
+    if (images && images.length > 0) {
+      images.forEach((f, i) => {
+        // backend should accept 'imagenes[]' or 'imagenes' depending on implementation
+        form.append('imagenes[]', f, f.name);
+      });
+    }
+
+    const response = await axiosClient.put(`/api/tickets/gestion/${ticketId}/estado`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error al cambiar estado con imágenes:', error);
+    throw error;
+  }
+}
+
 // Pausar SLA
 export async function pausarSLA(ticketId: number, motivo: string): Promise<Ticket> {
   try {
@@ -322,6 +358,11 @@ export async function getMensajes(ticketId: number): Promise<Array<any>> {
     throw error;
   }
 }
+
+// Obtener imágenes de cierre desde endpoint dedicado (fallback si no vienen en el detalle)
+// NOTE: El backend incluye `imagenes_cierre` dentro del objeto `ticket` retornado
+// por el endpoint de detalle. No existe un endpoint GET dedicado; por eso
+// eliminamos la función que intentaba múltiples rutas y evitamos requests adicionales.
 
 export async function postMensaje(ticketId: number, payload: { mensaje: string }): Promise<any> {
   try {
