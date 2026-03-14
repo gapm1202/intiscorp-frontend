@@ -316,14 +316,15 @@ export async function cambiarEstadoConImagenes(
     }
 
     if (images && images.length > 0) {
-      images.forEach((f, i) => {
-        // Para el endpoint de tickets el backend espera 'imagenes[]'
-        form.append('imagenes[]', f, f.name);
+      images.forEach((f) => {
+        // Enviar como 'imagenes' (sin corchetes) para que multer reciba los files correctamente
+        form.append('imagenes', f, f.name);
       });
     }
 
+    // Let axios/browser set the Content-Type with correct boundary
     const response = await axiosClient.put(`/api/tickets/gestion/${ticketId}/estado`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': undefined as any }
     });
     return response.data;
   } catch (error) {

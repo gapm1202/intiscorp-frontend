@@ -188,7 +188,8 @@ export async function finalizarVisita(visitaId: string, payload: FinalizarVisita
     });
 
     images.forEach((f) => {
-      form.append('imagenes_visita[]', f, f.name);
+      // Multer expects the field name without brackets
+      form.append('imagenes_visita', f, f.name);
     });
 
     const res = await fetch(url, {
