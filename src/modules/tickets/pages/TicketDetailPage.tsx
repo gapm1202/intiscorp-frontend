@@ -79,6 +79,31 @@ export default function TicketDetailPage() {
   const [chatInput, setChatInput] = useState('');
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // Indicar si hay datos de cierre que merecen mostrarse aunque el estado no sea exactamente 'RESUELTO'
+  const hasCierre = Boolean(
+    ticket && (
+      String(ticket.estado).toUpperCase() === 'RESUELTO' ||
+      !!ticket.diagnostico ||
+      !!ticket.resolucion ||
+      !!ticket.recomendacion ||
+      (((ticket as any).imagenes_cierre && (ticket as any).imagenes_cierre.length > 0) || ((ticket as any).cierre_imagenes && (ticket as any).cierre_imagenes.length > 0))
+    )
+  );
+
+  useEffect(() => {
+    if (!ticket) return;
+    try {
+      console.log('[TicketDetailPage] hasCierre:', hasCierre);
+      console.log('[TicketDetailPage] estado raw:', ticket.estado);
+      console.log('[TicketDetailPage] diagnostico present:', Boolean(ticket.diagnostico));
+      console.log('[TicketDetailPage] resolucion present:', Boolean(ticket.resolucion));
+      console.log('[TicketDetailPage] recomendacion present:', Boolean(ticket.recomendacion));
+      console.log('[TicketDetailPage] imagenes_cierre length:', ((ticket as any).imagenes_cierre || (ticket as any).cierre_imagenes || []).length);
+    } catch (e) {
+      console.warn('[TicketDetailPage] error al loggear hasCierre', e);
+    }
+  }, [ticket, hasCierre]);
+
   
 
   const showSuccessToast = (message: string) => {
@@ -396,6 +421,17 @@ export default function TicketDetailPage() {
   useEffect(() => {
     loadTicketDetail();
   }, [loadTicketDetail]);
+
+  // DEBUG: Log imágenes de cierre y URLs construidas para detectar problemas
+  useEffect(() => {
+    if (!ticket) return;
+    const imgs = (ticket as any).imagenes_cierre || (ticket as any).cierre_imagenes || [];
+    console.log('[TicketDetailPage] imagenes_cierre raw:', imgs);
+    imgs.forEach((img: any, i: number) => {
+      const raw = img?.url ?? img?.path ?? img?.src ?? img;
+      console.log(`[TicketDetailPage] imagen[${i}] raw:`, raw, 'full:', buildFullUrl(raw));
+    });
+  }, [ticket]);
 
   // Cargar contrato activo de la empresa del ticket
   useEffect(() => {
@@ -1138,73 +1174,6 @@ export default function TicketDetailPage() {
                     </p>
                   </div>
 
-                  {/* Cierre del Ticket */}
-                  {ticket && ticket.estado === 'RESUELTO' && (
-                    <div className="bg-white rounded-xl border border-sky-100 shadow-sm overflow-hidden">
-                      <div className="px-4 py-3 bg-sky-50 border-b border-sky-100 flex items-center gap-2">
-                        <div className="w-1 h-4 rounded-full bg-sky-500 flex-shrink-0" />
-                        <h3 className="text-xs font-semibold tracking-widest uppercase text-sky-700">Cierre del Ticket</h3>
-                      </div>
-                      {ticket.kb_entry_title && (
-                        <div className="px-4 py-3 border-b border-sky-50">
-                          <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Archivo seleccionado de la Base de Conocimiento</p>
-                          <p className="text-sm text-slate-700 font-semibold truncate">{ticket.kb_entry_title}</p>
-                        </div>
-                      )}
-                      <div className="divide-y divide-sky-50">
-                        <div className="px-4 py-3">
-                          <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Diagnóstico</p>
-                          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                            {ticket.diagnostico || ticket.notas_finalizacion || ticket.observaciones_clausura || 'N/A'}
-                          </p>
-                        </div>
-                        <div className="px-4 py-3">
-                          <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Resolución</p>
-                          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                            {ticket.resolucion || ticket.notas_finalizacion || ticket.observaciones_clausura || 'N/A'}
-                          </p>
-                        </div>
-                        <div className="px-4 py-3">
-                          <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Recomendación</p>
-                          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                            {ticket.recomendacion || ticket.notas_finalizacion || ticket.observaciones_clausura || 'N/A'}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Imágenes de cierre: mostrar siempre la sección y usar ticket.imagenes_cierre si existe */}
-                      <div className="p-4">
-                        <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-2">Imágenes de cierre</p>
-                        {(((ticket as any).imagenes_cierre && (ticket as any).imagenes_cierre.length > 0) || ((ticket as any).cierre_imagenes && (ticket as any).cierre_imagenes.length > 0)) ? (
-                          <div className="space-y-2">
-                            {(((ticket as any).imagenes_cierre && (ticket as any).imagenes_cierre) || (ticket as any).cierre_imagenes || []).map((img: any, i: number) => {
-                              const url = img?.url ?? img?.path ?? img?.src ?? img;
-                              const name = img?.nombre_archivo || img?.nombre || `Imagen ${i + 1}`;
-                              return (
-                                <div key={i} className="flex items-center justify-between gap-3 bg-slate-50 rounded-md p-2 border border-slate-100">
-                                  <div className="text-sm text-slate-700 truncate">{name}</div>
-                                  <div className="flex-shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        // Abrir la URL provista por el backend en una nueva pestaña
-                                        if (url) window.open(url, '_blank');
-                                      }}
-                                      className="px-3 py-1.5 bg-sky-600 text-white rounded-lg text-sm font-semibold hover:bg-sky-700"
-                                    >
-                                      Ver
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-slate-600">No hay imágenes de cierre registradas.</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
             </>
@@ -1221,6 +1190,76 @@ export default function TicketDetailPage() {
           )}
         </div>
       )}
+
+      {/* Cierre del Ticket — independiente del SLA */}
+      {hasCierre && (
+        <div className="mt-6 bg-white rounded-xl border border-sky-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-sky-50 border-b border-sky-100 flex items-center gap-2">
+            <div className="w-1 h-4 rounded-full bg-sky-500 flex-shrink-0" />
+            <h3 className="text-xs font-semibold tracking-widest uppercase text-sky-700">Cierre del Ticket</h3>
+          </div>
+          {ticket.kb_entry_title && (
+            <div className="px-4 py-3 border-b border-sky-50">
+              <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Archivo seleccionado de la Base de Conocimiento</p>
+              <p className="text-sm text-slate-700 font-semibold truncate">{ticket.kb_entry_title}</p>
+            </div>
+          )}
+          <div className="divide-y divide-sky-50">
+            <div className="px-4 py-3">
+              <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Diagnóstico</p>
+              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                {ticket.diagnostico || 'N/A'}
+              </p>
+            </div>
+            <div className="px-4 py-3">
+              <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Resolución</p>
+              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                {ticket.resolucion || 'N/A'}
+              </p>
+            </div>
+            <div className="px-4 py-3">
+              <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-1">Recomendación</p>
+              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                {ticket.recomendacion || 'N/A'}
+              </p>
+            </div>
+          </div>
+
+          {/* Imágenes de cierre */}
+          <div className="p-4">
+            <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-2">Imágenes de cierre</p>
+            {(((ticket as any).imagenes_cierre && (ticket as any).imagenes_cierre.length > 0) || ((ticket as any).cierre_imagenes && (ticket as any).cierre_imagenes.length > 0)) ? (
+              <div className="space-y-2">
+                {(((ticket as any).imagenes_cierre && (ticket as any).imagenes_cierre) || (ticket as any).cierre_imagenes || []).map((img: any, i: number) => {
+                  const raw = img?.url ?? img?.path ?? img?.src ?? img;
+                  const url = buildFullUrl(raw);
+                  const name = img?.nombre_archivo || img?.nombre || `Imagen ${i + 1}`;
+                  return (
+                    <div key={i} className="flex items-center justify-between gap-3 bg-slate-50 rounded-md p-2 border border-slate-100">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img src={url} alt={name} className="w-20 h-14 object-cover rounded-md border border-slate-100 shrink-0" />
+                        <div className="text-sm text-slate-700 truncate">{name}</div>
+                      </div>
+                      <div className="flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => { if (url) window.open(url, '_blank'); }}
+                          className="px-3 py-1.5 bg-sky-600 text-white rounded-lg text-sm font-semibold hover:bg-sky-700"
+                        >
+                          Ver
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600">No hay imágenes de cierre registradas.</p>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   </div>
 </div>

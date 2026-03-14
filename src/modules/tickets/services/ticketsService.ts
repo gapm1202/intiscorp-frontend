@@ -322,6 +322,16 @@ export async function cambiarEstadoConImagenes(
       });
     }
 
+    // DEBUG: Enumerar FormData entries para depuración local
+    try {
+      console.log('[ticketsService] cambiarEstadoConImagenes - FormData entries:');
+      for (const pair of (form as any).entries()) {
+        console.log(' -', pair[0], pair[1]);
+      }
+    } catch (e) {
+      console.warn('[ticketsService] No se pudo enumerar FormData entries', e);
+    }
+
     // Let axios/browser set the Content-Type with correct boundary
     const response = await axiosClient.put(`/api/tickets/gestion/${ticketId}/estado`, form, {
       headers: { 'Content-Type': undefined as any }
