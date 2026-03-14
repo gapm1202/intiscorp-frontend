@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { Visita, FinalizarVisitaPayload } from '../types';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { finalizarVisita, enviarResumenVisitaCorreo } from '../services/visitasService';
-import { getTicketById, getTickets } from '@/modules/tickets/services/ticketsService';
+import { getTicketById, getTickets, cambiarEstadoConImagenes } from '@/modules/tickets/services/ticketsService';
 import { getUsuariosByEmpresa } from '@/modules/usuarios/services/usuariosService';
 import type { Usuario } from '@/modules/usuarios/services/usuariosService';
 import { useAuth } from '@/hooks/useAuth';
@@ -41,6 +41,10 @@ export default function FinalizarVisitaModal({
   const [busquedaUsuario, setBusquedaUsuario] = useState('');
   const [ticketsResueltosDia, setTicketsResueltosDia] = useState<Ticket[]>([]);
   const [ticketsResueltosSeleccionados, setTicketsResueltosSeleccionados] = useState<number[]>([]);
+  const [cierreImages, setCierreImages] = useState<File[]>([]);
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [cargandoTicketsResueltos, setCargandoTicketsResueltos] = useState(false);
   const selectorRef = useRef<HTMLDivElement>(null);
 
@@ -105,6 +109,110 @@ export default function FinalizarVisitaModal({
 
     cargarTicketsResueltosMismaFecha();
   }, [cuentaComoVisita, visita.empresaId, visita.fechaProgramada]);
+
+  // Helpers para imágenes
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+  const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.width, height: img.height });
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const processFile = async (file: File): Promise<File> => {
+    if (file.size <= 2 * 1024 * 1024) return file;
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = (e) => reject(e);
+      i.src = URL.createObjectURL(file);
+    });
+
+    const maxSide = 1280;
+    let { width, height } = img;
+    if (Math.max(width, height) > maxSide) {
+      const ratio = maxSide / Math.max(width, height);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D not supported');
+    ctx.drawImage(img, 0, 0, width, height);
+
+    const outType = file.type === 'image/png' ? 'image/png' : 'image/webp';
+    let quality = 0.8;
+
+    let blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve as any, outType, quality));
+    if (!blob) throw new Error('Failed to compress image');
+
+    let outBlob = blob;
+    while (outBlob.size > 2 * 1024 * 1024 && quality > 0.3) {
+      quality -= 0.15;
+      // eslint-disable-next-line no-await-in-loop
+      const b = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve as any, outType, quality));
+      if (b) outBlob = b;
+      else break;
+    }
+
+    const newName = file.name.replace(/\.[^.]+$/, '') + (outType === 'image/webp' ? '.webp' : file.name.match(/\.[^.]+$/)?.[0] || '.jpg');
+    return new File([outBlob], newName, { type: outType });
+  };
+
+  const handleImageInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const list = Array.from(files);
+    const newImages: File[] = [];
+    const newPreviews: string[] = [];
+
+    for (const f of list) {
+      if (newImages.length + cierreImages.length >= 3) break;
+      if (!allowedTypes.includes(f.type)) {
+        onError('Formato no permitido. Solo JPG, PNG y WEBP.');
+        continue;
+      }
+
+      try {
+        let processed = f;
+        if (f.size > 2 * 1024 * 1024 || Math.max((await getImageDimensions(f)).width, (await getImageDimensions(f)).height) > 1280) {
+          processed = await processFile(f);
+        }
+        newImages.push(processed);
+        newPreviews.push(URL.createObjectURL(processed));
+      } catch (err) {
+        console.error('Error procesando imagen:', err);
+        onError('Error procesando imagen');
+      }
+    }
+
+    setCierreImages((prev) => {
+      const merged = [...prev, ...newImages].slice(0, 3);
+      return merged;
+    });
+    setPreviewImages((prev) => {
+      const merged = [...prev, ...newPreviews].slice(0, 3);
+      return merged;
+    });
+    // Reset input safely using ref if available
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    } else if (e.currentTarget) {
+      try { e.currentTarget.value = ''; } catch (e) { /* ignore */ }
+    }
+  };
+
+  const removeImageAt = (index: number) => {
+    setCierreImages((prev) => prev.filter((_, i) => i !== index));
+    setPreviewImages((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const toggleTicketResuelto = (ticketId: number) => {
     setTicketsResueltosSeleccionados((prev) =>
@@ -405,7 +513,8 @@ export default function FinalizarVisitaModal({
         ...(cuentaComoVisita && ticketsResueltosSeleccionados.length > 0 && { ticketsResueltosAsociados: ticketsResueltosSeleccionados }),
       };
 
-      const response = await finalizarVisita(String(visitaId), payload);
+      // If there are images, send them as multipart via visitasService.finalizarVisita
+      const response = await finalizarVisita(String(visitaId), payload, cierreImages.length > 0 ? cierreImages : undefined);
       const visitaFinalizada = response.data || response;
 
       if (destinatariosSeleccionados.length > 0) {
@@ -426,6 +535,31 @@ export default function FinalizarVisitaModal({
         } catch (correoError) {
           console.error('No se pudo enviar correo de cierre de visita:', correoError);
           onError('La visita se finalizo correctamente, pero no se pudo enviar el correo con el resumen PDF.');
+        }
+      }
+
+      // Si la visita proviene de un ticket y hay imágenes, enviarlas también al endpoint del ticket
+      if (visita.ticketId && cierreImages.length > 0) {
+        try {
+          const ticket = await getTicketById(Number(visita.ticketId));
+          const ticketIdNum = Number(ticket.id ?? ticket._id ?? ticket.ticketId ?? visita.ticketId);
+            if (Number.isInteger(ticketIdNum) && ticketIdNum > 0) {
+            const payloadForTicket: any = {
+              motivo: 'Imágenes adjuntas desde Finalizar Visita',
+              diagnostico: diagnostico.trim(),
+              resolucion: resolucion.trim(),
+              recomendacion: recomendacion.trim(),
+            };
+            try {
+              // Marcar el ticket como RESUELTO y enviar las imágenes para que se guarden en ticket_imagenes_cierre
+              await cambiarEstadoConImagenes(ticketIdNum, 'RESUELTO', payloadForTicket, cierreImages);
+            } catch (imgErr) {
+              console.error('Error enviando imágenes al endpoint de ticket:', imgErr);
+              onError('La visita se finalizó, pero no se pudieron guardar las imágenes en el ticket.');
+            }
+          }
+        } catch (e) {
+          console.error('No se pudo obtener ticket para adjuntar imágenes:', e);
         }
       }
 
@@ -543,6 +677,33 @@ export default function FinalizarVisitaModal({
                     rows={3}
                     className="w-full px-4 py-3 text-sm font-medium text-slate-800 placeholder-slate-400 border-2 border-blue-100 rounded-xl bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none transition-colors"
                   />
+                </div>
+                {/* Imágenes de cierre */}
+                <div>
+                  <label className="block text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">Adjuntar imágenes <span className="text-xs font-medium text-slate-400">(opcional)</span></label>
+                  <div className="mt-2 flex items-center gap-3">
+                    <input
+                      accept="image/jpeg,image/png,image/webp"
+                      type="file"
+                      multiple
+                      ref={fileInputRef}
+                      onChange={handleImageInput}
+                      disabled={cierreImages.length >= 3}
+                      className="text-sm"
+                    />
+                    <div className="text-xs text-slate-500">{cierreImages.length} / 3 imágenes</div>
+                  </div>
+
+                  {previewImages.length > 0 && (
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {previewImages.map((src, i) => (
+                        <div key={i} className="relative">
+                          <img src={src} onClick={() => setLightboxIndex(i)} className="w-full h-20 object-cover rounded-md cursor-pointer border border-slate-100" />
+                          <button onClick={() => removeImageAt(i)} type="button" className="absolute -top-1 -right-1 bg-rose-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs">×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -858,6 +1019,11 @@ export default function FinalizarVisitaModal({
           </div>
         </form>
       </div>
+      {lightboxIndex !== null && previewImages[lightboxIndex] && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70" onClick={() => setLightboxIndex(null)}>
+          <img src={previewImages[lightboxIndex]} className="max-h-[90vh] max-w-[90vw] rounded-md shadow-lg" />
+        </div>
+      )}
     </div>
   );
 }

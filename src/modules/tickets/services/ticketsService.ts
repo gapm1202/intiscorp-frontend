@@ -317,7 +317,7 @@ export async function cambiarEstadoConImagenes(
 
     if (images && images.length > 0) {
       images.forEach((f, i) => {
-        // backend should accept 'imagenes[]' or 'imagenes' depending on implementation
+        // Para el endpoint de tickets el backend espera 'imagenes[]'
         form.append('imagenes[]', f, f.name);
       });
     }

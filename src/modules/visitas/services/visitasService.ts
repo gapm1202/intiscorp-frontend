@@ -155,7 +155,8 @@ export async function iniciarVisita(visitaId: string) {
 }
 
 // PATCH finalizar visita con registro de clausura
-export async function finalizarVisita(visitaId: string, payload: FinalizarVisitaPayload) {
+// PATCH finalizar visita con soporte opcional de imágenes (imagenes_visita[])
+export async function finalizarVisita(visitaId: string, payload: FinalizarVisitaPayload | Record<string, any>, images?: File[]) {
   const visitaIdNum = Number(visitaId);
   if (!Number.isInteger(visitaIdNum) || visitaIdNum <= 0) {
     throw new Error('No se encontró el ID de la visita a finalizar');
@@ -164,6 +165,49 @@ export async function finalizarVisita(visitaId: string, payload: FinalizarVisita
   const url = `${API_BASE}/api/visitas/${visitaIdNum}/finalizar`;
   const token = getToken();
 
+  // Si vienen imágenes, enviar multipart/form-data
+  if (Array.isArray(images) && images.length > 0) {
+    const form = new FormData();
+    // Append explicitly the fields expected by backend to avoid undefined body
+    if ((payload as any)?.fechaFinalizacion) form.append('fechaFinalizacion', String((payload as any).fechaFinalizacion));
+    if ((payload as any)?.diagnostico) form.append('diagnostico', String((payload as any).diagnostico));
+    if ((payload as any)?.resolucion) form.append('resolucion', String((payload as any).resolucion));
+    if ((payload as any)?.recomendacion) form.append('recomendacion', String((payload as any).recomendacion));
+    // Append remaining payload keys generically if any
+    Object.keys(payload || {}).forEach((k) => {
+      if (['fechaFinalizacion', 'diagnostico', 'resolucion', 'recomendacion'].includes(k)) return;
+      const v = (payload as any)[k];
+      if (v === undefined || v === null) return;
+      if (Array.isArray(v)) {
+        v.forEach((item) => form.append(`${k}[]`, typeof item === 'object' ? JSON.stringify(item) : String(item)));
+      } else if (typeof v === 'object') {
+        form.append(k, JSON.stringify(v));
+      } else {
+        form.append(k, String(v));
+      }
+    });
+
+    images.forEach((f) => {
+      form.append('imagenes_visita[]', f, f.name);
+    });
+
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: form,
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Error finalizing visita (multipart): ${res.status} - ${text}`);
+    }
+
+    return await res.json();
+  }
+
+  // Default: enviar JSON
   const res = await fetch(url, {
     method: 'PATCH',
     headers: {
