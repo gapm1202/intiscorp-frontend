@@ -1995,6 +1995,7 @@ export default function TicketDetailPage() {
       {showFinalizarVisitaModal && visitaToFinalizar && (
         <FinalizarVisitaModal
           visita={visitaToFinalizar}
+          kbEntryId={selectedKbEntry?.id ?? null}
           onClose={() => setShowFinalizarVisitaModal(false)}
           onVisitaFinalizada={async (v: Visita) => {
             setShowFinalizarVisitaModal(false);

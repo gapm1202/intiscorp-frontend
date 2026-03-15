@@ -14,6 +14,7 @@ interface FinalizarVisitaModalProps {
   onVisitaFinalizada: (visita: Visita) => void;
   onError: (error: string) => void;
   onAbrirModalEditarActivo?: (activo: any) => void | Promise<void>;
+  kbEntryId?: string | null;
 }
 
 export default function FinalizarVisitaModal({
@@ -22,6 +23,7 @@ export default function FinalizarVisitaModal({
   onVisitaFinalizada,
   onError,
   onAbrirModalEditarActivo,
+  kbEntryId,
 }: FinalizarVisitaModalProps) {
   const { user } = useAuth();
   const [diagnostico, setDiagnostico] = useState('');
@@ -499,7 +501,7 @@ export default function FinalizarVisitaModal({
         `Recomendación: ${recomendacion.trim()}`,
       ].join('\n\n');
 
-      const payload: FinalizarVisitaPayload & { ticketsResueltosAsociados?: number[]; diagnostico?: string; resolucion?: string; recomendacion?: string } = {
+      const payload: FinalizarVisitaPayload & { ticketsResueltosAsociados?: number[]; diagnostico?: string; resolucion?: string; recomendacion?: string; kb_entry_id?: string } = {
         fechaFinalizacion: new Date().toISOString(),
         tecnicoFinalizadorId,
         notasFinalizacion: resumenClausura,
@@ -509,6 +511,7 @@ export default function FinalizarVisitaModal({
         recomendacion: recomendacion.trim(),
         cuentaComoVisitaContractual: cuentaComoVisita,
         huboCambioComponente: hayChangioComponente,
+        ...(kbEntryId ? { kb_entry_id: kbEntryId } : {}),
         ...(destinatariosSeleccionados.length > 0 && { destinatariosCorreo: destinatariosSeleccionados }),
         ...(cuentaComoVisita && ticketsResueltosSeleccionados.length > 0 && { ticketsResueltosAsociados: ticketsResueltosSeleccionados }),
       };
@@ -549,6 +552,7 @@ export default function FinalizarVisitaModal({
               diagnostico: diagnostico.trim(),
               resolucion: resolucion.trim(),
               recomendacion: recomendacion.trim(),
+              ...(kbEntryId ? { kb_entry_id: kbEntryId } : {}),
             };
             try {
               // Marcar el ticket como RESUELTO y enviar las imágenes para que se guarden en ticket_imagenes_cierre
