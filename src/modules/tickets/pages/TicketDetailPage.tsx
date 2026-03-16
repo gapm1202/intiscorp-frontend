@@ -90,20 +90,6 @@ export default function TicketDetailPage() {
     )
   );
 
-  useEffect(() => {
-    if (!ticket) return;
-    try {
-      console.log('[TicketDetailPage] hasCierre:', hasCierre);
-      console.log('[TicketDetailPage] estado raw:', ticket.estado);
-      console.log('[TicketDetailPage] diagnostico present:', Boolean(ticket.diagnostico));
-      console.log('[TicketDetailPage] resolucion present:', Boolean(ticket.resolucion));
-      console.log('[TicketDetailPage] recomendacion present:', Boolean(ticket.recomendacion));
-      console.log('[TicketDetailPage] imagenes_cierre length:', ((ticket as any).imagenes_cierre || (ticket as any).cierre_imagenes || []).length);
-    } catch (e) {
-      console.warn('[TicketDetailPage] error al loggear hasCierre', e);
-    }
-  }, [ticket, hasCierre]);
-
   
 
   const showSuccessToast = (message: string) => {
@@ -421,17 +407,6 @@ export default function TicketDetailPage() {
   useEffect(() => {
     loadTicketDetail();
   }, [loadTicketDetail]);
-
-  // DEBUG: Log imágenes de cierre y URLs construidas para detectar problemas
-  useEffect(() => {
-    if (!ticket) return;
-    const imgs = (ticket as any).imagenes_cierre || (ticket as any).cierre_imagenes || [];
-    console.log('[TicketDetailPage] imagenes_cierre raw:', imgs);
-    imgs.forEach((img: any, i: number) => {
-      const raw = img?.url ?? img?.path ?? img?.src ?? img;
-      console.log(`[TicketDetailPage] imagen[${i}] raw:`, raw, 'full:', buildFullUrl(raw));
-    });
-  }, [ticket]);
 
   // Cargar contrato activo de la empresa del ticket
   useEffect(() => {

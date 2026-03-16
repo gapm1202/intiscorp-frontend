@@ -132,6 +132,9 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
     }
   }, [formData.fechaProgramada, formData.sedeId]);
 
+  const getLocalDateKey = (d: Date = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const minDateLocal = getLocalDateKey();
+
   const validarFormulario = async () => {
     setValidacionError('');
 
@@ -485,7 +488,7 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
               value={formData.fechaProgramada}
               onChange={(e) => setFormData({ ...formData, fechaProgramada: e.target.value })}
               required
-              min={new Date().toISOString().split('T')[0]}
+              min={minDateLocal}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>

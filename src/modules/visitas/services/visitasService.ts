@@ -192,16 +192,6 @@ export async function finalizarVisita(visitaId: string, payload: FinalizarVisita
       form.append('imagenes_visita', f, f.name);
     });
 
-    // DEBUG: Enumerar FormData entries para depuración local
-    try {
-      console.log('[visitasService] finalizarVisita - FormData entries:');
-      for (const pair of (form as any).entries()) {
-        console.log(' -', pair[0], pair[1]);
-      }
-    } catch (e) {
-      console.warn('[visitasService] No se pudo enumerar FormData entries', e);
-    }
-
     const res = await fetch(url, {
       method: 'PATCH',
       headers: {
