@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Visita, FinalizarVisitaPayload } from '../types';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { finalizarVisita, enviarResumenVisitaCorreo } from '../services/visitasService';
+import { htmlToPdfBase64 } from '../services/pdfService';
+import { generateVisitaReportHtml } from '../utils/visitaReportTemplate';
+import type { TicketAsociadoData } from '../utils/visitaReportTemplate';
 import { getTicketById, getTickets, cambiarEstadoConImagenes } from '@/modules/tickets/services/ticketsService';
 import { getUsuariosByEmpresa } from '@/modules/usuarios/services/usuariosService';
 import type { Usuario } from '@/modules/usuarios/services/usuariosService';
@@ -57,6 +59,18 @@ export default function FinalizarVisitaModal({
     const d = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(d.getTime())) return null;
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  // Return local ISO-like string without trailing Z, e.g. "2026-03-17T00:00:00.000"
+  const toLocalIsoNoZ = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    const ms = String(d.getMilliseconds()).padStart(3, '0');
+    return `${y}-${m}-${day}T${hh}:${mm}:${ss}.${ms}`;
   };
 
   const getTicketDateKey = (t: Ticket): string | null => {
@@ -275,382 +289,175 @@ export default function FinalizarVisitaModal({
     );
   };
 
-  const toBase64 = (bytes: Uint8Array): string => {
-    let binary = '';
-    const chunkSize = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-    }
-    return btoa(binary);
-  };
+  // ─────────────────────────────────────────────────────────────────
+  //  FILE → DATA URI helper
+  // ─────────────────────────────────────────────────────────────────
+  const fileToDataUri = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
 
   // ─────────────────────────────────────────────────────────────────
-  //  PDF GENERATION — rediseñado completamente
+  //  PDF GENERATION — HTML → Puppeteer (pdf-server.cjs)
   // ─────────────────────────────────────────────────────────────────
-  const generarResumenVisitaPdfBase64 = async () => {
-    const pdfDoc = await PDFDocument.create();
-    const W = 595.28;
-    const H = 841.89;
-
-    const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontBold    = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    const fontItalic  = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
-
-    // ── Paleta azul-celeste / blanco ──
-    const C = {
-      navy:       rgb(0.06, 0.20, 0.42),   // #0F3469 — encabezado oscuro
-      sky:        rgb(0.12, 0.53, 0.90),   // #1E87E5 — acento celeste
-      skyLight:   rgb(0.82, 0.92, 0.98),   // #D1EBF9 — fondo suave
-      skyMid:     rgb(0.55, 0.78, 0.94),   // #8CC7EF — borde / divisor
-      white:      rgb(1, 1, 1),
-      offWhite:   rgb(0.97, 0.98, 0.99),   // #F7FAFD — filas alternas
-      textDark:   rgb(0.13, 0.18, 0.28),   // #222D47
-      textMid:    rgb(0.35, 0.42, 0.54),   // #596A8A
-      textLight:  rgb(0.58, 0.65, 0.75),   // #94A6BF
-      green:      rgb(0.10, 0.60, 0.36),   // #19994B
-      greenBg:    rgb(0.88, 0.97, 0.92),   // #E1F7EB
-      red:        rgb(0.76, 0.18, 0.22),   // #C22E38
-      redBg:      rgb(0.99, 0.90, 0.90),   // #FCE6E6
-    };
-
-    const MX    = 44;           // margen lateral
-    const CW    = W - MX * 2;  // ancho de contenido
-    const HDR_H = 80;           // altura del encabezado
-    const FTR_H = 36;           // altura del pie
-    const BODY_TOP = H - HDR_H - 16;
-    const BODY_BOTTOM = FTR_H + 16;
-
-    // ── Logo ──
-    let logoImage: any = null;
+  const generarResumenVisitaPdfBase64 = async (): Promise<string> => {
+    // ── Logo as data URI ────────────────────────────────────────────
+    let logoDataUri: string | undefined;
     try {
       const logoResp = await fetch('/logo.png');
-      const logoBytes = new Uint8Array(await logoResp.arrayBuffer());
-      try { logoImage = await pdfDoc.embedPng(logoBytes); }
-      catch { logoImage = await pdfDoc.embedJpg(logoBytes); }
-    } catch { /* sin logo */ }
+      const blob = await logoResp.blob();
+      logoDataUri = await fileToDataUri(new File([blob], 'logo.png', { type: blob.type }));
+    } catch { /* logo unavailable */ }
+    // ── Cierre images → data URIs ───────────────────────────────────
+    const cierreImagenes: string[] = await Promise.all(
+      cierreImages.map((f) => fileToDataUri(f).catch(() => '')),
+    ).then((uris) => uris.filter(Boolean));
 
-    // ── Estado mutable de página ──
-    let page = pdfDoc.addPage([W, H]);
-    let y = BODY_TOP;
-
-    // ─── Funciones base ───────────────────────────────────────────
-
-    const drawHeader = (pg: typeof page) => {
-      // Fondo navy completo
-      pg.drawRectangle({ x: 0, y: H - HDR_H, width: W, height: HDR_H, color: C.navy });
-      // Barra inferior celeste
-      pg.drawRectangle({ x: 0, y: H - HDR_H - 4, width: W, height: 4, color: C.sky });
-      // Franja lateral izquierda celeste
-      pg.drawRectangle({ x: 0, y: H - HDR_H, width: 6, height: HDR_H, color: C.sky });
-
-      // Logo
-      if (logoImage) {
-        const d = logoImage.scaleToFit(44, 44);
-        const lx = MX;
-        const ly = H - HDR_H + (HDR_H - d.height) / 2;
-        pg.drawRectangle({ x: lx - 5, y: ly - 5, width: d.width + 10, height: d.height + 10, color: C.white, borderColor: C.skyMid, borderWidth: 0.5 });
-        pg.drawImage(logoImage, { x: lx, y: ly, width: d.width, height: d.height });
-      }
-
-      const tx = logoImage ? MX + 60 : MX + 14;
-      pg.drawText('REPORTE DE CIERRE DE VISITA', {
-        x: tx, y: H - 33, size: 16, font: fontBold, color: C.white,
-      });
-      pg.drawText(`Documento generado el ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}`, {
-        x: tx, y: H - 51, size: 8, font: fontRegular, color: C.skyMid,
-      });
-
-      // Número de página provisional (top-right)
-      const pgLabel = `Pág. ${pdfDoc.getPageCount()}`;
-      pg.drawText(pgLabel, {
-        x: W - MX - fontRegular.widthOfTextAtSize(pgLabel, 8),
-        y: H - 42,
-        size: 8, font: fontRegular, color: C.skyMid,
-      });
-    };
-
-    const drawFooter = (pg: typeof page) => {
-      pg.drawLine({
-        start: { x: MX, y: FTR_H + 12 }, end: { x: W - MX, y: FTR_H + 12 },
-        thickness: 0.6, color: C.skyMid,
-      });
-      pg.drawText('IntisCorp · Sistema de Gestión de Visitas', {
-        x: MX, y: FTR_H - 1, size: 7, font: fontRegular, color: C.textLight,
-      });
-    };
-
-    const newPage = () => {
-      drawFooter(page);
-      page = pdfDoc.addPage([W, H]);
-      drawHeader(page);
-      y = BODY_TOP;
-    };
-
-    const ensureSpace = (h: number) => { if (y - h < BODY_BOTTOM) newPage(); };
-
-    // ─── Sección header (barra navy con texto blanco) ─────────────
-    const drawSection = (title: string, icon?: string) => {
-      ensureSpace(30);
-      y -= 12;
-      page.drawRectangle({ x: MX, y: y - 6, width: CW, height: 26, color: C.navy });
-      page.drawRectangle({ x: MX, y: y - 6, width: 4, height: 26, color: C.sky });
-      const label = icon ? `${icon}  ${title}` : title;
-      page.drawText(label, { x: MX + 14, y: y + 4, size: 9, font: fontBold, color: C.white });
-      y -= 26;
-    };
-
-    // ─── Tabla de dos columnas para datos info ────────────────────
-    /**
-     * rows: array de [label, value] pares
-     */
-    const drawInfoTable = (rows: [string, string][]) => {
-      const rowH = 22;
-      const colW = CW / 2;
-
-      for (let i = 0; i < rows.length; i++) {
-        const [label, value] = rows[i];
-        ensureSpace(rowH + 4);
-        const bg = i % 2 === 0 ? C.offWhite : C.white;
-        page.drawRectangle({ x: MX, y: y - rowH + 8, width: CW, height: rowH, color: bg });
-        // Borde inferior
-        page.drawLine({ start: { x: MX, y: y - rowH + 8 }, end: { x: MX + CW, y: y - rowH + 8 }, thickness: 0.4, color: rgb(0.88, 0.92, 0.96) });
-        // Label
-        page.drawText(label.toUpperCase(), { x: MX + 10, y: y - 2, size: 7.5, font: fontBold, color: C.textMid });
-        // Value
-        const maxValChars = 45;
-        const val = (value || '—').length > maxValChars ? value.slice(0, maxValChars) + '…' : (value || '—');
-        page.drawText(val, { x: MX + colW * 0.78, y: y - 2, size: 8.5, font: fontBold, color: C.textDark });
-        y -= rowH;
-      }
-      y -= 6;
-    };
-
-    // ─── Badge sí/no ──────────────────────────────────────────────
-    const drawBadgeRow = (label: string, value: boolean, isOdd: boolean) => {
-      const rowH = 24;
-      ensureSpace(rowH + 4);
-      const bg = isOdd ? C.offWhite : C.white;
-      page.drawRectangle({ x: MX, y: y - rowH + 8, width: CW, height: rowH, color: bg });
-      page.drawLine({ start: { x: MX, y: y - rowH + 8 }, end: { x: MX + CW, y: y - rowH + 8 }, thickness: 0.4, color: rgb(0.88, 0.92, 0.96) });
-      page.drawText(label.toUpperCase(), { x: MX + 10, y: y - 1, size: 7.5, font: fontBold, color: C.textMid });
-
-      // Badge pill
-      const pillText = value ? '  SÍ  ' : '  NO  ';
-      const pillColor = value ? C.green : C.red;
-      const pillBg = value ? C.greenBg : C.redBg;
-      const pillW = fontBold.widthOfTextAtSize(pillText, 8) + 8;
-      const px = MX + CW * 0.6;
-      page.drawRectangle({ x: px, y: y - 7, width: pillW, height: 16, color: pillBg, borderColor: pillColor, borderWidth: 0.8 });
-      page.drawText(pillText, { x: px + 4, y: y - 2, size: 8, font: fontBold, color: pillColor });
-      y -= rowH;
-    };
-
-    // ─── Campo de texto largo ──────────────────────────────────────
-    const drawTextField = (label: string, text: string) => {
-      const fieldText = (text || '').trim() || 'No especificado.';
-      const maxChars = 82;
-      const rawLines: string[] = [];
-      for (let i = 0; i < fieldText.length; i += maxChars) rawLines.push(fieldText.slice(i, i + maxChars));
-      const lines = rawLines.slice(0, 10);
-      const innerH = lines.length * 13 + 12;
-      const totalH = innerH + 28;
-
-      ensureSpace(totalH + 10);
-      y -= 8;
-
-      // Label flotante
-      page.drawText(label.toUpperCase(), { x: MX, y: y, size: 7.5, font: fontBold, color: C.sky });
-      y -= 10;
-
-      // Caja con fondo y borde izquierdo celeste
-      page.drawRectangle({ x: MX, y: y - innerH, width: CW, height: innerH + 4, color: C.skyLight, borderColor: C.skyMid, borderWidth: 0.6 });
-      page.drawRectangle({ x: MX, y: y - innerH, width: 3, height: innerH + 4, color: C.sky });
-
-      let ty = y - 4;
-      for (const line of lines) {
-        page.drawText(line, { x: MX + 12, y: ty, size: 8.5, font: fontRegular, color: C.textDark });
-        ty -= 13;
-      }
-      if (rawLines.length > 10) {
-        page.drawText('[ texto recortado … ]', { x: MX + 12, y: ty, size: 7.5, font: fontItalic, color: C.textLight });
-      }
-      y = y - innerH - 10;
-    };
-
-    const normalizeUrl = (rawUrl: string) => {
-      if (!rawUrl) return '';
-      const trimmed = String(rawUrl).trim();
-      if (!trimmed) return '';
-      if (/^https?:\/\//i.test(trimmed)) return trimmed;
-      return `${window.location.origin.replace(/\/$/, '')}/${trimmed.replace(/^\//, '')}`;
-    };
-
-    // ─── Datos ────────────────────────────────────────────────────
-    const fechaVisita = new Date(visita.fechaProgramada).toLocaleDateString('es-ES', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-    });
-    const tecEncargado = visita.tecnicosAsignados.find((t) => t.esEncargado)?.tecnicoNombre || '—';
-    const empresaNombre = visita.empresaNombre || '—';
-    const sedeNombre = visita.sedeNombre || '—';
-    const tipoVisitaFormateado = visita.tipoVisita.replace(/_/g, ' ');
-    const ticketNumero = ticketCodigo || visita.ticketNumero || visita.ticketId || '—';
-    const activoNombre = activo?.activo_codigo || activo?.assetId || activo?.codigo || visita.activoNombre || '—';
-    const usuarioActivo = usuarioNombreTicket || activo?.usuario_nombre || visita.usuarioTicketNombre || '—';
-
-    // ════════════════════════════════════════════════════
-    //  PÁGINA 1
-    // ════════════════════════════════════════════════════
-    drawHeader(page);
-
-    // ① Información general
-    drawSection('Información General');
-    drawInfoTable([
-      ['Empresa',          empresaNombre],
-      ['Sede',             sedeNombre],
-      ['Tipo de Visita',   tipoVisitaFormateado],
-      ['Fecha Programada', fechaVisita],
-      ...(visita.horaProgramada ? [['Hora Programada', visita.horaProgramada] as [string, string]] : []),
-    ]);
-
-    // ② Ticket & activo (condicional)
-    if (visita.tipoVisita === 'POR_TICKET' || visita.ticketId) {
-      drawSection('Información del Ticket');
-      drawInfoTable([
-        ['N° de Ticket',      String(ticketNumero)],
-        ['Activo Asociado',   String(activoNombre)],
-        ['Usuario Asignado',  String(usuarioActivo)],
-      ]);
-    }
-
-    // ③ Equipo técnico
-    drawSection('Equipo Técnico');
-    const otrosTecnicos = visita.tecnicosAsignados.length > 1
-      ? visita.tecnicosAsignados.filter((t) => !t.esEncargado).map((t) => t.tecnicoNombre).join(', ')
-      : '—';
-    drawInfoTable([
-      ['Técnico Encargado',  tecEncargado],
-      ...(visita.tecnicosAsignados.length > 1 ? [['Técnicos de Apoyo', otrosTecnicos] as [string, string]] : []),
-      ['Total de Técnicos',  String(visita.tecnicosAsignados.length)],
-    ]);
-
-    // ④ Resultado
-    drawSection('Resultado de la Visita');
-    y -= 4;
-    drawBadgeRow('Visita Contractual',    cuentaComoVisita ?? false,   true);
-    drawBadgeRow('Cambio de Componente',  hayChangioComponente ?? false, false);
-    y -= 4;
-
-    // ⑤ Detalle del cierre
-    drawSection('Detalle del Cierre');
-    drawTextField('Diagnóstico',    diagnostico);
-    drawTextField('Resolución',     resolucion);
-    drawTextField('Recomendación',  recomendacion);
-
-    drawFooter(page);
-
-    // ════════════════════════════════════════════════════
-    //  PÁGINAS: Tickets seleccionados
-    // ════════════════════════════════════════════════════
+    // ── Tickets asociados ───────────────────────────────────────────
     const selectedTicketIds = [...new Set(ticketsResueltosSeleccionados)]
-      .map((id) => Number(id))
+      .map(Number)
       .filter((id) => Number.isInteger(id) && id > 0);
 
+    const ticketsAsociados: TicketAsociadoData[] = [];
     if (selectedTicketIds.length > 0) {
-      const ticketDetails = await Promise.all(
-        selectedTicketIds.map(async (id) => {
-          try { return await getTicketById(id); } catch { return null; }
-        }),
+      const details = await Promise.all(
+        selectedTicketIds.map((id) => getTicketById(id).catch(() => null)),
       );
-
-      for (let i = 0; i < ticketDetails.length; i++) {
-        const t = ticketDetails[i] as any;
-        if (!t) continue;
-
-        page = pdfDoc.addPage([W, H]);
-        drawHeader(page);
-        y = BODY_TOP;
-
-        // Título de ticket
-        ensureSpace(40);
-        y -= 8;
-        const codigo = String(t.codigo_ticket || `#${t.id || '—'}`);
-        page.drawRectangle({ x: MX, y: y - 6, width: CW, height: 30, color: C.sky });
-        page.drawText(`TICKET ${i + 1}`, { x: MX + 14, y: y + 8, size: 8, font: fontBold, color: rgb(0.82, 0.93, 1) });
-        page.drawText(codigo, { x: MX + 14, y: y - 2, size: 12, font: fontBold, color: C.white });
-        y -= 38;
-
-        drawTextField('Diagnóstico',   String(t.diagnostico || ''));
-        drawTextField('Solución',      String(t.resolucion || ''));
-        drawTextField('Recomendación', String(t.recomendacion || ''));
-
-        // Fotos del cierre
-        const imgs = (t.imagenes_cierre || t.cierre_imagenes || []) as Array<any>;
-
-        drawSection('Evidencia Fotográfica');
-
-        if (!imgs.length) {
-          ensureSpace(22);
-          page.drawText('No hay fotografías de cierre adjuntas para este ticket.', {
-            x: MX + 10, y: y - 4, size: 8.5, font: fontItalic, color: C.textLight,
-          });
-          y -= 22;
-        } else {
-          const maxImages = Math.min(imgs.length, 4);
-          const gap = 12;
-          const imgW = (CW - gap) / 2;
-          const imgH = 140;
-
-          for (let j = 0; j < maxImages; j++) {
-            const col = j % 2;
-            if (col === 0) { ensureSpace(imgH + 24); y -= 6; }
-
-            const xImg = MX + col * (imgW + gap);
-            const yImg = y;
-
-            // Marco con sombra simulada
-            page.drawRectangle({ x: xImg + 2, y: yImg - imgH - 2, width: imgW, height: imgH, color: rgb(0.80, 0.88, 0.95) });
-            page.drawRectangle({ x: xImg, y: yImg - imgH, width: imgW, height: imgH, color: C.skyLight, borderColor: C.skyMid, borderWidth: 0.8 });
-
-            const raw = imgs[j]?.url ?? imgs[j]?.path ?? imgs[j]?.src ?? imgs[j];
-            const imageUrl = normalizeUrl(String(raw || ''));
-            try {
-              const r = await fetch(imageUrl);
-              const bytes = new Uint8Array(await r.arrayBuffer());
-              const ctype = (r.headers.get('content-type') || '').toLowerCase();
-              let embedded: any = null;
-              if (ctype.includes('png')) embedded = await pdfDoc.embedPng(bytes);
-              else if (ctype.includes('jpeg') || ctype.includes('jpg')) embedded = await pdfDoc.embedJpg(bytes);
-              else { try { embedded = await pdfDoc.embedPng(bytes); } catch { embedded = await pdfDoc.embedJpg(bytes); } }
-              const fit = embedded.scaleToFit(imgW - 10, imgH - 10);
-              page.drawImage(embedded, {
-                x: xImg + (imgW - fit.width) / 2,
-                y: yImg - imgH + (imgH - fit.height) / 2,
-                width: fit.width,
-                height: fit.height,
-              });
-            } catch {
-              page.drawText('Imagen no disponible', { x: xImg + 10, y: yImg - 24, size: 7.5, font: fontItalic, color: C.textLight });
-            }
-
-            if (col === 1 || j === maxImages - 1) { y -= imgH + 14; }
-          }
-        }
-
-        drawFooter(page);
-      }
+      details.forEach((t, i) => {
+        if (!t) return;
+        const rawImgs = ((t as any).imagenes_cierre || (t as any).cierre_imagenes || []) as Array<any>;
+        const imagenesUrls = rawImgs
+          .map((img: any) => {
+            const raw = img?.url ?? img?.path ?? img?.src ?? img;
+            const trimmed = String(raw || '').trim();
+            if (!trimmed) return '';
+            if (/^https?:\/\//i.test(trimmed)) return trimmed;
+            return `${window.location.origin.replace(/\/$/, '')}/${trimmed.replace(/^\//, '')}`;
+          })
+          .filter(Boolean)
+          .slice(0, 4) as string[];
+        ticketsAsociados.push({
+          numero: i + 1,
+          codigo: String((t as any).codigo_ticket || `#${(t as any).id || '—'}`),
+          diagnostico: String((t as any).diagnostico || ''),
+          solucion: String((t as any).resolucion || ''),
+          recomendacion: String((t as any).recomendacion || ''),
+          imagenesUrls,
+        });
+      });
     }
 
-    // ─── Numeración final ─────────────────────────────────────────
-    const totalPages = pdfDoc.getPageCount();
-    pdfDoc.getPages().forEach((pg, p) => {
-      const label = `Pág. ${p + 1} / ${totalPages}`;
-      const lw = fontRegular.widthOfTextAtSize(label, 8);
-      pg.drawRectangle({ x: W - MX - lw - 4, y: H - 48, width: lw + 8, height: 14, color: C.navy });
-      pg.drawText(label, { x: W - MX - lw, y: H - 44, size: 8, font: fontRegular, color: C.skyMid });
-    });
+    // ── Build data object ───────────────────────────────────────────
+    const tecEncargado = visita.tecnicosAsignados.find((t) => t.esEncargado)?.tecnicoNombre || '—';
+    const otrosTecnicos = visita.tecnicosAsignados.length > 1
+      ? visita.tecnicosAsignados.filter((t) => !t.esEncargado).map((t) => t.tecnicoNombre).join(', ')
+      : '';
 
-    const bytes = await pdfDoc.save();
-    return toBase64(bytes);
+    const reportData = {
+      empresaNombre: visita.empresaNombre || '—',
+      sedeNombre: visita.sedeNombre || '—',
+      tipoVisita: visita.tipoVisita.replace(/_/g, ' '),
+      fechaVisita: new Date(visita.fechaProgramada).toLocaleDateString('es-ES', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+      }),
+      horaProgramada: visita.horaProgramada,
+      tecnicoEncargado: tecEncargado,
+      otrosTecnicos,
+      totalTecnicos: visita.tecnicosAsignados.length,
+      tieneTicket: visita.tipoVisita === 'POR_TICKET' || Boolean(visita.ticketId),
+      ticketCodigo: ticketCodigo || String(visita.ticketNumero || visita.ticketId || '') || undefined,
+      activoNombre: activo?.activo_codigo || activo?.assetId || activo?.codigo || visita.activoNombre || undefined,
+      usuarioTicket: usuarioNombreTicket || (activo as any)?.usuario_nombre || visita.usuarioTicketNombre || undefined,
+      cuentaComoVisita: cuentaComoVisita ?? false,
+      huboCambioComponente: hayChangioComponente ?? false,
+      diagnostico: diagnostico.trim(),
+      solucion: resolucion.trim(),
+      recomendacion: recomendacion.trim(),
+      cierreImagenes,
+      ticketsAsociados,
+      logoDataUri,
+      fechaGeneracion: new Date().toLocaleDateString('es-ES', {
+        day: '2-digit', month: 'long', year: 'numeric',
+      }),
+    };
+
+    const html = generateVisitaReportHtml(reportData);
+
+    const visitaPayload = {
+      // IDs
+      visitaId: (visita as any)?._id || (visita as any)?.id || '',
+      visita_id: (visita as any)?._id || (visita as any)?.id || '',
+
+      // Empresa / Sede
+      cliente: visita.empresaNombre || '',
+      empresa: visita.empresaNombre || '',
+      empresa_nombre: visita.empresaNombre || '',
+      empresaNombre: visita.empresaNombre || '',
+      sede: visita.sedeNombre || '',
+      sede_nombre: visita.sedeNombre || '',
+      sedeNombre: visita.sedeNombre || '',
+
+      // Tipo y estado (forzamos FINALIZADA porque este PDF se genera al finalizar)
+      tipoVisita: visita.tipoVisita?.replace(/_/g, ' ') || '',
+      tipo_visita: visita.tipoVisita?.replace(/_/g, ' ') || '',
+      estado: 'FINALIZADA',
+
+      // Ticket
+      ticket: reportData.ticketCodigo || ticketCodigo || String(visita.ticketNumero || visita.ticketId || '') || '',
+      ticket_codigo: reportData.ticketCodigo || ticketCodigo || String(visita.ticketNumero || visita.ticketId || '') || '',
+      ticketCodigo: reportData.ticketCodigo || ticketCodigo || String(visita.ticketNumero || visita.ticketId || '') || '',
+
+      // Activo / Usuario
+      activoNombre: reportData.activoNombre || '',
+      activo_nombre: reportData.activoNombre || '',
+      activo_codigo: reportData.activoNombre || '',
+      usuarioTicket: reportData.usuarioTicket || '',
+      usuario_ticket: reportData.usuarioTicket || '',
+      usuario_nombre: reportData.usuarioTicket || '',
+
+      // Técnicos
+      tecnico: reportData.tecnicoEncargado || '',
+      tecnico_encargado: reportData.tecnicoEncargado || '',
+      tecnicoEncargado: reportData.tecnicoEncargado || '',
+      otrosTecnicos: reportData.otrosTecnicos || '',
+      otros_tecnicos: reportData.otrosTecnicos || '',
+      totalTecnicos: reportData.totalTecnicos || 1,
+      total_tecnicos: reportData.totalTecnicos || 1,
+
+      // Fecha
+      fecha: visita?.fechaProgramada
+        ? toLocalIsoNoZ(new Date(visita.fechaProgramada))
+        : toLocalIsoNoZ(new Date()),
+      fecha_programada: visita?.fechaProgramada
+        ? toLocalIsoNoZ(new Date(visita.fechaProgramada))
+        : toLocalIsoNoZ(new Date()),
+      fechaProgramada: visita?.fechaProgramada || '',
+      horaProgramada: visita.horaProgramada || '',
+      hora_programada: visita.horaProgramada || '',
+
+      // Cierre
+      diagnostico: reportData.diagnostico || '',
+      resolucion: resolucion.trim(),
+      recomendacion: reportData.recomendacion || '',
+      cuentaComoVisita: cuentaComoVisita ?? false,
+      cuenta_como_visita: cuentaComoVisita ?? false,
+      cuentaComoVisitaContractual: cuentaComoVisita ?? false,
+      huboCambioComponente: hayChangioComponente ?? false,
+      hubo_cambio_componente: hayChangioComponente ?? false,
+      cambio_componente: hayChangioComponente ?? false,
+
+      // Imágenes y tickets asociados
+      cierreImagenes,
+      cierre_imagenes: cierreImagenes,
+      imagenes: cierreImagenes,
+      ticketsAsociados: reportData.ticketsAsociados || [],
+      tickets_asociados: reportData.ticketsAsociados || [],
+    };
+
+    return htmlToPdfBase64(html, visitaPayload);
   };
 
   const getTecnicoFinalizadorId = () => {
