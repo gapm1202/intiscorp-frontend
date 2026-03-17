@@ -37,6 +37,10 @@ export interface VisitaReportData {
   tecnicoFirmaNombre?: string;
   /** Firma rasterizada a imagen (data URI) */
   firmaTecnicoDataUri?: string;
+  /** Firma del cliente rasterizada a imagen (data URI) */
+  firmaClienteDataUri?: string;
+  /** Nombre del cliente que firmó */
+  clienteNombre?: string;
   ticketsAsociados: TicketAsociadoData[];
   /** data: URI of the logo, embedded so no external fetch needed */
   logoDataUri?: string;
@@ -104,175 +108,320 @@ const pageHeader = (logoDataUri?: string): string => `
 const sectionTitle = (title: string): string =>
   `<div class="section-title"><span class="section-accent"></span>${esc(title)}</div>`;
 
-const signatureBlock = (firmaDataUri?: string, tecnicoNombre?: string): string => {
-  if (!firmaDataUri) {
-    return `
-      <div class="signature-box signature-empty">
-        <div class="signature-placeholder">No se registró firma del técnico.</div>
-      </div>`;
-  }
+// ── Bloque de firmas: técnico (izq) + cliente (der), imagen sobre la raya ──
+const signatureBlock = (
+  firmaDataUri?: string,
+  tecnicoNombre?: string,
+  firmaClienteDataUri?: string,
+  clienteNombre?: string,
+): string => `
+  <div class="signatures-row">
+    <div class="signature-col">
+      <div class="signature-box">
+        ${firmaDataUri
+          ? `<img class="signature-image" src="${firmaDataUri}" alt="Firma del técnico" />`
+          : `<div class="signature-blank"></div>`}
+        <div class="signature-line"></div>
+        <div class="signature-caption">${esc(tecnicoNombre || 'Técnico Encargado')}</div>
+        <div class="signature-role">Firma del Técnico</div>
+      </div>
+    </div>
+    <div class="signature-divider"></div>
+    <div class="signature-col">
+      <div class="signature-box">
+        ${firmaClienteDataUri
+          ? `<img class="signature-image" src="${firmaClienteDataUri}" alt="Firma del cliente" />`
+          : `<div class="signature-blank"></div>`}
+        <div class="signature-line"></div>
+        <div class="signature-caption">${esc(clienteNombre || 'Cliente')}</div>
+        <div class="signature-role">Firma de Conformidad</div>
+      </div>
+    </div>
+  </div>`;
 
-  return `
-    <div class="signature-box">
-      <img class="signature-image" src="${firmaDataUri}" alt="Firma del técnico" />
-      <div class="signature-line"></div>
-      <div class="signature-caption">${esc(tecnicoNombre || 'Técnico Encargado')}</div>
-    </div>`;
-};
-
-// ── CSS — compact professional report ────────────────────────────────────────
+// ── CSS — refined corporate report ───────────────────────────────────────────
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { margin: 0; padding: 0; }
 body {
-  font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'DM Sans', -apple-system, 'Segoe UI', sans-serif;
   background: #fff;
-  color: #111827;
+  color: #0f172a;
   font-size: 10.5px;
-  line-height: 1.45;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
 
 /* ── Page layout ── */
-.page { width: 210mm; min-height: 297mm; padding: 14mm 16mm 12mm; display: block; position: relative; }
+.page { width: 210mm; min-height: 297mm; padding: 14mm 16mm 18mm; display: block; position: relative; }
 .page-break { break-before: page; }
 
 /* ── Header ── */
 .header {
-  display: flex; align-items: center; gap: 10px;
-  padding-bottom: 8px; margin-bottom: 12px;
-  border-bottom: 2px solid #1e40af;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 10px;
+  margin-bottom: 14px;
 }
-.header-left { width: 40px; flex-shrink: 0; }
-.header-logo { width: 40px; height: 40px; object-fit: contain; display: block; }
-.header-logo-placeholder { width: 40px; height: 40px; }
-.header-center { flex: 1; }
+.header-left { width: 44px; flex-shrink: 0; }
+.header-logo { width: 44px; height: 44px; object-fit: contain; display: block; }
+.header-logo-placeholder { width: 44px; height: 44px; }
+.header-center { flex: 1; border-left: 3px solid #0f4c8a; padding-left: 12px; }
 .header-title {
-  font-size: 15px; font-weight: 800; color: #1e3a5f;
-  letter-spacing: -0.3px; line-height: 1.2;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f2d54;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  line-height: 1.2;
 }
-.header-subtitle { font-size: 9px; color: #6b7280; font-weight: 500; margin-top: 1px; letter-spacing: 0.3px; }
-.header-right { width: 40px; }
+.header-subtitle {
+  font-size: 8.5px;
+  color: #64748b;
+  font-weight: 400;
+  margin-top: 2px;
+  letter-spacing: 0.4px;
+}
+.header-right { width: 44px; }
+.header::after {
+  content: '';
+  display: block;
+  position: absolute;
+  left: 16mm;
+  right: 16mm;
+  top: calc(14mm + 54px);
+  height: 1px;
+  background: linear-gradient(to right, #0f4c8a 30%, #e2e8f0 100%);
+}
 
 /* ── Section titles ── */
-.section { margin-bottom: 10px; }
+.section { margin-bottom: 12px; }
 .section-title {
-  font-size: 9.5px; font-weight: 700; color: #1e40af;
-  text-transform: uppercase; letter-spacing: 0.8px;
-  padding-bottom: 3px; margin-bottom: 6px;
-  border-bottom: 1px solid #dbeafe;
-  display: flex; align-items: center; gap: 4px;
+  font-size: 8px;
+  font-weight: 700;
+  color: #0f4c8a;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  padding-bottom: 4px;
+  margin-bottom: 7px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
-.section-accent { display: inline-block; width: 3px; height: 12px; background: #2563eb; border-radius: 2px; }
+.section-accent {
+  display: inline-block;
+  width: 2px;
+  height: 11px;
+  background: #0f4c8a;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
 
 /* ── Info grid ── */
 .info-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 0;
-  border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
   background: #fff;
 }
 .info-cell {
-  padding: 6px 10px;
-  border-bottom: 1px solid #f3f4f6;
-  border-right: 1px solid #f3f4f6;
+  padding: 7px 11px;
+  border-bottom: 1px solid #f1f5f9;
+  border-right: 1px solid #f1f5f9;
+  background: #fff;
 }
 .info-cell:nth-child(even) { border-right: none; }
 .info-cell.full { grid-column: 1 / -1; border-right: none; }
-.info-cell:last-child, .info-cell:nth-last-child(2):nth-child(odd) { border-bottom: none; }
-.info-label { font-size: 8.5px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 1px; }
-.info-value { font-size: 11px; color: #111827; font-weight: 600; }
+.info-cell:last-child,
+.info-cell:nth-last-child(2):nth-child(odd) { border-bottom: none; }
+.info-cell:nth-child(4n+1),
+.info-cell:nth-child(4n+2) { background: #f8fafc; }
+.info-label {
+  font-size: 7.5px;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+.info-value {
+  font-size: 10.5px;
+  color: #0f172a;
+  font-weight: 600;
+  line-height: 1.3;
+}
 
 /* ── Text field blocks ── */
-.field-block { margin-bottom: 8px; }
+.field-block { margin-bottom: 9px; }
 .field-label {
-  font-size: 9px; font-weight: 700; color: #1e40af;
-  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px;
+  font-size: 7.5px;
+  font-weight: 700;
+  color: #0f4c8a;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 4px;
 }
 .field-content {
-  font-size: 10.5px; color: #1f2937; line-height: 1.5;
-  white-space: pre-wrap; word-break: break-word;
-  padding: 6px 8px; background: #f9fafb; border-radius: 4px;
-  border-left: 3px solid #dbeafe;
+  font-size: 10.5px;
+  color: #1e293b;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 7px 10px;
+  background: #f8fafc;
+  border-radius: 3px;
+  border-left: 2px solid #0f4c8a;
 }
-.divider { border: none; border-top: 1px solid #f3f4f6; margin: 6px 0; }
+.divider { border: none; border-top: 1px solid #f1f5f9; margin: 7px 0; }
 
 /* ── Badges ── */
 .badge {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 8px; border-radius: 999px;
-  font-weight: 700; font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 3px;
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.3px;
 }
-.badge-yes { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
-.badge-no  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.badge-yes { background: #ecfdf5; color: #047857; border: 1px solid #6ee7b7; }
+.badge-no  { background: #fef2f2; color: #b91c1c; border: 1px solid #fca5a5; }
 
-/* ── Ticket blocks ── */
+/* ── Ticket header block ── */
 .ticket-header {
-  padding: 7px 10px; border-radius: 6px; margin-bottom: 8px;
-  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  background: #0f2d54;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
-.ticket-number-label { font-size: 9px; font-weight: 700; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.5px; }
-.ticket-code { font-weight: 800; color: #fff; font-size: 12px; letter-spacing: -0.2px; }
+.ticket-number-label {
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.55);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.ticket-code {
+  font-family: 'DM Mono', monospace;
+  font-weight: 500;
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
 
 /* ── Images grid ── */
-.images-grid { display: grid; gap: 6px; grid-template-columns: repeat(3, 1fr); margin-top: 6px; }
+.images-grid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 6px;
+}
 .image-item {
-  overflow: hidden; border-radius: 5px; background: #f8fafc;
-  border: 1px solid #e2e8f0; aspect-ratio: 4/3;
-  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  aspect-ratio: 4/3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .image-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.no-images { font-size: 10px; color: #9ca3af; font-style: italic; padding: 4px 0; }
+.no-images { font-size: 10px; color: #94a3b8; font-style: italic; padding: 4px 0; }
 
-/* ── Signature ── */
-.signature-box {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+/* ── Signature block — two columns side by side con imagen sobre la raya ── */
+.signatures-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
   background: #fff;
-  padding: 10px 12px;
-  min-height: 96px;
+}
+.signature-col {
+  flex: 1;
+  padding: 14px 14px 10px 14px;
+}
+.signature-divider {
+  width: 1px;
+  background: #e2e8f0;
+  flex-shrink: 0;
+}
+.signature-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 90px;
 }
 .signature-image {
   width: 100%;
   max-height: 70px;
   object-fit: contain;
   display: block;
+  margin-bottom: 4px;
+}
+.signature-blank {
+  flex: 1;
+  min-height: 70px;
+  width: 100%;
 }
 .signature-line {
-  margin-top: 6px;
+  width: 100%;
   border-top: 1px solid #94a3b8;
+  margin: 0 0 5px 0;
 }
 .signature-caption {
-  margin-top: 4px;
-  font-size: 9px;
-  color: #475569;
+  font-size: 9.5px;
+  color: #0f172a;
   font-weight: 600;
   text-align: center;
+  letter-spacing: 0.1px;
+  line-height: 1.2;
 }
-.signature-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.signature-placeholder {
-  font-size: 10px;
-  color: #9ca3af;
-  font-style: italic;
+.signature-role {
+  font-size: 7.5px;
+  color: #94a3b8;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  text-align: center;
+  margin-top: 2px;
 }
 
 /* ── Footer ── */
 .footer {
-  position: absolute; bottom: 10mm; left: 16mm; right: 16mm;
-  font-size: 8.5px; color: #9ca3af; text-align: center;
-  border-top: 1px solid #f3f4f6; padding-top: 6px;
+  position: absolute;
+  bottom: 10mm;
+  left: 16mm;
+  right: 16mm;
+  font-size: 8px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 5px;
+  letter-spacing: 0.2px;
 }
+.footer-brand { font-weight: 600; color: #64748b; }
 
 @media print {
-  .page { padding: 10mm 14mm 10mm; }
+  .page { padding: 10mm 14mm 14mm; }
 }
 `;
 
@@ -332,7 +481,9 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
     </div>
 
     <div class="footer">
-      IntisCorp · Generado el ${esc(data.fechaGeneracion)} · Pág. 1 / ${totalPages}
+      <span class="footer-brand">IntisCorp</span>
+      <span>Generado el ${esc(data.fechaGeneracion)}</span>
+      <span>Pág. 1 / ${totalPages}</span>
     </div>
   </div>`;
 
@@ -363,7 +514,9 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
     </div>` : ''}
 
     <div class="footer">
-      IntisCorp · Generado el ${esc(data.fechaGeneracion)} · Pág. ${idx + 2} / ${totalPages}
+      <span class="footer-brand">IntisCorp</span>
+      <span>Generado el ${esc(data.fechaGeneracion)}</span>
+      <span>Pág. ${idx + 2} / ${totalPages}</span>
     </div>
   </div>`,
     )
@@ -387,12 +540,14 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
     </div>` : ''}
 
     <div class="section">
-      ${sectionTitle('Firma del Técnico')}
-      ${signatureBlock(data.firmaTecnicoDataUri, data.tecnicoFirmaNombre || data.tecnicoEncargado)}
+      ${sectionTitle('Firmas de Conformidad')}
+      ${signatureBlock(data.firmaTecnicoDataUri, data.tecnicoFirmaNombre || data.tecnicoEncargado, data.firmaClienteDataUri, data.clienteNombre)}
     </div>
 
     <div class="footer">
-      IntisCorp · Generado el ${esc(data.fechaGeneracion)} · Pág. ${totalPages} / ${totalPages}
+      <span class="footer-brand">IntisCorp</span>
+      <span>Generado el ${esc(data.fechaGeneracion)}</span>
+      <span>Pág. ${totalPages} / ${totalPages}</span>
     </div>
   </div>`;
 

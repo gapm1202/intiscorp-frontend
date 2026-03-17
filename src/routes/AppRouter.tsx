@@ -22,6 +22,7 @@ import CatalogoCorreosPage from "../modules/catalogo/pages/CatalogoCorreosPage";
 import TicketsPage from "../modules/tickets/pages/TicketsPage";
 import TicketDetailPage from "../modules/tickets/pages/TicketDetailPage";
 import SeguimientoTicketPage from "../modules/tickets/pages/SeguimientoTicketPage";
+import FirmaConformidadPage from "../modules/visitas/pages/FirmaConformidadPage";
 import UsuariosEmpresaPage from "../modules/usuarios/pages/UsuariosEmpresaPage";
 import UsuarioDetailPage from "../modules/usuarios/pages/UsuarioDetailPage";
 import { UsuariosInternosPage } from "../modules/usuarios/pages/UsuariosInternosPage";
@@ -38,6 +39,7 @@ const AppRouter = () => {
       {/* Rutas públicas del portal de soporte */}
       <Route path="/portal-soporte/login" element={<LoginEmpresaPage />} />
       <Route path="/portal-soporte/reportar-incidencia" element={<ReporteIncidenciaPage />} />
+      <Route path="/firma-conformidad/:token" element={<FirmaConformidadPage />} />
 
       <Route element={<PrivateRoute />}>
         {/* Ruta principal del dashboard */}

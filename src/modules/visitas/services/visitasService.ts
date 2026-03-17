@@ -9,6 +9,16 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+function safeParseJson(text: string) {
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
+
 // Obtener token del localStorage
 function getToken(): string | null {
   return localStorage.getItem('token');
@@ -239,6 +249,17 @@ export interface EnviarResumenVisitaCorreoPayload {
   };
 }
 
+export interface FirmaConformidadEstadoResponse {
+  [key: string]: any;
+}
+
+export interface RegistrarFirmaConformidadPayload {
+  token: string;
+  firma_cliente_base64: string;
+  nombre_cliente: string;
+  calificacion: number;
+}
+
 // POST enviar correo de cierre de visita con PDF adjunto
 export async function enviarResumenVisitaCorreo(
   visitaId: string,
@@ -273,6 +294,65 @@ export async function enviarResumenVisitaCorreo(
   }
 
   throw new Error(`Error sending visita closure email: ${lastStatus} - ${lastBody}`);
+}
+
+// GET estado público del enlace de firma de conformidad
+export async function consultarFirmaConformidad(token: string): Promise<FirmaConformidadEstadoResponse> {
+  const url = `${API_BASE}/api/visitas/firma-conformidad/${encodeURIComponent(token)}`;
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const text = await res.text();
+  const json = safeParseJson(text);
+
+  if (!res.ok) {
+    const error = new Error(
+      typeof json?.message === 'string'
+        ? json.message
+        : `Error fetching firma conformidad: ${res.status}`,
+    ) as Error & { status?: number; payload?: unknown };
+    error.status = res.status;
+    error.payload = json;
+    throw error;
+  }
+
+  return json;
+}
+
+// POST registrar firma pública del cliente
+export async function registrarFirmaConformidad(
+  payload: RegistrarFirmaConformidadPayload,
+): Promise<FirmaConformidadEstadoResponse> {
+  const url = `${API_BASE}/api/visitas/firma-conformidad`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await res.text();
+  const json = safeParseJson(text);
+
+  if (!res.ok) {
+    const error = new Error(
+      typeof json?.message === 'string'
+        ? json.message
+        : `Error registering firma conformidad: ${res.status}`,
+    ) as Error & { status?: number; payload?: unknown };
+    error.status = res.status;
+    error.payload = json;
+    throw error;
+  }
+
+  return json;
 }
 
 // PATCH cancelar visita
