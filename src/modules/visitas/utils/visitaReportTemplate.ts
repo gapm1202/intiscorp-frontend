@@ -33,6 +33,10 @@ export interface VisitaReportData {
   recomendacion: string;
   /** Array of data: URIs (converted from File on the frontend before sending) */
   cierreImagenes: string[];
+  /** Nombre mostrado para la firma del técnico */
+  tecnicoFirmaNombre?: string;
+  /** Firma rasterizada a imagen (data URI) */
+  firmaTecnicoDataUri?: string;
   ticketsAsociados: TicketAsociadoData[];
   /** data: URI of the logo, embedded so no external fetch needed */
   logoDataUri?: string;
@@ -99,6 +103,22 @@ const pageHeader = (logoDataUri?: string): string => `
 
 const sectionTitle = (title: string): string =>
   `<div class="section-title"><span class="section-accent"></span>${esc(title)}</div>`;
+
+const signatureBlock = (firmaDataUri?: string, tecnicoNombre?: string): string => {
+  if (!firmaDataUri) {
+    return `
+      <div class="signature-box signature-empty">
+        <div class="signature-placeholder">No se registró firma del técnico.</div>
+      </div>`;
+  }
+
+  return `
+    <div class="signature-box">
+      <img class="signature-image" src="${firmaDataUri}" alt="Firma del técnico" />
+      <div class="signature-line"></div>
+      <div class="signature-caption">${esc(tecnicoNombre || 'Técnico Encargado')}</div>
+    </div>`;
+};
 
 // ── CSS — compact professional report ────────────────────────────────────────
 const CSS = `
@@ -208,6 +228,42 @@ body {
 .image-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .no-images { font-size: 10px; color: #9ca3af; font-style: italic; padding: 4px 0; }
 
+/* ── Signature ── */
+.signature-box {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 12px;
+  min-height: 96px;
+}
+.signature-image {
+  width: 100%;
+  max-height: 70px;
+  object-fit: contain;
+  display: block;
+}
+.signature-line {
+  margin-top: 6px;
+  border-top: 1px solid #94a3b8;
+}
+.signature-caption {
+  margin-top: 4px;
+  font-size: 9px;
+  color: #475569;
+  font-weight: 600;
+  text-align: center;
+}
+.signature-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.signature-placeholder {
+  font-size: 10px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
 /* ── Footer ── */
 .footer {
   position: absolute; bottom: 10mm; left: 16mm; right: 16mm;
@@ -223,7 +279,9 @@ body {
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export function generateVisitaReportHtml(data: VisitaReportData): string {
-  // ── PAGE 1: all information + closure detail ───────────────────────────────
+  const totalPages = 2 + data.ticketsAsociados.length;
+
+  // ── PAGE 1: overview ──────────────────────────────────────────────────────
 
   const page1 = `
   <div class="page">
@@ -273,22 +331,8 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
       </div>
     </div>
 
-    <!-- DETALLE DEL CIERRE -->
-    <div class="section">
-      ${sectionTitle('Detalle del Cierre')}
-      ${fieldBlock('Diagnóstico', data.diagnostico)}
-      ${fieldBlock('Resolución', data.solucion)}
-      ${fieldBlock('Recomendación', data.recomendacion)}
-    </div>
-
-    ${data.cierreImagenes.length > 0 ? `
-    <div class="section">
-      ${sectionTitle('Evidencia Fotográfica')}
-      ${imagesGrid(data.cierreImagenes, 'Cierre')}
-    </div>` : ''}
-
     <div class="footer">
-      IntisCorp · Generado el ${esc(data.fechaGeneracion)} · Pág. 1${data.ticketsAsociados.length > 0 ? ` / ${data.ticketsAsociados.length + 1}` : ''}
+      IntisCorp · Generado el ${esc(data.fechaGeneracion)} · Pág. 1 / ${totalPages}
     </div>
   </div>`;
 
@@ -319,11 +363,38 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
     </div>` : ''}
 
     <div class="footer">
-      IntisCorp · Generado el ${esc(data.fechaGeneracion)} · Pág. ${idx + 2} / ${data.ticketsAsociados.length + 1}
+      IntisCorp · Generado el ${esc(data.fechaGeneracion)} · Pág. ${idx + 2} / ${totalPages}
     </div>
   </div>`,
     )
     .join('');
+
+  const cierrePage = `
+  <div class="page page-break">
+    ${pageHeader(data.logoDataUri)}
+
+    <div class="section">
+      ${sectionTitle('Cierre de Visita')}
+      ${fieldBlock('Diagnóstico', data.diagnostico)}
+      ${fieldBlock('Resolución', data.solucion)}
+      ${fieldBlock('Recomendación', data.recomendacion)}
+    </div>
+
+    ${data.cierreImagenes.length > 0 ? `
+    <div class="section">
+      ${sectionTitle('Evidencia Fotográfica del Cierre')}
+      ${imagesGrid(data.cierreImagenes, 'Cierre')}
+    </div>` : ''}
+
+    <div class="section">
+      ${sectionTitle('Firma del Técnico')}
+      ${signatureBlock(data.firmaTecnicoDataUri, data.tecnicoFirmaNombre || data.tecnicoEncargado)}
+    </div>
+
+    <div class="footer">
+      IntisCorp · Generado el ${esc(data.fechaGeneracion)} · Pág. ${totalPages} / ${totalPages}
+    </div>
+  </div>`;
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -336,6 +407,7 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
 <body>
   ${page1}
   ${ticketPages}
+  ${cierrePage}
 </body>
 </html>`;
 }

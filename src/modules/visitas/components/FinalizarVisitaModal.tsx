@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { Visita, FinalizarVisitaPayload } from '../types';
 import { finalizarVisita, enviarResumenVisitaCorreo } from '../services/visitasService';
 import { htmlToPdfBase64 } from '../services/pdfService';
@@ -28,6 +28,9 @@ export default function FinalizarVisitaModal({
   kbEntryId,
 }: FinalizarVisitaModalProps) {
   const { user } = useAuth();
+  const [firmaModo, setFirmaModo] = useState<'AUTO' | 'DRAW'>('AUTO');
+  const [firmaAutomaticaDataUri, setFirmaAutomaticaDataUri] = useState('');
+  const [firmaTrazadaDataUri, setFirmaTrazadaDataUri] = useState('');
   const [diagnostico, setDiagnostico] = useState('');
   const [resolucion, setResolucion] = useState('');
   const [recomendacion, setRecomendacion] = useState('');
@@ -53,6 +56,17 @@ export default function FinalizarVisitaModal({
   const lastScrollTopRef = useRef(0);
   const [cargandoTicketsResueltos, setCargandoTicketsResueltos] = useState(false);
   const selectorRef = useRef<HTMLDivElement>(null);
+  const firmaCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const firmaDibujandoRef = useRef(false);
+  const firmaTieneTrazoRef = useRef(false);
+
+  const tecnicoFirmaNombre = useMemo(() => {
+    const encargado = visita.tecnicosAsignados.find((t) => t.esEncargado)?.tecnicoNombre?.trim();
+    if (encargado) return encargado;
+    const userNombre = user?.nombre?.trim();
+    if (userNombre) return userNombre;
+    return 'Tecnico Encargado';
+  }, [visita.tecnicosAsignados, user?.nombre]);
 
   const toDateKey = (value?: string | Date | null): string | null => {
     if (!value) return null;
@@ -85,6 +99,69 @@ export default function FinalizarVisitaModal({
       || null;
     return toDateKey(raw);
   };
+
+  const generarFirmaAutomaticaDataUri = async (nombreTecnico: string): Promise<string> => {
+    const nombre = nombreTecnico.trim() || 'Tecnico Encargado';
+    if (document.fonts?.load) {
+      try {
+        await Promise.race([
+          document.fonts.load('48px Pacifico'),
+          new Promise((resolve) => setTimeout(resolve, 250)),
+        ]);
+      } catch {
+        // Si no carga la fuente, se usa fallback cursiva del sistema.
+      }
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 960;
+    canvas.height = 260;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = 'rgba(37, 99, 235, 0.18)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(44, 192);
+    ctx.lineTo(canvas.width - 44, 192);
+    ctx.stroke();
+
+    let fontSize = 72;
+    const minFont = 36;
+    const maxTextWidth = canvas.width - 88;
+    do {
+      ctx.font = `italic ${fontSize}px "Pacifico", "Great Vibes", "Brush Script MT", "Segoe Script", cursive`;
+      if (ctx.measureText(nombre).width <= maxTextWidth || fontSize <= minFont) break;
+      fontSize -= 2;
+    } while (fontSize >= minFont);
+
+    ctx.fillStyle = '#1e3a8a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(nombre, canvas.width / 2, 130);
+
+    return canvas.toDataURL('image/png');
+  };
+
+  const getFirmaSeleccionadaDataUri = () =>
+    (firmaModo === 'DRAW' ? firmaTrazadaDataUri : firmaAutomaticaDataUri) || '';
+
+  const getFirmaTipoSeleccionado = () => (firmaModo === 'DRAW' ? 'TRAZADA' : 'AUTOMATICA');
+
+  useEffect(() => {
+    let active = true;
+    generarFirmaAutomaticaDataUri(tecnicoFirmaNombre)
+      .then((uri) => {
+        if (active) setFirmaAutomaticaDataUri(uri);
+      })
+      .catch(() => {
+        if (active) setFirmaAutomaticaDataUri('');
+      });
+    return () => {
+      active = false;
+    };
+  }, [tecnicoFirmaNombre]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -277,6 +354,73 @@ export default function FinalizarVisitaModal({
     setPreviewImages((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const getCanvasPoint = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = firmaCanvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY,
+    };
+  };
+
+  const iniciarTrazadoFirma = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = firmaCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+
+    const { x, y } = getCanvasPoint(event);
+    canvas.setPointerCapture(event.pointerId);
+    firmaDibujandoRef.current = true;
+    firmaTieneTrazoRef.current = true;
+
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 2.6;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + 0.01, y + 0.01);
+    ctx.stroke();
+  };
+
+  const moverTrazadoFirma = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!firmaDibujandoRef.current) return;
+    const canvas = firmaCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    const { x, y } = getCanvasPoint(event);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const finalizarTrazadoFirma = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = firmaCanvasRef.current;
+    if (!canvas) return;
+
+    if (canvas.hasPointerCapture(event.pointerId)) {
+      canvas.releasePointerCapture(event.pointerId);
+    }
+    if (!firmaDibujandoRef.current) return;
+    firmaDibujandoRef.current = false;
+
+    if (firmaTieneTrazoRef.current) {
+      setFirmaTrazadaDataUri(canvas.toDataURL('image/png'));
+    }
+  };
+
+  const limpiarFirmaTrazada = () => {
+    const canvas = firmaCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    firmaDibujandoRef.current = false;
+    firmaTieneTrazoRef.current = false;
+    setFirmaTrazadaDataUri('');
+  };
+
   const toggleTicketResuelto = (ticketId: number) => {
     setTicketsResueltosSeleccionados((prev) =>
       prev.includes(ticketId) ? prev.filter((id) => id !== ticketId) : [...prev, ticketId]
@@ -352,6 +496,7 @@ export default function FinalizarVisitaModal({
 
     // ── Build data object ───────────────────────────────────────────
     const tecEncargado = visita.tecnicosAsignados.find((t) => t.esEncargado)?.tecnicoNombre || '—';
+    const firmaTecnicoDataUri = getFirmaSeleccionadaDataUri() || await generarFirmaAutomaticaDataUri(tecnicoFirmaNombre);
     const otrosTecnicos = visita.tecnicosAsignados.length > 1
       ? visita.tecnicosAsignados.filter((t) => !t.esEncargado).map((t) => t.tecnicoNombre).join(', ')
       : '';
@@ -378,6 +523,8 @@ export default function FinalizarVisitaModal({
       recomendacion: recomendacion.trim(),
       cierreImagenes,
       ticketsAsociados,
+      tecnicoFirmaNombre,
+      firmaTecnicoDataUri,
       logoDataUri,
       fechaGeneracion: new Date().toLocaleDateString('es-ES', {
         day: '2-digit', month: 'long', year: 'numeric',
@@ -455,6 +602,14 @@ export default function FinalizarVisitaModal({
       imagenes: cierreImagenes,
       ticketsAsociados: reportData.ticketsAsociados || [],
       tickets_asociados: reportData.ticketsAsociados || [],
+
+      // Firma del técnico
+      firmaTecnicoTipo: getFirmaTipoSeleccionado(),
+      firma_tecnico_tipo: getFirmaTipoSeleccionado(),
+      firmaTecnicoNombre: tecnicoFirmaNombre,
+      firma_tecnico_nombre: tecnicoFirmaNombre,
+      firmaTecnicoImagen: firmaTecnicoDataUri,
+      firma_tecnico_imagen: firmaTecnicoDataUri,
     };
 
     return htmlToPdfBase64(html, visitaPayload);
@@ -504,6 +659,16 @@ export default function FinalizarVisitaModal({
     if (cuentaComoVisita === null) { onError('Debes indicar si cuenta como visita contractual'); return; }
     if (hayChangioComponente === null) { onError('Debes indicar si se realizó cambio de componente'); return; }
 
+    const firmaSeleccionada = getFirmaSeleccionadaDataUri() || await generarFirmaAutomaticaDataUri(tecnicoFirmaNombre);
+    if (!firmaSeleccionada) {
+      onError('No se pudo generar la firma del técnico. Intenta nuevamente.');
+      return;
+    }
+    if (firmaModo === 'DRAW' && !firmaTrazadaDataUri) {
+      onError('Debes trazar la firma del técnico para continuar.');
+      return;
+    }
+
     const tecnicoFinalizadorId = getTecnicoFinalizadorId();
     if (tecnicoFinalizadorId === null) { onError('No se pudo identificar el técnico finalizador. Vuelve a iniciar sesión.'); return; }
 
@@ -518,7 +683,16 @@ export default function FinalizarVisitaModal({
         `Recomendación: ${recomendacion.trim()}`,
       ].join('\n\n');
 
-      const payload: FinalizarVisitaPayload & { ticketsResueltosAsociados?: number[]; diagnostico?: string; resolucion?: string; recomendacion?: string; kb_entry_id?: string } = {
+      const payload: FinalizarVisitaPayload & {
+        ticketsResueltosAsociados?: number[];
+        diagnostico?: string;
+        resolucion?: string;
+        recomendacion?: string;
+        kb_entry_id?: string;
+        firmaTecnicoTipo?: string;
+        firmaTecnicoNombre?: string;
+        firmaTecnicoImagen?: string;
+      } = {
         fechaFinalizacion: new Date().toISOString(),
         tecnicoFinalizadorId,
         notasFinalizacion: resumenClausura,
@@ -528,6 +702,9 @@ export default function FinalizarVisitaModal({
         recomendacion: recomendacion.trim(),
         cuentaComoVisitaContractual: cuentaComoVisita,
         huboCambioComponente: hayChangioComponente,
+        firmaTecnicoTipo: getFirmaTipoSeleccionado(),
+        firmaTecnicoNombre: tecnicoFirmaNombre,
+        firmaTecnicoImagen: firmaSeleccionada,
         ...(kbEntryId ? { kb_entry_id: kbEntryId } : {}),
         ...(destinatariosSeleccionados.length > 0 && { destinatariosCorreo: destinatariosSeleccionados }),
         ...(cuentaComoVisita && ticketsResueltosSeleccionados.length > 0 && { ticketsResueltosAsociados: ticketsResueltosSeleccionados }),
@@ -560,7 +737,8 @@ export default function FinalizarVisitaModal({
       if (visita.ticketId && cierreImages.length > 0) {
         try {
           const ticket = await getTicketById(Number(visita.ticketId));
-          const ticketIdNum = Number(ticket.id ?? ticket._id ?? ticket.ticketId ?? visita.ticketId);
+          const ticketRecord = ticket as unknown as Record<string, unknown>;
+          const ticketIdNum = Number(ticket.id ?? ticketRecord._id ?? ticketRecord.ticketId ?? visita.ticketId);
           if (Number.isInteger(ticketIdNum) && ticketIdNum > 0) {
             const payloadForTicket: any = {
               motivo: 'Imágenes adjuntas desde Finalizar Visita',
@@ -589,12 +767,6 @@ export default function FinalizarVisitaModal({
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    });
   };
 
   const tecnicoEncargado = visita.tecnicosAsignados.find((t) => t.esEncargado)?.tecnicoNombre || 'N/A';
@@ -771,6 +943,90 @@ export default function FinalizarVisitaModal({
                           className="sr-only"
                         />
                       </label>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl p-4" style={{ border: '1.5px solid #BFDBFE', background: '#F8FBFF' }}>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <label className="block text-xs font-bold uppercase tracking-wider" style={{ color: '#1563C8' }}>
+                        Firma del Técnico
+                      </label>
+                      <span className="text-[11px] font-semibold" style={{ color: '#64748B' }}>
+                        {tecnicoFirmaNombre}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                      {[
+                        {
+                          value: 'AUTO' as const,
+                          label: 'Automática',
+                          desc: 'Genera firma manuscrita con el nombre del técnico',
+                        },
+                        {
+                          value: 'DRAW' as const,
+                          label: 'Trazar firma',
+                          desc: 'Dibuja la firma manualmente en el recuadro',
+                        },
+                      ].map((opt) => {
+                        const active = firmaModo === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setFirmaModo(opt.value)}
+                            className="text-left p-3 rounded-xl transition-all"
+                            style={active
+                              ? { border: '2px solid #1563C8', background: '#EFF6FF' }
+                              : { border: '2px solid #DBEAFE', background: '#FFFFFF' }}
+                          >
+                            <p className="text-sm font-bold" style={{ color: '#1E3A8A' }}>{opt.label}</p>
+                            <p className="text-xs mt-1" style={{ color: '#64748B' }}>{opt.desc}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {firmaModo === 'AUTO' ? (
+                      <div className="rounded-xl px-3 py-2" style={{ border: '1.5px solid #C7D2FE', background: '#EEF2FF' }}>
+                        {firmaAutomaticaDataUri ? (
+                          <img
+                            src={firmaAutomaticaDataUri}
+                            alt="Firma automática"
+                            className="w-full h-24 object-contain"
+                          />
+                        ) : (
+                          <p className="text-xs font-semibold text-slate-500">Generando firma automática...</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <canvas
+                          ref={firmaCanvasRef}
+                          width={920}
+                          height={240}
+                          onPointerDown={iniciarTrazadoFirma}
+                          onPointerMove={moverTrazadoFirma}
+                          onPointerUp={finalizarTrazadoFirma}
+                          onPointerLeave={finalizarTrazadoFirma}
+                          onPointerCancel={finalizarTrazadoFirma}
+                          className="w-full h-32 rounded-xl touch-none"
+                          style={{ border: '1.5px dashed #93C5FD', background: '#FFFFFF' }}
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-medium" style={{ color: '#64748B' }}>
+                            Firma con mouse o pantalla táctil.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={limpiarFirmaTrazada}
+                            className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                            style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1D4ED8' }}
+                          >
+                            Limpiar
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
