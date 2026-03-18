@@ -428,7 +428,12 @@ body {
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export function generateVisitaReportHtml(data: VisitaReportData): string {
-  const totalPages = 2 + data.ticketsAsociados.length;
+  const esProgramada = /programada/i.test(data.tipoVisita);
+  const totalPages = esProgramada
+    ? (data.ticketsAsociados.length > 0
+        ? 1 + data.ticketsAsociados.length   // overview + tickets (signatures on last ticket)
+        : 2)                                  // overview + signatures-only page
+    : 2 + data.ticketsAsociados.length;       // overview + tickets + cierre
 
   // ── PAGE 1: overview ──────────────────────────────────────────────────────
 
@@ -491,7 +496,13 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
 
   const ticketPages = data.ticketsAsociados
     .map(
-      (t, idx) => `
+      (t, idx) => {
+        const isLastTicket = idx === data.ticketsAsociados.length - 1;
+        const signaturesOnThisPage = esProgramada && isLastTicket;
+        const pageNum = idx + 2;
+        // For programada, the last ticket page IS the final page (totalPages already accounts for no cierre page)
+        const effectiveTotalPages = signaturesOnThisPage ? pageNum : totalPages;
+        return `
   <div class="page page-break">
     ${pageHeader(data.logoDataUri)}
 
@@ -513,12 +524,19 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
       ${imagesGrid(t.imagenesUrls, 'Ticket')}
     </div>` : ''}
 
+    ${signaturesOnThisPage ? `
+    <div class="section">
+      ${sectionTitle('Firmas de Conformidad')}
+      ${signatureBlock(data.firmaTecnicoDataUri, data.tecnicoFirmaNombre || data.tecnicoEncargado, data.firmaClienteDataUri, data.clienteNombre)}
+    </div>` : ''}
+
     <div class="footer">
       <span class="footer-brand">IntisCorp</span>
       <span>Generado el ${esc(data.fechaGeneracion)}</span>
-      <span>Pág. ${idx + 2} / ${totalPages}</span>
+      <span>Pág. ${pageNum} / ${effectiveTotalPages}</span>
     </div>
-  </div>`,
+  </div>`;
+      },
     )
     .join('');
 
@@ -551,6 +569,34 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
     </div>
   </div>`;
 
+  // For PROGRAMADA with tickets: signatures are on the last ticket page, no cierre page.
+  // For PROGRAMADA without tickets: we still need a signatures-only page.
+  // For POR_TICKET / other: always render the full cierre page.
+  const renderCierrePage = esProgramada
+    ? (data.ticketsAsociados.length === 0)  // only if no tickets to attach signatures to
+    : true;
+
+  // When PROGRAMADA has no tickets, render a slim page with just signatures (no diagnóstico etc.)
+  const cierrePageProgramadaOnly = `
+  <div class="page page-break">
+    ${pageHeader(data.logoDataUri)}
+
+    <div class="section">
+      ${sectionTitle('Firmas de Conformidad')}
+      ${signatureBlock(data.firmaTecnicoDataUri, data.tecnicoFirmaNombre || data.tecnicoEncargado, data.firmaClienteDataUri, data.clienteNombre)}
+    </div>
+
+    <div class="footer">
+      <span class="footer-brand">IntisCorp</span>
+      <span>Generado el ${esc(data.fechaGeneracion)}</span>
+      <span>Pág. 2 / 2</span>
+    </div>
+  </div>`;
+
+  const finalCierrePage = esProgramada
+    ? (renderCierrePage ? cierrePageProgramadaOnly : '')
+    : cierrePage;
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -562,7 +608,7 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
 <body>
   ${page1}
   ${ticketPages}
-  ${cierrePage}
+  ${finalCierrePage}
 </body>
 </html>`;
 }

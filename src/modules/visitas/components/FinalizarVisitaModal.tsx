@@ -34,8 +34,9 @@ export default function FinalizarVisitaModal({
   const [diagnostico, setDiagnostico] = useState('');
   const [resolucion, setResolucion] = useState('');
   const [recomendacion, setRecomendacion] = useState('');
-  const [cuentaComoVisita, setCuentaComoVisita] = useState<boolean | null>(null);
-  const [hayChangioComponente, setHayChangioComponente] = useState<boolean | null>(null);
+  const esProgramada = visita.tipoVisita === 'PROGRAMADA';
+  const [cuentaComoVisita, setCuentaComoVisita] = useState<boolean | null>(esProgramada ? true : null);
+  const [hayChangioComponente, setHayChangioComponente] = useState<boolean | null>(esProgramada ? false : null);
   const [loading, setLoading] = useState(false);
   const [activo, setActivo] = useState<any>(null);
   const [cargandoActivo, setCargandoActivo] = useState(false);
@@ -203,7 +204,7 @@ export default function FinalizarVisitaModal({
   useEffect(() => {
     const cargarTicketsResueltosMismaFecha = async () => {
       const esPorTicket = visita.tipoVisita === 'POR_TICKET' || Boolean(visita.ticketId);
-      if (!cuentaComoVisita || !esPorTicket || !visita.empresaId || !visita.fechaProgramada) {
+      if (!cuentaComoVisita || (!esPorTicket && !esProgramada) || !visita.empresaId || !visita.fechaProgramada) {
         setTicketsResueltosDia([]);
         setTicketsResueltosSeleccionados([]);
         return;
@@ -251,7 +252,8 @@ export default function FinalizarVisitaModal({
     };
 
     cargarTicketsResueltosMismaFecha();
-  }, [cuentaComoVisita, visita.empresaId, visita.fechaProgramada]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cuentaComoVisita, visita.empresaId, visita.fechaProgramada, esProgramada]);
 
   const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -655,9 +657,9 @@ export default function FinalizarVisitaModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!diagnostico.trim() || !resolucion.trim() || !recomendacion.trim()) { onError('Completa Diagnóstico, Resolución y Recomendación para finalizar la visita'); return; }
+    if (!esProgramada && (!diagnostico.trim() || !resolucion.trim() || !recomendacion.trim())) { onError('Completa Diagnóstico, Resolución y Recomendación para finalizar la visita'); return; }
     if (cuentaComoVisita === null) { onError('Debes indicar si cuenta como visita contractual'); return; }
-    if (hayChangioComponente === null) { onError('Debes indicar si se realizó cambio de componente'); return; }
+    if (!esProgramada && hayChangioComponente === null) { onError('Debes indicar si se realizó cambio de componente'); return; }
 
     const firmaSeleccionada = getFirmaSeleccionadaDataUri() || await generarFirmaAutomaticaDataUri(tecnicoFirmaNombre);
     if (!firmaSeleccionada) {
@@ -700,8 +702,8 @@ export default function FinalizarVisitaModal({
         diagnostico: diagnostico.trim(),
         resolucion: resolucion.trim(),
         recomendacion: recomendacion.trim(),
-        cuentaComoVisitaContractual: cuentaComoVisita,
-        huboCambioComponente: hayChangioComponente,
+        cuentaComoVisitaContractual: cuentaComoVisita ?? false,
+        huboCambioComponente: hayChangioComponente ?? false,
         firmaTecnicoTipo: getFirmaTipoSeleccionado(),
         firmaTecnicoNombre: tecnicoFirmaNombre,
         firmaTecnicoImagen: firmaSeleccionada,
@@ -860,12 +862,12 @@ export default function FinalizarVisitaModal({
 
               {/* ── 1. Cierre de Visita ── */}
               <SectionCard
-                title="Cierre de Visita"
+                title={esProgramada ? 'Firma del Técnico' : 'Cierre de Visita'}
                 icon={<PencilIcon />}
                 accent="#1563C8"
               >
                 <div className="space-y-4 p-5">
-                  {[
+                  {!esProgramada && [
                     { label: 'Diagnóstico', value: diagnostico, setter: setDiagnostico, placeholder: 'Describe el diagnóstico identificado durante la visita...' },
                     { label: 'Resolución',  value: resolucion,  setter: setResolucion,  placeholder: 'Describe las acciones realizadas para resolver el problema...' },
                     { label: 'Recomendación', value: recomendacion, setter: setRecomendacion, placeholder: 'Incluye recomendaciones para evitar recurrencia...' },
@@ -890,7 +892,8 @@ export default function FinalizarVisitaModal({
                     </div>
                   ))}
 
-                  {/* Imágenes */}
+                  {/* Imágenes — solo para POR_TICKET */}
+                  {!esProgramada && (
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#1563C8' }}>
                       Adjuntar Imágenes
@@ -945,6 +948,7 @@ export default function FinalizarVisitaModal({
                       </label>
                     )}
                   </div>
+                  )}
 
                   <div className="rounded-2xl p-4" style={{ border: '1.5px solid #BFDBFE', background: '#F8FBFF' }}>
                     <div className="flex items-center justify-between gap-2 mb-3">
@@ -1138,8 +1142,8 @@ export default function FinalizarVisitaModal({
                 </div>
               </SectionCard>
 
-              {/* ── 3. Cambio de Componente ── */}
-              <SectionCard title="¿Se realizó cambio de componente?" icon={<RefreshIcon />} accent="#0284C7">
+              {/* ── 3. Cambio de Componente (solo POR_TICKET) ── */}
+              {!esProgramada && <SectionCard title="¿Se realizó cambio de componente?" icon={<RefreshIcon />} accent="#0284C7">
                 <div className="p-5 space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     {[
@@ -1229,7 +1233,7 @@ export default function FinalizarVisitaModal({
                     </div>
                   )}
                 </div>
-              </SectionCard>
+              </SectionCard>}
 
               {/* ── 4. Notificación por correo ── */}
               <SectionCard title="Notificación por Correo" icon={<MailIcon />} accent="#0369A1">
@@ -1382,11 +1386,14 @@ export default function FinalizarVisitaModal({
               style={{ background: 'white', borderTop: '1.5px solid #DBEAFE' }}>
               {/* Progress dots */}
               <div className="flex items-center gap-1.5">
-                {[
-                  { done: diagnostico.trim() && resolucion.trim() && recomendacion.trim(), label: 'Texto' },
-                  { done: cuentaComoVisita !== null, label: 'Contractual' },
-                  { done: hayChangioComponente !== null, label: 'Componente' },
-                ].map(({ done, label }) => (
+                {(esProgramada
+                  ? [{ done: cuentaComoVisita !== null, label: 'Contractual' }]
+                  : [
+                      { done: diagnostico.trim() && resolucion.trim() && recomendacion.trim(), label: 'Texto' },
+                      { done: cuentaComoVisita !== null, label: 'Contractual' },
+                      { done: hayChangioComponente !== null, label: 'Componente' },
+                    ]
+                ).map(({ done, label }) => (
                   <div key={label} className="flex items-center gap-1" title={label}>
                     <div className="w-2 h-2 rounded-full transition-all"
                       style={{ background: done ? '#1563C8' : '#CBD5E1' }} />
@@ -1406,7 +1413,7 @@ export default function FinalizarVisitaModal({
                 </button>
                 <button
                   type="submit"
-                  disabled={loading || cuentaComoVisita === null || hayChangioComponente === null}
+                  disabled={loading || cuentaComoVisita === null || (!esProgramada && hayChangioComponente === null)}
                   className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: 'linear-gradient(135deg, #0A2456, #1563C8)', boxShadow: '0 4px 14px rgba(21,99,200,0.35)' }}
                   onMouseEnter={e => { if (!loading && cuentaComoVisita !== null && hayChangioComponente !== null) (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(21,99,200,0.5)'; }}
