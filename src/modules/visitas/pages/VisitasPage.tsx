@@ -319,6 +319,17 @@ export default function VisitasPage() {
   };
 
   const handleFinalizarVisita = (visita: Visita) => {
+    if (visita.tipoVisita === 'POR_TICKET') {
+      const ticketRef = visita.ticketNumero || visita.ticketId;
+      mostrarToast(
+        ticketRef
+          ? `Las visitas POR_TICKET deben finalizarse desde el ticket (${ticketRef}) con el boton \"Culminar ticket\".`
+          : 'Las visitas POR_TICKET deben finalizarse desde el ticket con el boton "Culminar ticket".',
+        'warning',
+      );
+      return;
+    }
+
     const visitaId = Number((visita as any)?._id ?? (visita as any)?.id);
     if (!Number.isInteger(visitaId) || visitaId <= 0) {
       mostrarToast('No se encontró el ID de la visita a finalizar', 'error');

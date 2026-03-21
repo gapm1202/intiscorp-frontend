@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { Visita, EstadoVisita } from '../types';
+import { useNavigate } from 'react-router-dom';
 
 interface VisitasCalendarViewProps {
   visitas: Visita[];
@@ -14,6 +15,7 @@ export default function VisitasCalendarView({
   onFinalizarVisita,
   estadoColor,
 }: VisitasCalendarViewProps) {
+  const navigate = useNavigate();
   const parseMonthToDate = (value: string) => {
     const [yearStr, monthStr] = value.split('-');
     const year = Number(yearStr);
@@ -362,7 +364,7 @@ export default function VisitasCalendarView({
 
             {/* Modal footer */}
             <div className="flex justify-end gap-2 border-t border-blue-100 px-5 py-3 bg-sky-50">
-              {visitaSeleccionada.estado === 'EN_PROCESO' && (
+              {visitaSeleccionada.estado === 'EN_PROCESO' && visitaSeleccionada.tipoVisita !== 'POR_TICKET' && (
                 <button
                   onClick={() => {
                     onFinalizarVisita(visitaSeleccionada);
@@ -374,6 +376,21 @@ export default function VisitasCalendarView({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   Finalizar visita
+                </button>
+              )}
+              {visitaSeleccionada.estado === 'EN_PROCESO' && visitaSeleccionada.tipoVisita === 'POR_TICKET' && (
+                <button
+                  onClick={() => {
+                    if (visitaSeleccionada.ticketId) {
+                      navigate(`/admin/tickets/${visitaSeleccionada.ticketId}`);
+                      setVisitaSeleccionada(null);
+                    }
+                  }}
+                  disabled={!visitaSeleccionada.ticketId}
+                  className="inline-flex items-center gap-2 rounded-lg bg-amber-500 hover:bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Las visitas POR_TICKET deben finalizarse desde el ticket con el botón Culminar ticket"
+                >
+                  Ir al ticket
                 </button>
               )}
               <button

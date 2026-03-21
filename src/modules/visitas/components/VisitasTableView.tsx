@@ -202,6 +202,7 @@ export default function VisitasTableView({
               const tecnicosCount = visita.tecnicosAsignadosCount ?? tecnicosAsignados.length;
               const encargado = tecnicosAsignados.find((t) => t.esEncargado) || tecnicosAsignados[0];
               const tipoVisitaLabel = (visita.tipoVisita || '').replace(/_/g, ' ');
+              const esVisitaPorTicket = visita.tipoVisita === 'POR_TICKET';
               const nombresTecnicosList = tecnicosAsignados
                 .filter((t) => !encargado || t.tecnicoId !== encargado.tecnicoId)
                 .map((t) => t.tecnicoNombre)
@@ -323,7 +324,7 @@ export default function VisitasTableView({
                         </span>
                       )}
 
-                      {visita.estado === 'EN_PROCESO' && (
+                      {visita.estado === 'EN_PROCESO' && !esVisitaPorTicket && (
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => onFinalizarVisita(visita)}
@@ -341,6 +342,29 @@ export default function VisitasTableView({
                               onClick={() => navigate(`/admin/tickets/${visita.ticketId}`)}
                               disabled={loading}
                               title="Ver detalle del ticket"
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-50 transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {visita.estado === 'EN_PROCESO' && esVisitaPorTicket && (
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-50 text-amber-700 text-xs font-medium border border-amber-200"
+                            title="Debes culminar el ticket para luego finalizar la visita"
+                          >
+                            Desde ticket
+                          </span>
+                          {visita.ticketId && (
+                            <button
+                              onClick={() => navigate(`/admin/tickets/${visita.ticketId}`)}
+                              disabled={loading}
+                              title="Ir al ticket para culminarlo"
                               className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-50 transition-colors"
                             >
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
