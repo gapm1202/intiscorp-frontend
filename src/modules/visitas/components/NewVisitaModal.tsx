@@ -344,7 +344,6 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
                     >
                       <option value="PROGRAMADA">Programada</option>
                       <option value="POR_TICKET">Por Ticket</option>
-                      <option value="PREVENTIVO">Preventivo</option>
                     </select>
                   </SelectWrapper>
                   {isFromTicket && (

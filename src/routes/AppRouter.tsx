@@ -30,6 +30,7 @@ import UsuariosInternosFormPage from "../modules/usuarios/pages/UsuariosInternos
 import UsuariosInternosViewPage from "../modules/usuarios/pages/UsuariosInternosViewPage";
 import VisitasPage from "../modules/visitas/pages/VisitasPage";
 import BaseConocimientosPage from "../modules/baseConocimientos/pages/BaseConocimientosPage";
+import MantenimientoPreventivoPage from "../modules/mantenimientoPreventivo/pages/MantenimientoPreventivoPage";
 
 const AppRouter = () => {
   return (
@@ -198,6 +199,16 @@ const AppRouter = () => {
             <RoleRoute role="admin">
               <AdminLayout>
                 <VisitasPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/mantenimiento-preventivo"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <MantenimientoPreventivoPage />
               </AdminLayout>
             </RoleRoute>
           }

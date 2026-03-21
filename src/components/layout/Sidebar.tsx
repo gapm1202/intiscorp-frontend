@@ -667,6 +667,23 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
               </button>
             </li>
 
+            {/* Mantenimiento Preventivo */}
+            <li>
+              <button
+                className="sb-nav-btn"
+                onClick={() => handleNavigation('/admin/mantenimiento-preventivo')}
+                style={navItemStyle(isActive('/admin/mantenimiento-preventivo'))}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <svg style={{ width: 17, height: 17, flexShrink: 0, color: isActive('/admin/mantenimiento-preventivo') ? '#38bdf8' : undefined }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M11.983 1.25a2 2 0 011.788 1.104l.593 1.186a2 2 0 001.342 1.025l1.317.329a2 2 0 011.262 2.932l-.71 1.184a2 2 0 000 2.039l.71 1.184a2 2 0 01-1.262 2.932l-1.317.329a2 2 0 00-1.342 1.025l-.593 1.186a2 2 0 01-3.576 0l-.593-1.186a2 2 0 00-1.342-1.025l-1.317-.329a2 2 0 01-1.262-2.932l.71-1.184a2 2 0 000-2.039l-.71-1.184A2 2 0 016.977 4.894l1.317-.329a2 2 0 001.342-1.025l.593-1.186a2 2 0 011.754-1.104z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9.75 12l1.5 1.5L14.25 10.5" />
+                  </svg>
+                  {!collapsed && <span>Mantenimiento Preventivo</span>}
+                </span>
+              </button>
+            </li>
+
             {/* Empresas */}
             <li>
               <button
