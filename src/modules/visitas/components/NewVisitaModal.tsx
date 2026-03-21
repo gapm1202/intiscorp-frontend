@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Visita, CrearVisitaPayload, TecnicoAsignado } from '../types';
-import { crearVisita } from '../services/visitasService';
+import { crearVisita, actualizarVisita } from '../services/visitasService';
 import { getTicketById, asignarTecnico } from '@/modules/tickets/services/ticketsService';
 
 interface NewVisitaModalProps {
@@ -8,7 +8,9 @@ interface NewVisitaModalProps {
   contratoId: string;
   onClose: () => void;
   onVisitaCreada: (visita: Visita) => void;
+  onVisitaActualizada?: (visita: Visita) => void;
   onError: (error: string) => void;
+  editingVisita?: Visita;
   prefilledData?: {
     sedeId?: string;
     tipoVisita?: 'PROGRAMADA' | 'POR_TICKET' | 'PREVENTIVO';
@@ -58,14 +60,17 @@ const SectionTitle = ({ icon, label }: { icon: React.ReactNode; label: string })
   </div>
 );
 
-export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisitaCreada, onError, prefilledData }: NewVisitaModalProps) {
+export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisitaCreada, onVisitaActualizada, onError, editingVisita, prefilledData }: NewVisitaModalProps) {
+  const isEditing = Boolean(editingVisita);
+  const toDateInputVal = (dateStr?: string) => (dateStr ? dateStr.slice(0, 10) : '');
+
   const [formData, setFormData] = useState<FormData>({
-    sedeId: prefilledData?.sedeId || '',
-    tipoVisita: prefilledData?.tipoVisita || 'PROGRAMADA',
-    ticketId: prefilledData?.ticketId,
-    fechaProgramada: '',
-    tecnicos: [],
-    observaciones: '',
+    sedeId: editingVisita?.sedeId || prefilledData?.sedeId || '',
+    tipoVisita: editingVisita?.tipoVisita || prefilledData?.tipoVisita || 'PROGRAMADA',
+    ticketId: editingVisita?.ticketId || prefilledData?.ticketId,
+    fechaProgramada: isEditing ? toDateInputVal(editingVisita?.fechaProgramada) : '',
+    tecnicos: editingVisita?.tecnicosAsignados ?? [],
+    observaciones: editingVisita?.observaciones || '',
   });
 
   const [sedes, setSedes] = useState<any[]>([]);
@@ -74,14 +79,17 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
   const [ticketDetalle, setTicketDetalle] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [selectedTecnico, setSelectedTecnico] = useState('');
-  const [tecnicoEncargado, setTecnicoEncargado] = useState('');
+  const [tecnicoEncargado, setTecnicoEncargado] = useState(
+    editingVisita?.tecnicosAsignados.find((t) => t.esEncargado)?.tecnicoId || ''
+  );
   const [validacionError, setValidacionError] = useState('');
-  const isFromTicket = Boolean(prefilledData?.ticketId);
+  const isFromTicket = Boolean(prefilledData?.ticketId) || (isEditing && editingVisita?.tipoVisita === 'POR_TICKET');
 
   useEffect(() => {
     cargarDatos();
-    if (prefilledData?.ticketId) {
-      cargarDetalleTicket(prefilledData.ticketId);
+    const ticketIdToLoad = prefilledData?.ticketId || editingVisita?.ticketId;
+    if (ticketIdToLoad) {
+      cargarDetalleTicket(ticketIdToLoad);
     }
   }, [empresaId]);
 
@@ -204,45 +212,56 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.sedeId) { onError('Selecciona una sede'); return; }
-    if (!contratoId) { onError('No se encontró un contrato activo para la empresa'); return; }
+    if (!isEditing && !contratoId) { onError('No se encontró un contrato activo para la empresa'); return; }
     if (!formData.fechaProgramada) { onError('Selecciona una fecha'); return; }
     if (formData.tecnicos.length === 0) { onError('Debes agregar al menos un técnico'); return; }
     if (validacionError) { onError(validacionError); return; }
 
     setLoading(true);
     try {
-      const mes = formData.fechaProgramada.slice(0, 7);
-      const [anio, mesNumero] = mes.split('-');
-      const payload: CrearVisitaPayload = {
-        empresaId,
-        contratoId,
-        sedeId: formData.sedeId,
-        tipoVisita: formData.tipoVisita,
-        ticketId: formData.tipoVisita === 'POR_TICKET' ? formData.ticketId : undefined,
-        activoId: formData.activoId,
-        fechaProgramada: formData.fechaProgramada,
-        tecnicosAsignados: formData.tecnicos,
-        mes: mesNumero,
-        anio,
-        observaciones: formData.observaciones,
-      };
-      const response = await crearVisita(payload);
-      const visitaCreada = response.data || response;
-      try {
-        if (formData.ticketId && tecnicoEncargado) {
-          const ticketIdNum = Number(formData.ticketId);
-          const tecnicoIdNum = Number(tecnicoEncargado);
-          if (!Number.isNaN(ticketIdNum) && !Number.isNaN(tecnicoIdNum)) {
-            await asignarTecnico(ticketIdNum, tecnicoIdNum, 'Asignado como encargado de visita presencial');
+      if (isEditing && editingVisita) {
+        const payload = {
+          fechaProgramada: formData.fechaProgramada,
+          tecnicosAsignados: formData.tecnicos,
+          observaciones: formData.observaciones,
+        };
+        const response = await actualizarVisita(editingVisita._id, payload);
+        const visitaActualizada = response.data || response;
+        onVisitaActualizada?.(visitaActualizada);
+      } else {
+        const mes = formData.fechaProgramada.slice(0, 7);
+        const [anio, mesNumero] = mes.split('-');
+        const payload: CrearVisitaPayload = {
+          empresaId,
+          contratoId,
+          sedeId: formData.sedeId,
+          tipoVisita: formData.tipoVisita,
+          ticketId: formData.tipoVisita === 'POR_TICKET' ? formData.ticketId : undefined,
+          activoId: formData.activoId,
+          fechaProgramada: formData.fechaProgramada,
+          tecnicosAsignados: formData.tecnicos,
+          mes: mesNumero,
+          anio,
+          observaciones: formData.observaciones,
+        };
+        const response = await crearVisita(payload);
+        const visitaCreada = response.data || response;
+        try {
+          if (formData.ticketId && tecnicoEncargado) {
+            const ticketIdNum = Number(formData.ticketId);
+            const tecnicoIdNum = Number(tecnicoEncargado);
+            if (!Number.isNaN(ticketIdNum) && !Number.isNaN(tecnicoIdNum)) {
+              await asignarTecnico(ticketIdNum, tecnicoIdNum, 'Asignado como encargado de visita presencial');
+            }
           }
+        } catch (err) {
+          console.error('Error asignando técnico al ticket tras crear visita:', err);
         }
-      } catch (err) {
-        console.error('Error asignando técnico al ticket tras crear visita:', err);
+        onVisitaCreada(visitaCreada);
       }
-      onVisitaCreada(visitaCreada);
     } catch (error: any) {
-      console.error('Error creating visita:', error);
-      onError(error.message || 'Error al crear la visita');
+      console.error('Error saving visita:', error);
+      onError(error.message || 'Error al guardar la visita');
     } finally {
       setLoading(false);
     }
@@ -256,7 +275,7 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
         <div className="bg-gradient-to-r from-blue-900 to-blue-700 px-7 py-5 flex items-center justify-between shrink-0">
           <div>
             <p className="text-blue-300 text-xs font-semibold uppercase tracking-widest mb-0.5">Visitas</p>
-            <h2 className="text-xl font-bold text-white tracking-tight">Nueva Visita</h2>
+            <h2 className="text-xl font-bold text-white tracking-tight">{isEditing ? 'Editar Visita' : 'Nueva Visita'}</h2>
           </div>
           <button
             onClick={onClose}
@@ -293,7 +312,7 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
                       value={formData.sedeId}
                       onChange={(e) => setFormData({ ...formData, sedeId: e.target.value })}
                       required
-                      disabled={isFromTicket}
+                      disabled={isFromTicket || isEditing}
                       className={selectCls}
                     >
                       <option value="">Seleccionar sede...</option>
@@ -320,7 +339,7 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
                     <select
                       value={formData.tipoVisita}
                       onChange={(e) => setFormData({ ...formData, tipoVisita: e.target.value as any })}
-                      disabled={isFromTicket}
+                      disabled={isFromTicket || isEditing}
                       className={selectCls}
                     >
                       <option value="PROGRAMADA">Programada</option>
@@ -364,7 +383,7 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
                         setFormData({ ...formData, ticketId: e.target.value });
                         cargarDetalleTicket(e.target.value);
                       }}
-                      disabled={isFromTicket}
+                      disabled={isFromTicket || isEditing}
                       className={selectCls}
                     >
                       <option value="">Seleccionar ticket...</option>
@@ -633,14 +652,14 @@ export default function NewVisitaModal({ empresaId, contratoId, onClose, onVisit
               {loading ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  Creando…
+                  {isEditing ? 'Guardando…' : 'Creando…'}
                 </>
               ) : (
                 <>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
-                  Crear Visita
+                  {isEditing ? 'Guardar cambios' : 'Crear Visita'}
                 </>
               )}
             </button>

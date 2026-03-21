@@ -7,6 +7,7 @@ import ConfirmModal from '../../../components/ui/ConfirmModal';
 interface VisitasTableViewProps {
   visitas: Visita[];
   onFinalizarVisita: (visita: Visita) => void;
+  onEditarVisita: (visita: Visita) => void;
   estadoColor: Record<EstadoVisita, string>;
   onRefresh: () => void;
 }
@@ -14,6 +15,7 @@ interface VisitasTableViewProps {
 export default function VisitasTableView({
   visitas,
   onFinalizarVisita,
+  onEditarVisita,
   estadoColor,
   onRefresh,
 }: VisitasTableViewProps) {
@@ -373,6 +375,19 @@ export default function VisitasTableView({
                             </button>
                           )}
                         </div>
+                      )}
+
+                      {(visita.estado === 'PROGRAMADA' || visita.estado === 'PENDIENTE_PROGRAMACION') && (
+                        <button
+                          onClick={() => onEditarVisita(visita)}
+                          disabled={loading}
+                          title="Editar visita"
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-sky-200 text-sky-600 hover:bg-sky-50 disabled:opacity-50 transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
                       )}
 
                       {puedeCambiarEstado && visita.estado !== 'EN_PROCESO' && (

@@ -6,6 +6,7 @@ interface VisitasCalendarViewProps {
   visitas: Visita[];
   mes: string; // YYYY-MM format
   onFinalizarVisita: (visita: Visita) => void;
+  onEditarVisita: (visita: Visita) => void;
   estadoColor: Record<EstadoVisita, string>;
 }
 
@@ -13,6 +14,7 @@ export default function VisitasCalendarView({
   visitas,
   mes,
   onFinalizarVisita,
+  onEditarVisita,
   estadoColor,
 }: VisitasCalendarViewProps) {
   const navigate = useNavigate();
@@ -391,6 +393,20 @@ export default function VisitasCalendarView({
                   title="Las visitas POR_TICKET deben finalizarse desde el ticket con el botón Culminar ticket"
                 >
                   Ir al ticket
+                </button>
+              )}
+              {(visitaSeleccionada.estado === 'PROGRAMADA' || visitaSeleccionada.estado === 'PENDIENTE_PROGRAMACION') && (
+                <button
+                  onClick={() => {
+                    onEditarVisita(visitaSeleccionada);
+                    setVisitaSeleccionada(null);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-lg border border-sky-300 bg-white hover:bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Editar
                 </button>
               )}
               <button

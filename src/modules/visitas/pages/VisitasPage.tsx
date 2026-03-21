@@ -132,6 +132,7 @@ export default function VisitasPage() {
   const [showFinalizarModal, setShowFinalizarModal] = useState(false);
   const [visitaSeleccionada, setVisitaSeleccionada] = useState<Visita | null>(null);
   const [prefilledVisitaData, setPrefilledVisitaData] = useState<any>(null);
+  const [editingVisita, setEditingVisita] = useState<Visita | null>(null);
   const [showRegisterAssetModal, setShowRegisterAssetModal] = useState(false);
   const [activoSeleccionadoParaEditar, setActivoSeleccionadoParaEditar] = useState<any>(null);
   
@@ -315,7 +316,21 @@ export default function VisitasPage() {
       return;
     }
     setPrefilledVisitaData(null);
+    setEditingVisita(null);
     setShowNewVisitaModal(true);
+  };
+
+  const handleEditarVisita = (visita: Visita) => {
+    setEditingVisita(visita);
+    setPrefilledVisitaData(null);
+    setShowNewVisitaModal(true);
+  };
+
+  const handleVisitaActualizada = async () => {
+    setShowNewVisitaModal(false);
+    setEditingVisita(null);
+    mostrarToast('Visita actualizada exitosamente', 'success');
+    cargarVisitas();
   };
 
   const handleFinalizarVisita = (visita: Visita) => {
@@ -730,6 +745,7 @@ export default function VisitasPage() {
               <VisitasTableView
                 visitas={visitas}
                 onFinalizarVisita={handleFinalizarVisita}
+                onEditarVisita={handleEditarVisita}
                 estadoColor={estadoColor}
                 onRefresh={cargarVisitas}
               />
@@ -738,6 +754,7 @@ export default function VisitasPage() {
                 visitas={visitas}
                 mes={mesAño}
                 onFinalizarVisita={handleFinalizarVisita}
+                onEditarVisita={handleEditarVisita}
                 estadoColor={estadoColor}
               />
             )}
@@ -748,15 +765,18 @@ export default function VisitasPage() {
       {/* ── Modales ── */}
       {showNewVisitaModal && (
         <NewVisitaModal
-          empresaId={filtros.empresaId!}
+          empresaId={editingVisita?.empresaId || filtros.empresaId!}
           contratoId={String(contratoActivo?.id ?? '')}
           onClose={() => {
             setShowNewVisitaModal(false);
             setPrefilledVisitaData(null);
+            setEditingVisita(null);
           }}
           onVisitaCreada={handleVisitaCreada}
+          onVisitaActualizada={handleVisitaActualizada}
           onError={(error) => mostrarToast(error, 'error')}
           prefilledData={prefilledVisitaData}
+          editingVisita={editingVisita ?? undefined}
         />
       )}
 
