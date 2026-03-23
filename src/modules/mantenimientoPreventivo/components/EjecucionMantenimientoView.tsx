@@ -4,6 +4,7 @@ import RegisterAssetModal from '@/modules/inventario/components/RegisterAssetMod
 import { getAreasByEmpresa } from '@/modules/inventario/services/areasService';
 import { getCategorias, type Category } from '@/modules/inventario/services/categoriasService';
 import { getInventarioBySede } from '@/modules/inventario/services/inventarioService';
+import { getActivoExecution, saveActivoExecution } from '../services/mantenimientosPreventivosService';
 
 type TecnicoInfo = {
   id: string;
@@ -11,6 +12,7 @@ type TecnicoInfo = {
 };
 
 type MantenimientoContext = {
+  mantenimientoId?: string;
   empresaId: string;
   empresaNombre: string;
   sedeId: string;
@@ -52,8 +54,8 @@ type MantenimientoDraft = {
   trabajoRealizado: string;
   recomendaciones: string;
   cambioComponentes: 'NO' | 'SI';
-  evidenciaAntes: File | null;
-  evidenciaDespues: File | null;
+  evidenciaAntes: File | string | null; // string = base64 tras guardar
+  evidenciaDespues: File | string | null;
   checklist: ChecklistRow[];
   observaciones: string;
   firmaTecnicoModo: 'AUTO' | 'TRAZAR';
@@ -119,6 +121,22 @@ function getCurrentUserName(): string {
     return String(user.nombreCompleto ?? user.nombre ?? user.name ?? '').trim();
   } catch {
     return '';
+  }
+}
+
+function getCurrentUserIdentity(): { id: string; nombre: string; email: string } {
+  try {
+    const raw = localStorage.getItem('user');
+    if (!raw) return { id: '', nombre: '', email: '' };
+
+    const user = JSON.parse(raw) as Record<string, unknown>;
+    const id = String(user.id ?? user.userId ?? user.usuarioId ?? user._id ?? '').trim();
+    const nombre = String(user.nombreCompleto ?? user.nombre ?? user.name ?? '').trim();
+    const email = String(user.email ?? user.correo ?? user.mail ?? '').trim();
+
+    return { id, nombre, email };
+  } catch {
+    return { id: '', nombre: '', email: '' };
   }
 }
 
@@ -320,6 +338,168 @@ function buildEmptyDraft(): MantenimientoDraft {
   };
 }
 
+function normalizeChecklistValue(value: unknown): ChecklistValue {
+  const normalized = String(value ?? '')
+    .trim()
+    .toUpperCase();
+  if (normalized === 'SI' || normalized === 'S' || normalized === 'TRUE') return 'SI';
+  if (normalized === 'NO' || normalized === 'N' || normalized === 'FALSE') return 'NO';
+  return null;
+}
+
+function buildDraftFromExecutionData(raw: unknown): MantenimientoDraft | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const source = raw as Record<string, unknown>;
+
+  const base = buildEmptyDraft();
+
+  const diagnostico = getStringField(source, ['diagnostico']);
+  const trabajoRealizado = getStringField(source, ['trabajoRealizado', 'trabajo_realizado']);
+  const recomendaciones = getStringField(source, ['recomendaciones']);
+  const observaciones = getStringField(source, ['observaciones']);
+
+  const evidenciaAntes = getStringField(source, ['evidenciaAntes', 'evidencia_antes']);
+  const evidenciaDespues = getStringField(source, ['evidenciaDespues', 'evidencia_despues']);
+
+  const firmaTecnicoTipo = getStringField(source, ['firmaTecnicoTipo', 'firma_tecnico_tipo']).toUpperCase();
+  const firmaUsuarioTipo = getStringField(source, ['firmaUsuarioTipo', 'firma_usuario_tipo']).toUpperCase();
+  const firmaTecnicoValor = getStringField(source, ['firmaTecnicoValor', 'firma_tecnico_valor']);
+  const firmaUsuarioValor = getStringField(source, ['firmaUsuarioValor', 'firma_usuario_valor']);
+
+  const cambioRaw = source.cambioComponentes ?? source.cambio_componentes;
+  const cambioComponentes: 'NO' | 'SI' =
+    String(cambioRaw ?? '')
+      .trim()
+      .toUpperCase() === 'SI' ||
+    cambioRaw === true
+      ? 'SI'
+      : 'NO';
+
+  const checklistRaw = Array.isArray(source.checklist) ? source.checklist : [];
+  const checklistMap = new Map<string, ChecklistRow>();
+
+  checklistRaw.forEach((row) => {
+    if (!row || typeof row !== 'object') return;
+    const item = row as Record<string, unknown>;
+    const key = getStringField(item, ['key', 'itemKey', 'item_key']);
+    if (!key) return;
+    const label = getStringField(item, ['label']) || CHECKLIST_BASE.find((baseItem) => baseItem.key === key)?.label || key;
+    checklistMap.set(key, {
+      key,
+      label,
+      value: normalizeChecklistValue(item.estado ?? item.value),
+      comentario: getStringField(item, ['comentario', 'comment']),
+    });
+  });
+
+  const checklist = CHECKLIST_BASE.map((baseRow) => checklistMap.get(baseRow.key) || { ...baseRow });
+
+  const hasMeaningfulData =
+    Boolean(diagnostico) ||
+    Boolean(trabajoRealizado) ||
+    Boolean(recomendaciones) ||
+    Boolean(observaciones) ||
+    Boolean(evidenciaAntes) ||
+    Boolean(evidenciaDespues) ||
+    checklist.some((item) => item.value !== null || Boolean(item.comentario));
+
+  if (!hasMeaningfulData) return null;
+
+  return {
+    ...base,
+    diagnostico,
+    trabajoRealizado,
+    recomendaciones,
+    observaciones,
+    cambioComponentes,
+    evidenciaAntes: evidenciaAntes || null,
+    evidenciaDespues: evidenciaDespues || null,
+    checklist,
+    firmaTecnicoModo: firmaTecnicoTipo === 'TRAZAR' ? 'TRAZAR' : 'AUTO',
+    firmaUsuarioModo: firmaUsuarioTipo === 'TRAZAR' ? 'TRAZAR' : 'AUTO',
+    firmaTecnico: firmaTecnicoValor,
+    firmaUsuario: firmaUsuarioValor,
+  };
+}
+
+function getDraftStorageKey(mantenimientoId: string, activoId: string): string {
+  return `mp:ejecucion:draft:${mantenimientoId}:${activoId}`;
+}
+
+function getDraftFallbackStorageKey(scopeKey: string, activoId: string): string {
+  return `mp:ejecucion:draft:fallback:${scopeKey}:${activoId}`;
+}
+
+function saveDraftSnapshot(
+  mantenimientoId: string | undefined,
+  scopeKey: string,
+  activoId: string,
+  draft: MantenimientoDraft
+): void {
+  const beforeAsString = typeof draft.evidenciaAntes === 'string' ? draft.evidenciaAntes : '';
+  const afterAsString = typeof draft.evidenciaDespues === 'string' ? draft.evidenciaDespues : '';
+
+  const isHeavyDataUrl = (value: string): boolean => {
+    if (!value) return false;
+    return value.startsWith('data:image/') && value.length > 64 * 1024;
+  };
+
+  const payload: MantenimientoDraft = {
+    ...draft,
+    // Evita romper localStorage por payloads base64 grandes; conserva URLs/valores livianos.
+    evidenciaAntes: beforeAsString && !isHeavyDataUrl(beforeAsString) ? beforeAsString : null,
+    evidenciaDespues: afterAsString && !isHeavyDataUrl(afterAsString) ? afterAsString : null,
+  };
+
+  try {
+    if (mantenimientoId) {
+      localStorage.setItem(getDraftStorageKey(mantenimientoId, activoId), JSON.stringify(payload));
+    }
+    localStorage.setItem(getDraftFallbackStorageKey(scopeKey, activoId), JSON.stringify(payload));
+  } catch {
+    // no-op: almacenamiento local opcional
+  }
+}
+
+function loadDraftSnapshot(
+  mantenimientoId: string | undefined,
+  scopeKey: string,
+  activoId: string
+): MantenimientoDraft | null {
+  try {
+    const candidateKeys = [
+      ...(mantenimientoId ? [getDraftStorageKey(mantenimientoId, activoId)] : []),
+      getDraftFallbackStorageKey(scopeKey, activoId),
+    ];
+
+    for (const key of candidateKeys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as unknown;
+      const draft = buildDraftFromExecutionData(parsed);
+      if (draft) return draft;
+    }
+
+    // Compatibilidad: busca snapshots antiguos por activo sin depender del mantenimiento actual.
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (!key.startsWith('mp:ejecucion:draft:')) continue;
+      if (!key.endsWith(`:${activoId}`)) continue;
+
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as unknown;
+      const draft = buildDraftFromExecutionData(parsed);
+      if (draft) return draft;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function compressImageIfNeeded(file: File): Promise<File> {
   const maxBytes = 2 * 1024 * 1024;
   if (file.size <= maxBytes) return file;
@@ -441,6 +621,9 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
   const [showRegisterAssetModal, setShowRegisterAssetModal] = useState(false);
   const [showEditComponentsModal, setShowEditComponentsModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [savingAsset, setSavingAsset] = useState<string | null>(null);
+  const [pdfUrlByAsset, setPdfUrlByAsset] = useState<Record<string, string>>({});
+  const [isReadOnly, setIsReadOnly] = useState(false);
 
   const [areas, setAreas] = useState<AreaItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -519,16 +702,75 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
   const progreso = totalActivos === 0 ? 0 : Math.round((completados / totalActivos) * 100);
 
   const activeDraft = activeAsset ? draftByAsset[activeAsset.id] || buildEmptyDraft() : buildEmptyDraft();
-  const tecnicoFirmaNombre = context.tecnicos[0]?.nombre || getCurrentUserName() || 'Tecnico asignado';
+  const currentUserIdentity = getCurrentUserIdentity();
+  const tecnicoPrincipal = context.tecnicos[0];
+  const tecnicoFirmaNombre = tecnicoPrincipal?.nombre || currentUserIdentity.nombre || getCurrentUserName() || 'Tecnico';
+  const tecnicoEmail =
+    currentUserIdentity.email ||
+    (tecnicoFirmaNombre && !tecnicoFirmaNombre.toLowerCase().includes('tecnico')
+      ? `${tecnicoFirmaNombre.split(' ').join('.').toLowerCase()}@intiscorp.com`
+      : 'soporte@intiscorp.com');
   const usuarioFirmaNombre = activeAsset?.usuarioCompleto || activeAsset?.usuario || 'Usuario asignado';
+  const usuarioEmail =
+    (activeAsset?.raw as Record<string, unknown> | undefined)?.usuario_email?.toString() ||
+    (activeAsset?.raw as Record<string, unknown> | undefined)?.usuarioEmail?.toString() ||
+    'usuario@intiscorp.com';
+  const snapshotScopeKey = `${context.empresaId}:${context.sedeId}`;
 
-  const openExecutionModal = (asset: AssetRow) => {
+  const openExecutionModal = async (asset: AssetRow) => {
+    let isCompleted = statusByAsset[asset.id] === 'COMPLETADO';
+
+    const cachedDraft = loadDraftSnapshot(context.mantenimientoId, snapshotScopeKey, asset.id);
+    if (cachedDraft) {
+      isCompleted = true;
+      setDraftByAsset((prev) => ({
+        ...prev,
+        [asset.id]: cachedDraft,
+      }));
+    }
+
+    if (context.mantenimientoId) {
+      try {
+        const existing = await getActivoExecution(context.mantenimientoId, asset.id);
+        if (existing?.ejecucionId) {
+          isCompleted = true;
+          setStatusByAsset((prev) => ({
+            ...prev,
+            [asset.id]: 'COMPLETADO',
+          }));
+        }
+
+        const mappedDraft = buildDraftFromExecutionData(existing);
+        if (mappedDraft) {
+          setDraftByAsset((prev) => ({
+            ...prev,
+            [asset.id]: mappedDraft,
+          }));
+
+          saveDraftSnapshot(context.mantenimientoId, snapshotScopeKey, asset.id, mappedDraft);
+        }
+
+        if (existing?.pdf?.url) {
+          setPdfUrlByAsset((prev) => ({
+            ...prev,
+            [asset.id]: existing.pdf?.url || '',
+          }));
+        }
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        setErrorMessage(err.message || 'No se pudo consultar la ejecución actual del activo.');
+      }
+    }
+
+    setIsReadOnly(isCompleted);
     setActiveAsset(asset);
     setShowExecutionModal(true);
-    setStatusByAsset((prev) => ({
-      ...prev,
-      [asset.id]: prev[asset.id] === 'COMPLETADO' ? 'COMPLETADO' : 'EN_PROCESO',
-    }));
+    if (!isCompleted) {
+      setStatusByAsset((prev) => ({
+        ...prev,
+        [asset.id]: prev[asset.id] === 'COMPLETADO' ? 'COMPLETADO' : 'EN_PROCESO',
+      }));
+    }
   };
 
   const updateActiveDraft = (patch: Partial<MantenimientoDraft>) => {
@@ -593,7 +835,7 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
     return null;
   };
 
-  const handleSaveAssetExecution = () => {
+  const handleSaveAssetExecution = async () => {
     if (!activeAsset) return;
 
     const draft = draftByAsset[activeAsset.id] || buildEmptyDraft();
@@ -605,8 +847,137 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
     }
 
     setErrorMessage(null);
-    setStatusByAsset((prev) => ({ ...prev, [activeAsset.id]: 'COMPLETADO' }));
-    setShowExecutionModal(false);
+    setSavingAsset(activeAsset.id);
+
+    try {
+      // Convertir imágenes a base64
+      const evidenciaAntesBase64 = draft.evidenciaAntes instanceof File 
+        ? await fileToBase64(draft.evidenciaAntes) 
+        : draft.evidenciaAntes || '';
+      const evidenciaDespuesBase64 = draft.evidenciaDespues instanceof File 
+        ? await fileToBase64(draft.evidenciaDespues) 
+        : draft.evidenciaDespues || '';
+
+      console.log('📷 [handleSaveAssetExecution] Evidencias base64:', {
+        antesLength: evidenciaAntesBase64.length,
+        despuesLength: evidenciaDespuesBase64.length,
+        antesStart: evidenciaAntesBase64.substring(0, 50),
+        despuesStart: evidenciaDespuesBase64.substring(0, 50),
+      });
+
+      // Mapear checklist - mantener structure que type espera
+      const checklistPayload = draft.checklist.map((item) => ({
+        key: item.key,
+        label: item.label,
+        estado: item.value || 'SI',
+        comentario: item.comentario || '',
+      }));
+
+      const payload = {
+        mantenimientoId: context.mantenimientoId || '',
+        activoId: activeAsset.id,
+        fechaInicio: context.fecha || new Date().toISOString().split('T')[0],
+        fechaFin: new Date().toISOString().split('T')[0],
+        diagnostico: draft.diagnostico,
+        trabajoRealizado: draft.trabajoRealizado,
+        recomendaciones: draft.recomendaciones,
+        observaciones: draft.observaciones,
+        tecnicoNombre: tecnicoFirmaNombre,
+        tecnicoEmail,
+        usuarioNombre: usuarioFirmaNombre,
+        usuarioEmail,
+        firmaTecnicoTipo: draft.firmaTecnicoModo,
+        firmaTecnicoValor: draft.firmaTecnico || tecnicoFirmaNombre,
+        firmaUsuarioTipo: draft.firmaUsuarioModo,
+        firmaUsuarioValor: draft.firmaUsuario || usuarioFirmaNombre,
+        checklist: checklistPayload,
+        evidenciaAntes: evidenciaAntesBase64,
+        evidenciaDespues: evidenciaDespuesBase64,
+      };
+
+      console.log('📤 [handleSaveAssetExecution] Enviando payload:', {
+        mantenimientoId: payload.mantenimientoId,
+        activoId: payload.activoId,
+        checklistItems: payload.checklist.length,
+        signatures: [payload.firmaTecnicoTipo, payload.firmaUsuarioTipo],
+      });
+
+      const response = await saveActivoExecution(payload);
+
+      console.log('📥 [handleSaveAssetExecution] Respuesta del servidor:', {
+        ejecucionId: response.ejecucionId,
+        estado: response.estado,
+        pdfEstado: response.pdf?.estado,
+        pdfUrl: response.pdf?.url ? '✓ URL disponible' : '✗ Sin URL',
+      });
+
+      // Guardar ejecucionId y URL del PDF
+      if (response.ejecucionId) {
+        setStatusByAsset((prev) => ({
+          ...prev,
+          [activeAsset.id]: 'COMPLETADO',
+        }));
+      }
+
+      if (response.pdf?.url) {
+        setPdfUrlByAsset((prev) => ({ 
+          ...prev, 
+          [activeAsset.id]: response.pdf!.url 
+        }));
+        console.log('✅ PDF vinculado al activo:', activeAsset.id);
+      } else if (response.pdf?.estado === 'ERROR') {
+        console.warn('⚠️ Error en generación de PDF:', response.pdf);
+      }
+
+      // Persistir base64 en draft para mostrarlo en vista de solo lectura
+      const persistedDraft: MantenimientoDraft = {
+        ...draft,
+        evidenciaAntes: evidenciaAntesBase64 || draft.evidenciaAntes,
+        evidenciaDespues: evidenciaDespuesBase64 || draft.evidenciaDespues,
+      };
+
+      setDraftByAsset((prev) => ({
+        ...prev,
+        [activeAsset.id]: {
+          ...persistedDraft,
+        },
+      }));
+
+      saveDraftSnapshot(context.mantenimientoId, snapshotScopeKey, activeAsset.id, persistedDraft);
+
+      // Cerrar modal y limpiar draft
+      setShowExecutionModal(false);
+      // Opcional: limpiar el draft del activo después de guardar exitosamente
+      // setDraftByAsset((prev) => { const { [activeAsset.id]: _, ...rest } = prev; return rest; });
+
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      const errorMsg = err.message || 'Error al guardar la ejecución del activo.';
+
+      if (errorMsg.toLowerCase().includes('ya existe una ejecucion')) {
+        setStatusByAsset((prev) => ({
+          ...prev,
+          [activeAsset.id]: 'COMPLETADO',
+        }));
+        setShowExecutionModal(false);
+        setErrorMessage('Este activo ya tiene una ejecución registrada para este mantenimiento.');
+        return;
+      }
+
+      console.error('🔴 [handleSaveAssetExecution] Error:', errorMsg);
+      setErrorMessage(errorMsg);
+    } finally {
+      setSavingAsset(null);
+    }
+  };
+
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleOpenComponentsEdit = () => {
@@ -826,7 +1197,7 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
             <div className="bg-[#0f2d5e] px-6 py-4 flex items-start justify-between gap-3">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-[#7eb8e8] mb-0.5">
-                  Formulario de ejecución
+                  {isReadOnly ? 'Detalle de ejecución' : 'Formulario de ejecución'}
                 </p>
                 <h4 className="text-lg font-extrabold text-white leading-tight">
                   {activeAsset.equipo}
@@ -848,6 +1219,133 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
             </div>
 
             {/* Modal body */}
+            {isReadOnly ? (
+              <div className="p-6 space-y-7 overflow-y-auto bg-[#f7faff]">
+                {/* ── VISTA DE SOLO LECTURA ─────────────────── */}
+
+                {/* Informe técnico */}
+                <div className="bg-white rounded-xl border border-[#daeaf8] p-5 shadow-sm">
+                  <SectionTitle>Informe técnico</SectionTitle>
+                  <div className="space-y-4">
+                    {[
+                      { label: 'Diagnóstico', value: activeDraft.diagnostico },
+                      { label: 'Trabajo realizado', value: activeDraft.trabajoRealizado },
+                      { label: 'Recomendaciones', value: activeDraft.recomendaciones },
+                    ].map(({ label, value }) => (
+                      <div key={label}>
+                        <FieldLabel>{label}</FieldLabel>
+                        <p className="text-sm text-[#0f2744] bg-[#f4f8fd] rounded-xl p-3.5 border border-[#daeaf8] whitespace-pre-wrap min-h-[60px]">
+                          {value || <span className="text-[#94afc8]">Sin información</span>}
+                        </p>
+                      </div>
+                    ))}
+                    {activeDraft.observaciones ? (
+                      <div>
+                        <FieldLabel>Observaciones</FieldLabel>
+                        <p className="text-sm text-[#0f2744] bg-[#f4f8fd] rounded-xl p-3.5 border border-[#daeaf8] whitespace-pre-wrap min-h-[48px]">
+                          {activeDraft.observaciones}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* Cambio de componentes */}
+                <div className="bg-white rounded-xl border border-[#daeaf8] p-5 shadow-sm">
+                  <SectionTitle>Cambio de componentes</SectionTitle>
+                  <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border-2 ${activeDraft.cambioComponentes === 'SI' ? 'bg-[#1a6fc4] text-white border-[#1a6fc4]' : 'bg-[#0f2d5e] text-white border-[#0f2d5e]'}`}>
+                    {activeDraft.cambioComponentes === 'SI' ? 'Sí se realizó cambio de componente' : 'No se realizó cambio de componente'}
+                  </span>
+                </div>
+
+                {/* Evidencias */}
+                <div className="bg-white rounded-xl border border-[#daeaf8] p-5 shadow-sm">
+                  <SectionTitle>Evidencias fotográficas</SectionTitle>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {([
+                      { kind: 'ANTES', evidence: activeDraft.evidenciaAntes },
+                      { kind: 'DESPUES', evidence: activeDraft.evidenciaDespues },
+                    ] as const).map(({ kind, evidence }) => (
+                      <div key={kind} className="rounded-xl border-2 border-[#bdd7f0] bg-[#f4f8fd] p-4">
+                        <p className="text-xs font-bold uppercase tracking-widest text-[#1a4d8f] mb-3">Imagen {kind}</p>
+                        {evidence ? (
+                          <img
+                            src={typeof evidence === 'string' ? evidence : URL.createObjectURL(evidence)}
+                            alt={`Evidencia ${kind}`}
+                            className="w-full rounded-xl border border-[#bdd7f0] object-contain max-h-52"
+                          />
+                        ) : (
+                          <p className="text-xs text-[#94afc8] font-semibold text-center py-10">Sin imagen</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Checklist */}
+                <div className="bg-white rounded-xl border border-[#daeaf8] p-5 shadow-sm">
+                  <SectionTitle>Checklist de mantenimiento</SectionTitle>
+                  <div className="space-y-2">
+                    {activeDraft.checklist.map((item, idx) => (
+                      <div
+                        key={item.key}
+                        className={`rounded-xl border p-3.5 ${item.value === 'SI' ? 'border-[#7dd3af] bg-[#f0fbf6]' : item.value === 'NO' ? 'border-[#f9a8a8] bg-[#fff5f5]' : 'border-[#daeaf8] bg-[#f7faff]'}`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <span className="text-[11px] font-bold text-[#94afc8] w-5 text-right">{idx + 1}</span>
+                            <p className="text-sm font-semibold text-[#0f2744]">{item.label}</p>
+                          </div>
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${item.value === 'SI' ? 'bg-[#e6f7f0] text-[#0d5c39] border-[#7dd3af]' : item.value === 'NO' ? 'bg-[#fff5f5] text-[#b91c1c] border-[#f9a8a8]' : 'bg-[#f0f4fa] text-[#94afc8] border-[#daeaf8]'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${item.value === 'SI' ? 'bg-[#22c47a]' : item.value === 'NO' ? 'bg-red-500' : 'bg-[#c8ddf0]'}`} />
+                            {item.value ?? 'Sin responder'}
+                          </span>
+                        </div>
+                        {item.value === 'NO' && item.comentario && (
+                          <p className="mt-2 text-sm text-[#7a0000] bg-[#fff5f5] rounded-lg p-2.5 border border-[#f9a8a8]">
+                            {item.comentario}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Firmas */}
+                <div className="bg-white rounded-xl border border-[#daeaf8] p-5 shadow-sm">
+                  <SectionTitle>Firmas de conformidad</SectionTitle>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {[
+                      { label: 'Firma del Técnico', nombre: tecnicoFirmaNombre, modo: activeDraft.firmaTecnicoModo, firmaValue: activeDraft.firmaTecnico },
+                      { label: 'Firma del Usuario', nombre: usuarioFirmaNombre, modo: activeDraft.firmaUsuarioModo, firmaValue: activeDraft.firmaUsuario },
+                    ].map(({ label, nombre, modo, firmaValue }) => (
+                      <div key={label} className="space-y-3">
+                        <FieldLabel>{label}</FieldLabel>
+                        <input type="text" value={nombre} readOnly className="w-full px-3.5 py-2.5 rounded-xl border-2 border-[#c8ddf0] bg-[#f0f6fd] text-[#0f2744] text-sm font-semibold" />
+                        {modo === 'AUTO' ? (
+                          <div className="h-32 rounded-xl border-2 border-[#c8ddf0] bg-white flex items-center px-5 overflow-hidden">
+                            <p
+                              className="text-[#0f2744] w-full whitespace-nowrap overflow-hidden text-ellipsis"
+                              style={{ fontFamily: '"Segoe Script", "Brush Script MT", cursive', fontSize: getAutoSignatureFontSize(nombre), lineHeight: 1, letterSpacing: '0.01em' }}
+                            >
+                              {nombre}
+                            </p>
+                          </div>
+                        ) : firmaValue ? (
+                          <div className="h-32 rounded-xl border-2 border-[#c8ddf0] bg-white overflow-hidden">
+                            <img src={firmaValue} alt={`Firma ${label}`} className="w-full h-full object-contain" />
+                          </div>
+                        ) : (
+                          <div className="h-32 rounded-xl border-2 border-dashed border-[#c8ddf0] bg-[#f0f6fd] flex items-center justify-center">
+                            <p className="text-xs text-[#94afc8] font-semibold">Sin firma</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
             <div className="p-6 space-y-7 overflow-y-auto bg-[#f7faff]">
 
               {/* Sección: Diagnóstico */}
@@ -941,7 +1439,7 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                         />
                         {file && (
                           <p className="mt-2 text-xs text-[#0d5c39] font-semibold flex items-center gap-1">
-                            <span>✓</span> {file.name}
+                            <span>✓</span> {file instanceof File ? file.name : 'Imagen cargada'}
                           </p>
                         )}
                       </div>
@@ -1094,10 +1592,11 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Modal footer */}
             <div className="px-6 py-4 border-t border-[#daeaf8] bg-white flex items-center justify-between gap-3">
-              {errorMessage && (
+              {!isReadOnly && errorMessage && (
                 <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5">
                   <span>⚠</span> {errorMessage}
                 </p>
@@ -1108,15 +1607,35 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                   onClick={() => setShowExecutionModal(false)}
                   className="px-5 py-2.5 rounded-xl border-2 border-[#c8ddf0] text-[#3a5a8a] text-sm font-bold hover:bg-[#f0f6fd] transition"
                 >
-                  Cancelar
+                  {isReadOnly ? 'Cerrar' : 'Cancelar'}
                 </button>
-                <button
-                  type="button"
-                  onClick={handleSaveAssetExecution}
-                  className="px-6 py-2.5 rounded-xl bg-[#1a6fc4] text-white text-sm font-bold hover:bg-[#145faa] shadow-md transition"
-                >
-                  Guardar ejecución
-                </button>
+                {!isReadOnly && (
+                  <button
+                    type="button"
+                    onClick={handleSaveAssetExecution}
+                    disabled={savingAsset === activeAsset?.id}
+                    className="px-6 py-2.5 rounded-xl bg-[#1a6fc4] text-white text-sm font-bold hover:bg-[#145faa] disabled:opacity-60 disabled:cursor-not-allowed shadow-md transition flex items-center gap-2"
+                  >
+                    {savingAsset === activeAsset?.id ? (
+                      <>
+                        <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                        Guardando...
+                      </>
+                    ) : (
+                      'Guardar ejecución'
+                    )}
+                  </button>
+                )}
+                {pdfUrlByAsset[activeAsset?.id || ''] && (
+                  <a
+                    href={pdfUrlByAsset[activeAsset?.id || '']}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-6 py-2.5 rounded-xl bg-[#22c47a] text-white text-sm font-bold hover:bg-[#1ba866] shadow-md transition"
+                  >
+                    Ver PDF
+                  </a>
+                )}
               </div>
             </div>
           </div>
