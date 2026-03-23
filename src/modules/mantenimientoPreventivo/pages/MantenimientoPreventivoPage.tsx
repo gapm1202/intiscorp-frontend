@@ -1,14 +1,32 @@
 import { useState } from 'react';
 import NuevoMantenimientoModal from '../components/NuevoMantenimientoModal';
 import MantenimientoPreventivoCalendar from '../components/MantenimientoPreventivoCalendar';
+import EjecucionMantenimientoView from '../components/EjecucionMantenimientoView';
+
+type EjecucionContext = {
+  mantenimientoId?: string;
+  empresaId: string;
+  empresaNombre: string;
+  sedeId: string;
+  sedeNombre: string;
+  fecha: string;
+  tecnicos: Array<{ id: string; nombre: string }>;
+};
 
 export default function MantenimientoPreventivoPage() {
   const [showNuevoMantenimiento, setShowNuevoMantenimiento] = useState(false);
+  const [executionContext, setExecutionContext] = useState<EjecucionContext | null>(null);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-blue-50 to-indigo-50 p-6">
+    <div
+      className="min-h-screen p-6"
+      style={{ background: 'linear-gradient(to bottom, rgb(248 250 252), rgb(239 246 255), rgb(238 242 255))' }}
+    >
       <div className="max-w-6xl mx-auto">
-        <div className="bg-gradient-to-r from-blue-900 via-blue-800 to-blue-700 rounded-2xl shadow-2xl px-8 py-6 mb-6 text-white">
+        <div
+          className="rounded-2xl shadow-2xl px-8 py-6 mb-6 text-white"
+          style={{ background: 'linear-gradient(to right, rgb(30 58 138), rgb(30 64 175), rgb(29 78 216))' }}
+        >
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <p className="text-blue-200 text-xs font-semibold uppercase tracking-[0.2em]">Mantenimiento</p>
@@ -27,11 +45,27 @@ export default function MantenimientoPreventivoPage() {
           </div>
         </div>
 
-        <MantenimientoPreventivoCalendar />
+        {executionContext ? (
+          <EjecucionMantenimientoView
+            context={executionContext}
+            onBack={() => setExecutionContext(null)}
+          />
+        ) : (
+          <MantenimientoPreventivoCalendar
+            onStartMantenimiento={(payload) => {
+              setExecutionContext(payload);
+            }}
+          />
+        )}
       </div>
 
       {showNuevoMantenimiento && (
-        <NuevoMantenimientoModal onClose={() => setShowNuevoMantenimiento(false)} />
+        <NuevoMantenimientoModal
+          onClose={() => setShowNuevoMantenimiento(false)}
+          onStart={(payload) => {
+            setExecutionContext(payload);
+          }}
+        />
       )}
     </div>
   );

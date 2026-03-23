@@ -31,6 +31,8 @@ interface Props {
   categories?: Category[];
   groups?: Array<{ id?: string; nombre?: string; codigo?: string }>;
   editingAsset?: Record<string, unknown> | null;
+  initialTab?: TabId;
+  lockToTab?: TabId;
 }
 
 type StorageEntry = { tipo: string; capacidad: string };
@@ -58,15 +60,17 @@ const RegisterAssetModal = ({
   isOpen, onClose, empresaId, sedeId, onSuccess,
   empresaNombre, sedeNombre, empresa, sedes, areas,
   categories = [], groups = [], editingAsset = null,
+  initialTab = 'identificacion', lockToTab,
 }: Props) => {
   const navigate = useNavigate();
 
   // ── Estado: tab activo ──
-  const [activeTab, setActiveTab] = useState<TabId>('identificacion');
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   // Stepper index: 0..3 correspond to TABS order
   const STEP_ORDER: TabId[] = ['identificacion', 'compra', 'personalizados', 'asignaciones'];
-  const [stepIndex, setStepIndex] = useState<number>(0);
+  const [stepIndex, setStepIndex] = useState<number>(Math.max(0, STEP_ORDER.indexOf(initialTab)));
   const [stepError, setStepError] = useState<string | null>(null);
+  const visibleTabs = lockToTab ? TABS.filter((tab) => tab.id === lockToTab) : TABS;
 
   // ── Estado: campos básicos ──
   const [categoria,        setCategoria]        = useState("");
@@ -437,6 +441,15 @@ const RegisterAssetModal = ({
     const idx = STEP_ORDER.indexOf(activeTab);
     if (idx >= 0 && idx !== stepIndex) setStepIndex(idx);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!lockToTab) return;
+    const idx = STEP_ORDER.indexOf(lockToTab);
+    if (idx >= 0) {
+      setActiveTab(lockToTab);
+      setStepIndex(idx);
+    }
+  }, [lockToTab]);
 
   // Validation for advancing steps
   const isStep0Valid = () => {
@@ -1210,11 +1223,11 @@ const RegisterAssetModal = ({
         ) : (
           <div className="space-y-4">
             {usuariosAsignadosIds.length > 0 && (
-              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-4">
+              <div className="bg-linear-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h5 className="text-sm font-semibold text-blue-800">✅ Asignados ({usuariosAsignadosIds.length})</h5>
                   {usuariosAsignadosIds.length > 1 && (
-                    <span className="text-xs bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-1 rounded-full font-semibold">Compartido</span>
+                    <span className="text-xs bg-linear-to-r from-blue-500 to-cyan-500 text-white px-3 py-1 rounded-full font-semibold">Compartido</span>
                   )}
                 </div>
                 <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
@@ -1228,7 +1241,7 @@ const RegisterAssetModal = ({
                     return (
                       <div key={uid} className="flex items-center justify-between bg-white border border-blue-100 rounded-lg px-4 py-2.5 hover:shadow-sm transition">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-sm shadow">
+                          <div className="w-9 h-9 rounded-full bg-linear-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-sm shadow">
                             {u.nombreCompleto?.charAt(0).toUpperCase() || '?'}
                           </div>
                           <div>
@@ -1415,7 +1428,7 @@ const RegisterAssetModal = ({
       <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden transform-gpu animate-modal-enter border border-slate-100">
 
         {/* ── Header ── */}
-        <div className="bg-gradient-to-r from-blue-600 to-cyan-500 px-6 py-5 flex items-center justify-between rounded-t-3xl flex-shrink-0">
+        <div className="bg-linear-to-r from-blue-600 to-cyan-500 px-6 py-5 flex items-center justify-between rounded-t-3xl shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center text-white text-lg">
               {editingAsset ? '✏️' : '➕'}
@@ -1434,12 +1447,13 @@ const RegisterAssetModal = ({
         </div>
 
         {/* ── Tabs ── */}
-        <div className="bg-white border-b border-slate-100 px-6 flex gap-1 flex-shrink-0">
-          {TABS.map(tab => (
+        <div className="bg-white border-b border-slate-100 px-6 flex gap-1 shrink-0">
+          {visibleTabs.map(tab => (
             <button
               key={tab.id}
               type="button"
               onClick={() => {
+                if (lockToTab) return;
                 const targetIdx = STEP_ORDER.indexOf(tab.id);
                 // if trying to advance forward, validate current step
                 if (targetIdx > stepIndex && !canAdvanceFromStep(stepIndex)) {
@@ -1471,10 +1485,11 @@ const RegisterAssetModal = ({
           </div>
 
           {/* ── Footer: acciones ── */}
-          <div className="bg-white border-t border-slate-100 px-6 py-4 flex items-center justify-between flex-shrink-0 rounded-b-3xl">
+          <div className="bg-white border-t border-slate-100 px-6 py-4 flex items-center justify-between shrink-0 rounded-b-3xl">
             <div className="flex gap-1.5">
-              {TABS.map((tab, i) => (
+              {visibleTabs.map((tab, i) => (
                 <button key={tab.id} type="button" onClick={() => {
+                  if (lockToTab) return;
                   const targetIdx = STEP_ORDER.indexOf(tab.id);
                   if (targetIdx > stepIndex && !canAdvanceFromStep(stepIndex)) { const missing = getMissingStep0Fields(); setStepError(missing.length ? `Faltan campos obligatorios: ${missing.join(', ')}.` : 'Completa los campos requeridos antes de avanzar.'); return; }
                   setActiveTab(tab.id); setStepIndex(targetIdx);
@@ -1490,6 +1505,14 @@ const RegisterAssetModal = ({
               {/* If not final step, the main button advances the stepper; final step submits the form */}
               <button type="button" disabled={isSubmitting}
                 onClick={async () => {
+                  if (lockToTab) {
+                    if (isSubmitting) return;
+                    const targetSedeId = sedeId ?? selectedSedeId;
+                    if (!empresaId || !targetSedeId) { alert('Error: No se puede crear activo sin empresa o sede'); return; }
+                    if (editingAsset) { setShowMotivoModal(true); return; }
+                    await procesarCreacion(empresaId, targetSedeId);
+                    return;
+                  }
                   const last = STEP_ORDER.length - 1;
                   if (stepIndex < last) {
                     if (!canAdvanceFromStep(stepIndex)) { const missing = getMissingStep0Fields(); setStepError(missing.length ? `Faltan campos obligatorios: ${missing.join(', ')}.` : 'Completa los campos requeridos antes de avanzar.'); return; }
@@ -1503,7 +1526,7 @@ const RegisterAssetModal = ({
                   if (editingAsset) { setShowMotivoModal(true); return; }
                   await procesarCreacion(empresaId, targetSedeId);
                 }}
-                className="px-6 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white rounded-full font-semibold text-sm shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                className="px-6 py-2 bg-linear-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white rounded-full font-semibold text-sm shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
                 {isSubmitting ? (
                   <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>Procesando…</>
                 ) : (
@@ -1519,9 +1542,9 @@ const RegisterAssetModal = ({
 
       {/* ── Modal Motivo de Actualización ── */}
       {showMotivoModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100000]">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-100000">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4">
-            <div className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-6 py-4 rounded-t-2xl flex items-center gap-3">
+            <div className="bg-linear-to-r from-blue-500 to-cyan-500 text-white px-6 py-4 rounded-t-2xl flex items-center gap-3">
               <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">✏️</div>
               <h3 className="text-lg font-bold">Confirmar Actualización</h3>
             </div>
@@ -1559,7 +1582,7 @@ const RegisterAssetModal = ({
                 className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition flex items-center gap-2
                   ${motivo.trim().length < 10
                     ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow hover:shadow-md hover:from-blue-700 hover:to-cyan-600'}`}>
+                    : 'bg-linear-to-r from-blue-600 to-cyan-500 text-white shadow hover:shadow-md hover:from-blue-700 hover:to-cyan-600'}`}>
                 ✅ Confirmar Actualización
               </button>
             </div>
@@ -1569,7 +1592,7 @@ const RegisterAssetModal = ({
 
       {/* ── Popup de error de step (estilizado) ── */}
       {stepError && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100001]">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-100001">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 border border-red-100">
             <div className="flex items-center gap-3 px-5 py-4 border-b border-red-50 rounded-t-2xl bg-red-50">
               <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-red-100 text-red-700">⚠️</div>
