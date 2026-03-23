@@ -14,6 +14,7 @@ import EtiquetasPage from "../modules/inventario/pages/EtiquetasPage";
 import GruposPage from "../modules/inventario/pages/GruposPage";
 import TiposActivosPage from "../modules/inventario/pages/TiposActivosPage";
 import MarcasPage from "../modules/inventario/pages/MarcasPage";
+import ChecklistPage from "../modules/inventario/pages/ChecklistPage";
 import LoginEmpresaPage from "../modules/public/pages/LoginEmpresaPage";
 import ReporteIncidenciaPage from "../modules/public/pages/ReporteIncidenciaPage";
 import CatalogoCategoriasPage from "../modules/catalogo/pages/CatalogoCategoriasPage";
@@ -159,6 +160,16 @@ const AppRouter = () => {
             <RoleRoute role="admin">
               <AdminLayout>
                 <MarcasPage />
+              </AdminLayout>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin/grupos-activos/checklist"
+          element={
+            <RoleRoute role="admin">
+              <AdminLayout>
+                <ChecklistPage />
               </AdminLayout>
             </RoleRoute>
           }
