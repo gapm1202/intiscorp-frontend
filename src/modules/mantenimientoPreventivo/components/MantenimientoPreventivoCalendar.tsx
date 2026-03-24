@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import axiosClient from '@/api/axiosClient';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import { useNavigate } from 'react-router-dom';
 import { getEmpresas } from '@/modules/empresas/services/empresasService';
 import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
@@ -10,7 +12,7 @@ type Option = {
   nombre: string;
 };
 
-type EstadoMantenimiento = 'PENDIENTE' | 'PROGRAMADO' | 'EJECUTADO' | 'ATRASADO';
+type EstadoMantenimiento = 'PENDIENTE' | 'PROGRAMADO' | 'EN_PROCESO' | 'EJECUTADO' | 'ATRASADO';
 
 type MantenimientoItem = {
   id: string;
@@ -52,6 +54,7 @@ const WEEK_DAYS = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
 const estadoStyles: Record<EstadoMantenimiento, { chip: string; dot: string; label: string }> = {
   PENDIENTE: { chip: 'bg-amber-100 text-amber-800 border-amber-200', dot: 'bg-amber-500', label: 'Pendiente' },
   PROGRAMADO: { chip: 'bg-blue-100 text-blue-800 border-blue-200', dot: 'bg-blue-500', label: 'Programado' },
+  EN_PROCESO: { chip: 'bg-violet-100 text-violet-800 border-violet-200', dot: 'bg-violet-500', label: 'En proceso' },
   EJECUTADO: { chip: 'bg-emerald-100 text-emerald-800 border-emerald-200', dot: 'bg-emerald-500', label: 'Ejecutado' },
   ATRASADO: { chip: 'bg-rose-100 text-rose-800 border-rose-200', dot: 'bg-rose-500', label: 'Atrasado' },
 };
@@ -155,6 +158,8 @@ export default function MantenimientoPreventivoCalendar({ onStartMantenimiento, 
   const [estadoContrato, setEstadoContrato] = useState<EstadoContratoPreventivo>('SIN_EMPRESA');
   const [selectedMantenimiento, setSelectedMantenimiento] = useState<MantenimientoItem | null>(null);
   const [mantenimientos, setMantenimientos] = useState<MantenimientoItem[]>([]);
+  const [mantenimientoToStart, setMantenimientoToStart] = useState<MantenimientoItem | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   const sedesDisponibles = useMemo(() => {
     if (!empresaId) return [];
@@ -275,7 +280,7 @@ export default function MantenimientoPreventivoCalendar({ onStartMantenimiento, 
   const pendientesMes = useMemo(() => mantenimientosFiltrados.filter((item) => item.estado === 'PENDIENTE'), [mantenimientosFiltrados]);
 
   const programados = useMemo(
-    () => mantenimientosFiltrados.filter((item) => item.estado === 'PROGRAMADO' || item.estado === 'ATRASADO'),
+    () => mantenimientosFiltrados.filter((item) => item.estado === 'PROGRAMADO' || item.estado === 'ATRASADO' || item.estado === 'EN_PROCESO'),
     [mantenimientosFiltrados]
   );
 
@@ -319,15 +324,37 @@ export default function MantenimientoPreventivoCalendar({ onStartMantenimiento, 
     if (!canOperate) return;
     if (item.estado !== 'PROGRAMADO' && item.estado !== 'ATRASADO' && item.estado !== 'PENDIENTE') return;
 
-    onStartMantenimiento?.({
-      mantenimientoId: item.id,
-      empresaId: item.empresaId,
-      empresaNombre: item.empresaNombre,
-      sedeId: item.sedeId,
-      sedeNombre: item.sedeNombre,
-      fecha: item.fechaProgramada,
-      tecnicos: [],
-    });
+    setMantenimientoToStart(item);
+  };
+
+  const performStart = async (item: MantenimientoItem) => {
+    setConfirmLoading(true);
+    try {
+      const resp = await axiosClient.patch(`/api/mantenimientos/${item.id}`, { estado: 'EN_PROCESO' });
+
+      // consider 2xx success
+      if (resp && (resp.status === 200 || (resp.status >= 200 && resp.status < 300))) {
+        setMantenimientos((prev) => prev.map((m) => (m.id === item.id ? { ...m, estado: 'EN_PROCESO' } : m)));
+
+        // if parent wants to start execution view, notify
+        onStartMantenimiento?.({
+          mantenimientoId: item.id,
+          empresaId: item.empresaId,
+          empresaNombre: item.empresaNombre,
+          sedeId: item.sedeId,
+          sedeNombre: item.sedeNombre,
+          fecha: item.fechaProgramada,
+          tecnicos: [],
+        });
+      }
+    } catch (err) {
+      // surface error using alert for now, do not change state
+      const message = (err as any)?.response?.data?.message || (err as any)?.message || 'Error al iniciar el mantenimiento.';
+      window.alert(String(message));
+    } finally {
+      setConfirmLoading(false);
+      setMantenimientoToStart(null);
+    }
   };
 
   return (
@@ -547,14 +574,35 @@ export default function MantenimientoPreventivoCalendar({ onStartMantenimiento, 
                         >
                           Editar
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleIniciar(item)}
-                          disabled={!canOperate}
-                          className="px-3 py-1.5 rounded-lg bg-blue-700 text-white text-xs font-semibold hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                        >
-                          Iniciar
-                        </button>
+                        {item.estado === 'EN_PROCESO' ? (
+                          <button
+                            type="button"
+                            onClick={() => onStartMantenimiento?.({
+                              mantenimientoId: item.id,
+                              empresaId: item.empresaId,
+                              empresaNombre: item.empresaNombre,
+                              sedeId: item.sedeId,
+                              sedeNombre: item.sedeNombre,
+                              fecha: item.fechaProgramada,
+                              tecnicos: [],
+                            })}
+                            title="Ver activos en proceso"
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition flex items-center justify-center"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleIniciar(item)}
+                            disabled={!canOperate || (item.estado !== 'PENDIENTE' && item.estado !== 'PROGRAMADO' && item.estado !== 'ATRASADO')}
+                            className="px-3 py-1.5 rounded-lg bg-blue-700 text-white text-xs font-semibold hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                          >
+                            Iniciar
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -601,14 +649,32 @@ export default function MantenimientoPreventivoCalendar({ onStartMantenimiento, 
                   Editar
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => handleIniciar(selectedMantenimiento)}
-                disabled={!canOperate || (selectedMantenimiento.estado !== 'PENDIENTE' && selectedMantenimiento.estado !== 'PROGRAMADO' && selectedMantenimiento.estado !== 'ATRASADO')}
-                className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                {actionLabel}
-              </button>
+              {selectedMantenimiento.estado === 'EN_PROCESO' ? (
+                <button
+                  type="button"
+                  onClick={() => onStartMantenimiento?.({
+                    mantenimientoId: selectedMantenimiento.id,
+                    empresaId: selectedMantenimiento.empresaId,
+                    empresaNombre: selectedMantenimiento.empresaNombre,
+                    sedeId: selectedMantenimiento.sedeId,
+                    sedeNombre: selectedMantenimiento.sedeNombre,
+                    fecha: selectedMantenimiento.fechaProgramada,
+                    tecnicos: [],
+                  })}
+                  className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition"
+                >
+                  Ver activos
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleIniciar(selectedMantenimiento)}
+                  disabled={!canOperate || (selectedMantenimiento.estado !== 'PENDIENTE' && selectedMantenimiento.estado !== 'PROGRAMADO' && selectedMantenimiento.estado !== 'ATRASADO')}
+                  className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  {actionLabel}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -617,6 +683,14 @@ export default function MantenimientoPreventivoCalendar({ onStartMantenimiento, 
       {(loadingData || loadingMantenimientos) && (
         <div className="text-sm text-slate-500">Cargando mantenimientos...</div>
       )}
+      <ConfirmModal
+        open={!!mantenimientoToStart}
+        title={undefined}
+        message={"¿Desea iniciar el Mantenimiento?"}
+        onConfirm={() => mantenimientoToStart && performStart(mantenimientoToStart)}
+        onCancel={() => setMantenimientoToStart(null)}
+        loading={confirmLoading}
+      />
     </div>
   );
 }
