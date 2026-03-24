@@ -380,6 +380,7 @@ function buildDraftFromExecutionData(raw: unknown): MantenimientoDraft | null {
 
   const checklistRaw = Array.isArray(source.checklist) ? source.checklist : [];
   const checklistMap = new Map<string, ChecklistRow>();
+  const checklistOrder: string[] = [];
 
   checklistRaw.forEach((row) => {
     if (!row || typeof row !== 'object') return;
@@ -399,6 +400,10 @@ function buildDraftFromExecutionData(raw: unknown): MantenimientoDraft | null {
       else normalizedValue = String(rawVal);
     }
 
+    if (!checklistMap.has(key)) {
+      checklistOrder.push(key);
+    }
+
     checklistMap.set(key, {
       key,
       label,
@@ -409,7 +414,10 @@ function buildDraftFromExecutionData(raw: unknown): MantenimientoDraft | null {
     });
   });
 
-  const checklist = CHECKLIST_BASE.map((baseRow) => checklistMap.get(baseRow.key) || { ...baseRow });
+  const checklist =
+    checklistMap.size > 0
+      ? checklistOrder.map((key) => checklistMap.get(key)).filter((item): item is ChecklistRow => Boolean(item))
+      : CHECKLIST_BASE.map((baseRow) => ({ ...baseRow }));
 
   const hasMeaningfulData =
     Boolean(diagnostico) ||
@@ -514,6 +522,34 @@ function loadDraftSnapshot(
     return null;
   } catch {
     return null;
+  }
+}
+
+function clearDraftSnapshot(mantenimientoId: string | undefined, scopeKey: string, activoId: string): void {
+  try {
+    if (mantenimientoId) {
+      localStorage.removeItem(getDraftStorageKey(mantenimientoId, activoId));
+    }
+    localStorage.removeItem(getDraftFallbackStorageKey(scopeKey, activoId));
+  } catch {
+    // no-op
+  }
+}
+
+function clearLegacyDraftSnapshots(activoId: string): void {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (!key.startsWith('mp:ejecucion:draft:')) continue;
+      if (!key.endsWith(`:${activoId}`)) continue;
+      keysToRemove.push(key);
+    }
+
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // no-op
   }
 }
 
@@ -736,10 +772,13 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
 
   const openExecutionModal = async (asset: AssetRow) => {
     let isCompleted = statusByAsset[asset.id] === 'COMPLETADO';
+    let loadedDraft: MantenimientoDraft | null = null;
+    let canUseCachedDraft = true;
 
     const cachedDraft = loadDraftSnapshot(context.mantenimientoId, snapshotScopeKey, asset.id);
     if (cachedDraft) {
-      isCompleted = true;
+      // Si hay un draft local, cargarlo para continuar edición, pero NO marcar como completado.
+      // Marcar el modal como solo lectura solo debe ocurrir cuando exista una ejecución ya persistida en el backend.
       setDraftByAsset((prev) => ({
         ...prev,
         [asset.id]: cachedDraft,
@@ -749,7 +788,35 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
     if (context.mantenimientoId) {
       try {
         const existing = await getActivoExecution(context.mantenimientoId, asset.id);
-        if (existing?.ejecucionId) {
+
+        if (!existing?.ejecucionId) {
+          // Si no existe ejecución en backend, eliminar cualquier snapshot local obsoleto.
+          clearDraftSnapshot(context.mantenimientoId, snapshotScopeKey, asset.id);
+          clearLegacyDraftSnapshots(asset.id);
+          canUseCachedDraft = false;
+          setDraftByAsset((prev) => {
+            if (!prev[asset.id]) return prev;
+            const next = { ...prev };
+            delete next[asset.id];
+            return next;
+          });
+        }
+
+        const backendEstado = String(existing?.estado ?? '')
+          .trim()
+          .toUpperCase();
+        const completedEstados = new Set(['COMPLETADO', 'EJECUTADO', 'FINALIZADO', 'CERRADO']);
+        const editableEstados = new Set(['EN_PROCESO', 'INICIADO', 'PENDIENTE', 'BORRADOR', 'DRAFT']);
+
+        const mappedDraft = buildDraftFromExecutionData(existing);
+        loadedDraft = mappedDraft;
+
+        const shouldBeReadOnly = Boolean(existing?.ejecucionId) && (
+          completedEstados.has(backendEstado) ||
+          (!editableEstados.has(backendEstado) && Boolean(mappedDraft))
+        );
+
+        if (shouldBeReadOnly) {
           isCompleted = true;
           setStatusByAsset((prev) => ({
             ...prev,
@@ -757,7 +824,6 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
           }));
         }
 
-        const mappedDraft = buildDraftFromExecutionData(existing);
         if (mappedDraft) {
           setDraftByAsset((prev) => ({
             ...prev,
@@ -817,22 +883,51 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
 
       // Mapear preguntas al draft
       if (preguntas && preguntas.length > 0) {
-        const mapped: ChecklistRow[] = preguntas.map((q) => ({
-          key: q.id || q.pregunta.slice(0, 24).replace(/\s+/g, '_'),
-          label: q.pregunta,
-          value: q.tipo === 'si_no' ? null : '',
-          comentario: '',
-          tipo: q.tipo,
-          opciones: Array.isArray(q.opciones) ? q.opciones : [],
-        }));
+        setDraftByAsset((prev) => {
+          const currentDraft = prev[asset.id] || loadedDraft || (canUseCachedDraft ? cachedDraft : null) || buildEmptyDraft();
 
-        setDraftByAsset((prev) => ({
-          ...prev,
-          [asset.id]: {
-            ...buildEmptyDraft(),
-            checklist: mapped,
-          },
-        }));
+          const savedByKey = new Map<string, ChecklistRow>(currentDraft.checklist.map((it) => [it.key, it]));
+          const savedByLabel = new Map<string, ChecklistRow>();
+          currentDraft.checklist.forEach((it) => savedByLabel.set(String(it.label).trim().toLowerCase(), it));
+
+          const merged: ChecklistRow[] = preguntas.map((q) => {
+            const qId = q.id ? String(q.id) : '';
+            const slug = q.pregunta.slice(0, 24).replace(/\s+/g, '_');
+
+            let saved: ChecklistRow | undefined = undefined;
+            if (qId && savedByKey.has(qId)) saved = savedByKey.get(qId);
+            if (!saved && savedByLabel.has(String(q.pregunta).trim().toLowerCase())) saved = savedByLabel.get(String(q.pregunta).trim().toLowerCase());
+            if (!saved && savedByKey.has(slug)) saved = savedByKey.get(slug);
+
+            if (saved) {
+              return {
+                ...saved,
+                key: saved.key || qId || slug,
+                label: q.pregunta,
+                tipo: q.tipo,
+                opciones: Array.isArray(q.opciones) ? q.opciones : [],
+              };
+            }
+
+            return {
+              key: qId || slug,
+              label: q.pregunta,
+              value: q.tipo === 'si_no' ? null : '',
+              comentario: '',
+              tipo: q.tipo,
+              opciones: Array.isArray(q.opciones) ? q.opciones : [],
+            };
+          });
+
+          // preserve any saved items that didn't match the preguntas list (append extras)
+          const mergedKeys = new Set(merged.map((m) => m.key));
+          const extras = currentDraft.checklist.filter((it) => !mergedKeys.has(it.key));
+
+          return {
+            ...prev,
+            [asset.id]: { ...currentDraft, checklist: merged.concat(extras) },
+          };
+        });
       } else {
         // mantener comportamiento backward-compatible: si no hay preguntas, usar CHECKLIST_BASE
         setDraftByAsset((prev) => ({ ...prev, [asset.id]: prev[asset.id] || buildEmptyDraft() }));
