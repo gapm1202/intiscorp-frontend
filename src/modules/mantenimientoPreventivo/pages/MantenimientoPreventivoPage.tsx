@@ -16,6 +16,13 @@ type EjecucionContext = {
 export default function MantenimientoPreventivoPage() {
   const [showNuevoMantenimiento, setShowNuevoMantenimiento] = useState(false);
   const [executionContext, setExecutionContext] = useState<EjecucionContext | null>(null);
+  const [editingMaintenance, setEditingMaintenance] = useState<{
+    id: string;
+    empresaId?: string;
+    sedeId?: string;
+    fecha?: string;
+  } | null>(null);
+  const [calendarKey, setCalendarKey] = useState(0);
 
   return (
     <div
@@ -52,18 +59,28 @@ export default function MantenimientoPreventivoPage() {
           />
         ) : (
           <MantenimientoPreventivoCalendar
+            key={calendarKey}
             onStartMantenimiento={(payload) => {
               setExecutionContext(payload);
+            }}
+            onEditMantenimiento={(payload) => {
+              setEditingMaintenance(payload);
             }}
           />
         )}
       </div>
 
-      {showNuevoMantenimiento && (
+      {(showNuevoMantenimiento || editingMaintenance) && (
         <NuevoMantenimientoModal
-          onClose={() => setShowNuevoMantenimiento(false)}
+          onClose={() => { setShowNuevoMantenimiento(false); setEditingMaintenance(null); }}
           onStart={(payload) => {
             setExecutionContext(payload);
+          }}
+          editing={editingMaintenance}
+          onUpdated={() => {
+            // remount calendar to refresh data
+            setEditingMaintenance(null);
+            setCalendarKey(k => k + 1);
           }}
         />
       )}

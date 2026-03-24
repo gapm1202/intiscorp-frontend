@@ -168,6 +168,19 @@ export async function listMantenimientosPreventivos(filters?: {
   }
 }
 
+export async function getMantenimientoPreventivoById(id: string): Promise<Record<string, unknown> | null> {
+  try {
+    const response = await axiosClient.get(`/api/mantenimientos/${id}`);
+    const result = response?.data?.data || response?.data || {};
+    if (!result || typeof result !== 'object') return null;
+    return result as Record<string, unknown>;
+  } catch (err) {
+    const e = err as AxiosErrorLike;
+    if (e.response?.status === 404) return null;
+    throw new Error(extractBackendErrorMessage(e.response?.data) || e.message || 'No se pudo obtener el mantenimiento.');
+  }
+}
+
 export async function createMantenimientoPreventivo(payload: CreateMantenimientoPayload): Promise<CreatedMantenimiento> {
   const tecnicoIds = uniqueNumericIds(payload.tecnicoIds);
   const encargadoId = toNumberOrUndefined(payload.encargadoId);
@@ -234,6 +247,103 @@ export async function createMantenimientoPreventivo(payload: CreateMantenimiento
       extractBackendErrorMessage(firstData) ||
       firstErr.message ||
       'No se pudo crear el mantenimiento.';
+
+    throw new Error(serverMessage);
+  }
+}
+
+export async function updateMantenimientoPreventivo(id: string, payload: CreateMantenimientoPayload): Promise<CreatedMantenimiento> {
+  const tecnicoIds = uniqueNumericIds(payload.tecnicoIds);
+  const encargadoId = toNumberOrUndefined(payload.encargadoId);
+  const empresaId = toNumberOrUndefined(payload.empresaId);
+  const sedeId = toNumberOrUndefined(payload.sedeId);
+
+  if (!empresaId || !sedeId || !payload.fecha || tecnicoIds.length === 0 || !encargadoId) {
+    throw new Error('Faltan campos obligatorios para actualizar mantenimiento.');
+  }
+
+  const observaciones = payload.observaciones?.trim() || undefined;
+
+  const tecnicosAsignados = tecnicoIds.map((idNum) => ({ tecnicoId: idNum, esEncargado: idNum === encargadoId }));
+
+  const bodyCamel = {
+    empresaId,
+    sedeId,
+    fechaProgramada: payload.fecha,
+    tecnicosAsignados,
+    encargadoId,
+    observaciones,
+  };
+
+  const bodySnake = {
+    empresa_id: empresaId,
+    sede_id: sedeId,
+    fecha_programada: payload.fecha,
+    tecnico_ids: tecnicoIds,
+    tecnicos: tecnicoIds,
+    encargado_id: encargadoId,
+    observaciones,
+  };
+
+  // Try common HTTP verbs/backends may expect PATCH or POST for updates.
+  try {
+    const response = await axiosClient.put(`/api/mantenimientos/${id}`, bodyCamel);
+    return response?.data?.data || response?.data || {};
+  } catch (error: unknown) {
+    const firstErr = error as AxiosErrorLike;
+
+    // If backend rejects camelCase, try snake_case with same verb
+    if (firstErr.response?.status === 400) {
+      try {
+        const fallbackResponse = await axiosClient.put(`/api/mantenimientos/${id}`, bodySnake);
+        return fallbackResponse?.data?.data || fallbackResponse?.data || {};
+      } catch (fallbackError: unknown) {
+        // continue to other fallbacks
+      }
+    }
+
+    // If endpoint not found (404) or other mismatch, try PATCH -> POST on resource -> POST to collection
+    const status = firstErr.response?.status;
+
+    if (status === 404 || status === 405) {
+      // try PATCH camel
+      try {
+        const r = await axiosClient.patch(`/api/mantenimientos/${id}`, bodyCamel);
+        return r?.data?.data || r?.data || {};
+      } catch (e) {
+        // try PATCH snake
+        try {
+          const r2 = await axiosClient.patch(`/api/mantenimientos/${id}`, bodySnake);
+          return r2?.data?.data || r2?.data || {};
+        } catch (e2) {
+          // try POST to resource path
+          try {
+            const r3 = await axiosClient.post(`/api/mantenimientos/${id}`, bodyCamel);
+            return r3?.data?.data || r3?.data || {};
+          } catch (e3) {
+            try {
+              const r4 = await axiosClient.post(`/api/mantenimientos/${id}`, bodySnake);
+              return r4?.data?.data || r4?.data || {};
+            } catch (e4) {
+              // try POST to collection as last resort (include id)
+              try {
+                const r5 = await axiosClient.post('/api/mantenimientos', { id, ...bodyCamel });
+                return r5?.data?.data || r5?.data || {};
+              } catch (e5) {
+                // fall through to throw below
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // If none of the fallbacks worked, surface the original or best-available message
+    const firstData = firstErr.response?.data;
+    const serverMessage =
+      extractBackendErrorMessage(firstData) ||
+      firstErr.message ||
+      'No se pudo actualizar el mantenimiento.';
 
     throw new Error(serverMessage);
   }

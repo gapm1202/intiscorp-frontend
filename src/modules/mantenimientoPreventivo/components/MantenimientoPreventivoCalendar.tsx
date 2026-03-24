@@ -39,6 +39,7 @@ type Props = {
     fecha: string;
     tecnicos: Array<{ id: string; nombre: string }>;
   }) => void;
+  onEditMantenimiento?: (payload: { id: string; empresaId: string; sedeId: string; fecha?: string }) => void;
 };
 
 const MONTHS = [
@@ -114,7 +115,8 @@ function parseMaintenanceDate(value: string): Date {
 }
 
 function toMantenimientoItem(record: MantenimientoPreventivoRecord, empresas: Option[], sedesByEmpresa: Record<string, Option[]>): MantenimientoItem {
-  const baseFecha = record.fechaCreacion || record.fechaProgramada;
+  // Prefer the scheduled date for display; fall back to creation date if missing
+  const baseFecha = record.fechaProgramada || record.fechaCreacion;
   const d = parseMaintenanceDate(baseFecha);
   const isValid = !Number.isNaN(d.getTime());
   const empresaNombre = record.empresaNombre || empresas.find((e) => e.id === record.empresaId)?.nombre || 'Empresa';
@@ -135,7 +137,7 @@ function toMantenimientoItem(record: MantenimientoPreventivoRecord, empresas: Op
   };
 }
 
-export default function MantenimientoPreventivoCalendar({ onStartMantenimiento }: Props) {
+export default function MantenimientoPreventivoCalendar({ onStartMantenimiento, onEditMantenimiento }: Props) {
   const navigate = useNavigate();
   const now = new Date();
 
@@ -537,14 +539,23 @@ export default function MantenimientoPreventivoCalendar({ onStartMantenimiento }
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleIniciar(item)}
-                        disabled={!canOperate}
-                        className="px-3 py-1.5 rounded-lg bg-blue-700 text-white text-xs font-semibold hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                      >
-                        Iniciar
-                      </button>
+                      <div className="inline-flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onEditMantenimiento?.({ id: item.id, empresaId: item.empresaId, sedeId: item.sedeId, fecha: item.fechaProgramada })}
+                          className="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 text-xs font-semibold hover:bg-amber-200 transition"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleIniciar(item)}
+                          disabled={!canOperate}
+                          className="px-3 py-1.5 rounded-lg bg-blue-700 text-white text-xs font-semibold hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                        >
+                          Iniciar
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -581,6 +592,15 @@ export default function MantenimientoPreventivoCalendar({ onStartMantenimiento }
               >
                 Cerrar
               </button>
+              {selectedMantenimiento && (
+                <button
+                  type="button"
+                  onClick={() => onEditMantenimiento?.({ id: selectedMantenimiento.id, empresaId: selectedMantenimiento.empresaId, sedeId: selectedMantenimiento.sedeId, fecha: selectedMantenimiento.fechaProgramada })}
+                  className="px-4 py-2 rounded-lg bg-amber-100 text-amber-800 text-sm font-semibold hover:bg-amber-200 transition"
+                >
+                  Editar
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleIniciar(selectedMantenimiento)}
