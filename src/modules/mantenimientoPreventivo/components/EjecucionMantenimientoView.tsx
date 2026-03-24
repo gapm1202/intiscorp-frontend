@@ -5,6 +5,7 @@ import { getAreasByEmpresa } from '@/modules/inventario/services/areasService';
 import { getCategorias, type Category } from '@/modules/inventario/services/categoriasService';
 import { getInventarioBySede } from '@/modules/inventario/services/inventarioService';
 import { getActivoExecution, saveActivoExecution } from '../services/mantenimientosPreventivosService';
+import { listPreguntas, type ChecklistQuestion } from '@/modules/inventario/services/checklistService';
 
 type TecnicoInfo = {
   id: string;
@@ -40,13 +41,15 @@ type AssetRow = {
   raw: Record<string, unknown>;
 };
 
-type ChecklistValue = 'SI' | 'NO' | null;
+type ChecklistValue = 'SI' | 'NO' | string | null;
 
 type ChecklistRow = {
   key: string;
   label: string;
   value: ChecklistValue;
   comentario: string;
+  tipo?: string;
+  opciones?: string[];
 };
 
 type MantenimientoDraft = {
@@ -75,15 +78,15 @@ type Props = {
 };
 
 const CHECKLIST_BASE: ChecklistRow[] = [
-  { key: 'limpieza', label: 'Limpieza fisica del equipo', value: null, comentario: '' },
-  { key: 'pasta', label: 'Cambio de pasta termica', value: null, comentario: '' },
-  { key: 'software', label: 'Actualizacion de software', value: null, comentario: '' },
-  { key: 'almacenamiento', label: 'Revision de almacenamiento', value: null, comentario: '' },
-  { key: 'rendimiento', label: 'Verificacion de rendimiento', value: null, comentario: '' },
-  { key: 'cables', label: 'Estado de cables', value: null, comentario: '' },
-  { key: 'discos', label: 'Estado de discos', value: null, comentario: '' },
-  { key: 'temperatura', label: 'Monitoreo de temperatura', value: null, comentario: '' },
-  { key: 'antivirus', label: 'Antivirus actualizado', value: null, comentario: '' },
+  { key: 'limpieza', label: 'Limpieza fisica del equipo', value: null, comentario: '', tipo: 'si_no' },
+  { key: 'pasta', label: 'Cambio de pasta termica', value: null, comentario: '', tipo: 'si_no' },
+  { key: 'software', label: 'Actualizacion de software', value: null, comentario: '', tipo: 'si_no' },
+  { key: 'almacenamiento', label: 'Revision de almacenamiento', value: null, comentario: '', tipo: 'si_no' },
+  { key: 'rendimiento', label: 'Verificacion de rendimiento', value: null, comentario: '', tipo: 'si_no' },
+  { key: 'cables', label: 'Estado de cables', value: null, comentario: '', tipo: 'si_no' },
+  { key: 'discos', label: 'Estado de discos', value: null, comentario: '', tipo: 'si_no' },
+  { key: 'temperatura', label: 'Monitoreo de temperatura', value: null, comentario: '', tipo: 'si_no' },
+  { key: 'antivirus', label: 'Antivirus actualizado', value: null, comentario: '', tipo: 'si_no' },
 ];
 
 function toArray<T>(response: unknown): T[] {
@@ -384,11 +387,25 @@ function buildDraftFromExecutionData(raw: unknown): MantenimientoDraft | null {
     const key = getStringField(item, ['key', 'itemKey', 'item_key']);
     if (!key) return;
     const label = getStringField(item, ['label']) || CHECKLIST_BASE.find((baseItem) => baseItem.key === key)?.label || key;
+    const tipo = getStringField(item, ['tipo']) || (CHECKLIST_BASE.find((b) => b.key === key)?.tipo ?? 'si_no');
+    const opciones = Array.isArray(item.opciones) ? (item.opciones as string[]) : [];
+    // Normalizar valor según contenido: SI/NO se mantienen, otros textos se preservan
+    const rawVal = item.estado ?? item.value;
+    let normalizedValue: ChecklistValue = null;
+    if (typeof rawVal === 'string') {
+      const up = rawVal.trim().toUpperCase();
+      if (up === 'SI' || up === 'S' || up === 'TRUE') normalizedValue = 'SI';
+      else if (up === 'NO' || up === 'N' || up === 'FALSE') normalizedValue = 'NO';
+      else normalizedValue = String(rawVal);
+    }
+
     checklistMap.set(key, {
       key,
       label,
-      value: normalizeChecklistValue(item.estado ?? item.value),
+      value: normalizedValue,
       comentario: getStringField(item, ['comentario', 'comment']),
+      tipo,
+      opciones,
     });
   });
 
@@ -762,6 +779,69 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
       }
     }
 
+    // Cargar checklist según la categoría del activo
+    try {
+      // Determinar id de categoría posible en el raw del activo
+      const raw = asset.raw || {};
+      let categoriaId: number | null = null;
+
+      // posibles keys donde puede venir la categoría
+      const possibleKeys = ['categoriaId', 'categoria_id', 'categoriaIdNumber', 'categoriaIdNumber', 'categoryId', 'categoria'];
+      for (const key of possibleKeys) {
+        const v = (raw as Record<string, unknown>)[key];
+        if (typeof v === 'number') {
+          categoriaId = v;
+          break;
+        }
+        if (typeof v === 'string' && /^\d+$/.test(v)) {
+          categoriaId = Number(v);
+          break;
+        }
+      }
+
+      // Si no encontramos id numérico, intentar emparejar por nombre con las categorías cargadas
+      if (categoriaId === null && raw && typeof (raw as Record<string, unknown>).categoria === 'string') {
+        const name = String((raw as Record<string, unknown>).categoria).trim().toLowerCase();
+        const found = categories.find((c) => String(c.nombre ?? '').trim().toLowerCase() === name);
+        if (found && found.id) {
+          const maybe = Number(found.id as unknown as string);
+          if (!Number.isNaN(maybe)) categoriaId = maybe;
+        }
+      }
+
+      // Si aún no hay categoría, omitimos la petición y usamos el checklist base
+      let preguntas: ChecklistQuestion[] = [];
+      if (categoriaId !== null) {
+        preguntas = await listPreguntas({ categoriaId });
+      }
+
+      // Mapear preguntas al draft
+      if (preguntas && preguntas.length > 0) {
+        const mapped: ChecklistRow[] = preguntas.map((q) => ({
+          key: q.id || q.pregunta.slice(0, 24).replace(/\s+/g, '_'),
+          label: q.pregunta,
+          value: q.tipo === 'si_no' ? null : '',
+          comentario: '',
+          tipo: q.tipo,
+          opciones: Array.isArray(q.opciones) ? q.opciones : [],
+        }));
+
+        setDraftByAsset((prev) => ({
+          ...prev,
+          [asset.id]: {
+            ...buildEmptyDraft(),
+            checklist: mapped,
+          },
+        }));
+      } else {
+        // mantener comportamiento backward-compatible: si no hay preguntas, usar CHECKLIST_BASE
+        setDraftByAsset((prev) => ({ ...prev, [asset.id]: prev[asset.id] || buildEmptyDraft() }));
+      }
+    } catch (err) {
+      // no bloquear la apertura por error en checklist
+      console.warn('No se pudo cargar checklist por categoria:', err);
+    }
+
     setIsReadOnly(isCompleted);
     setActiveAsset(asset);
     setShowExecutionModal(true);
@@ -817,11 +897,16 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
     if (!draft.evidenciaAntes) return 'La imagen ANTES es obligatoria.';
     if (!draft.evidenciaDespues) return 'La imagen DESPUES es obligatoria.';
 
-    const unanswered = draft.checklist.some((item) => item.value === null);
+    const unanswered = draft.checklist.some((item) => {
+      const tipo = (item.tipo ?? 'si_no').toLowerCase();
+      if (tipo === 'si_no') return item.value === null;
+      // texto y seleccion esperan string no vacío
+      return typeof item.value !== 'string' || !String(item.value).trim();
+    });
     if (unanswered) return 'Debes responder todo el checklist.';
 
     const invalidComment = draft.checklist.some(
-      (item) => item.value === 'NO' && !item.comentario.trim()
+      (item) => (item.tipo ?? 'si_no').toLowerCase() === 'si_no' && item.value === 'NO' && !item.comentario.trim()
     );
     if (invalidComment) return 'Cada item marcado en NO requiere comentario obligatorio.';
 
@@ -865,13 +950,22 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
         despuesStart: evidenciaDespuesBase64.substring(0, 50),
       });
 
-      // Mapear checklist - mantener structure que type espera
-      const checklistPayload = draft.checklist.map((item) => ({
-        key: item.key,
-        label: item.label,
-        estado: item.value || 'SI',
-        comentario: item.comentario || '',
-      }));
+      // Mapear checklist - soporta distintos tipos (si_no, texto, seleccion)
+      const checklistPayload = draft.checklist.map((item) => {
+        const tipo = (item.tipo ?? 'si_no').toLowerCase();
+        let estado: string = '';
+        if (tipo === 'si_no') {
+          estado = String(item.value ?? 'SI');
+        } else {
+          estado = String(item.value ?? '');
+        }
+        return {
+          key: item.key,
+          label: item.label,
+          estado,
+          comentario: item.comentario || '',
+        };
+      });
 
       const payload = {
         mantenimientoId: context.mantenimientoId || '',
@@ -1286,28 +1380,39 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                 <div className="bg-white rounded-xl border border-[#daeaf8] p-5 shadow-sm">
                   <SectionTitle>Checklist de mantenimiento</SectionTitle>
                   <div className="space-y-2">
-                    {activeDraft.checklist.map((item, idx) => (
-                      <div
-                        key={item.key}
-                        className={`rounded-xl border p-3.5 ${item.value === 'SI' ? 'border-[#7dd3af] bg-[#f0fbf6]' : item.value === 'NO' ? 'border-[#f9a8a8] bg-[#fff5f5]' : 'border-[#daeaf8] bg-[#f7faff]'}`}
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <span className="text-[11px] font-bold text-[#94afc8] w-5 text-right">{idx + 1}</span>
-                            <p className="text-sm font-semibold text-[#0f2744]">{item.label}</p>
+                    {activeDraft.checklist.map((item, idx) => {
+                      const tipo = (item.tipo ?? 'si_no').toLowerCase();
+                      const isPositive = tipo === 'si_no' ? item.value === 'SI' : Boolean(item.value && String(item.value).trim());
+                      const isNegative = tipo === 'si_no' ? item.value === 'NO' : false;
+                      return (
+                        <div
+                          key={item.key}
+                          className={`rounded-xl border p-3.5 ${isPositive ? 'border-[#7dd3af] bg-[#f0fbf6]' : isNegative ? 'border-[#f9a8a8] bg-[#fff5f5]' : 'border-[#daeaf8] bg-[#f7faff]'}`}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <span className="text-[11px] font-bold text-[#94afc8] w-5 text-right">{idx + 1}</span>
+                              <p className="text-sm font-semibold text-[#0f2744]">{item.label}</p>
+                            </div>
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${isPositive ? 'bg-[#e6f7f0] text-[#0d5c39] border-[#7dd3af]' : isNegative ? 'bg-[#fff5f5] text-[#b91c1c] border-[#f9a8a8]' : 'bg-[#f0f4fa] text-[#94afc8] border-[#daeaf8]'}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${isPositive ? 'bg-[#22c47a]' : isNegative ? 'bg-red-500' : 'bg-[#c8ddf0]'}`} />
+                              {tipo === 'si_no' ? (item.value ?? 'Sin responder') : (String(item.value) || 'Sin responder')}
+                            </span>
                           </div>
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${item.value === 'SI' ? 'bg-[#e6f7f0] text-[#0d5c39] border-[#7dd3af]' : item.value === 'NO' ? 'bg-[#fff5f5] text-[#b91c1c] border-[#f9a8a8]' : 'bg-[#f0f4fa] text-[#94afc8] border-[#daeaf8]'}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${item.value === 'SI' ? 'bg-[#22c47a]' : item.value === 'NO' ? 'bg-red-500' : 'bg-[#c8ddf0]'}`} />
-                            {item.value ?? 'Sin responder'}
-                          </span>
+                          {tipo === 'si_no' && item.value === 'NO' && item.comentario && (
+                            <p className="mt-2 text-sm text-[#7a0000] bg-[#fff5f5] rounded-lg p-2.5 border border-[#f9a8a8]">
+                              {item.comentario}
+                            </p>
+                          )}
+                          {tipo === 'texto' && item.value && (
+                            <p className="mt-2 text-sm text-[#0f2744] bg-[#f4f8fd] rounded-lg p-2.5 border border-[#daeaf8] whitespace-pre-wrap">{String(item.value)}</p>
+                          )}
+                          {tipo === 'seleccion' && item.value && (
+                            <p className="mt-2 text-sm text-[#0f2744] bg-[#f4f8fd] rounded-lg p-2.5 border border-[#daeaf8]">{String(item.value)}</p>
+                          )}
                         </div>
-                        {item.value === 'NO' && item.comentario && (
-                          <p className="mt-2 text-sm text-[#7a0000] bg-[#fff5f5] rounded-lg p-2.5 border border-[#f9a8a8]">
-                            {item.comentario}
-                          </p>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1452,61 +1557,88 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
               <div className="bg-white rounded-xl border border-[#daeaf8] p-5 shadow-sm">
                 <SectionTitle>Checklist de mantenimiento</SectionTitle>
                 <div className="space-y-2">
-                  {activeDraft.checklist.map((item, idx) => (
-                    <div
-                      key={item.key}
-                      className={`rounded-xl border p-3.5 transition ${
-                        item.value === 'SI'
-                          ? 'border-[#7dd3af] bg-[#f0fbf6]'
-                          : item.value === 'NO'
-                          ? 'border-[#f9a8a8] bg-[#fff5f5]'
-                          : 'border-[#daeaf8] bg-[#f7faff]'
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-[11px] font-bold text-[#94afc8] w-5 text-right">{idx + 1}</span>
-                          <p className="text-sm font-semibold text-[#0f2744]">{item.label}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          {(['SI', 'NO'] as const).map((opt) => (
-                            <label
-                              key={opt}
-                              className={`inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold select-none ${
-                                opt === 'SI' ? 'text-[#0d5c39]' : 'text-[#b91c1c]'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={item.value === opt}
-                                onChange={() =>
-                                  updateChecklist(item.key, {
-                                    value: item.value === opt ? null : opt,
-                                    ...(opt === 'SI' ? { comentario: '' } : {}),
-                                  })
-                                }
-                                className="w-4 h-4 rounded accent-current"
+                  {activeDraft.checklist.map((item, idx) => {
+                    const tipo = (item.tipo ?? 'si_no').toLowerCase();
+                    const isPositive = tipo === 'si_no' ? item.value === 'SI' : Boolean(item.value && String(item.value).trim());
+                    const isNegative = tipo === 'si_no' ? item.value === 'NO' : false;
+                    return (
+                      <div
+                        key={item.key}
+                        className={`rounded-xl border p-3.5 transition ${
+                          isPositive ? 'border-[#7dd3af] bg-[#f0fbf6]' : isNegative ? 'border-[#f9a8a8] bg-[#fff5f5]' : 'border-[#daeaf8] bg-[#f7faff]'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <span className="text-[11px] font-bold text-[#94afc8] w-5 text-right">{idx + 1}</span>
+                            <p className="text-sm font-semibold text-[#0f2744]">{item.label}</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {tipo === 'si_no' ? (
+                              (['SI', 'NO'] as const).map((opt) => (
+                                <label
+                                  key={opt}
+                                  className={`inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold select-none ${opt === 'SI' ? 'text-[#0d5c39]' : 'text-[#b91c1c]'}`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={item.value === opt}
+                                    onChange={() =>
+                                      updateChecklist(item.key, {
+                                        value: item.value === opt ? null : opt,
+                                        ...(opt === 'SI' ? { comentario: '' } : {}),
+                                      })
+                                    }
+                                    className="w-4 h-4 rounded accent-current"
+                                  />
+                                  {opt}
+                                </label>
+                              ))
+                            ) : tipo === 'texto' ? (
+                              <textarea
+                                rows={2}
+                                value={String(item.value ?? '')}
+                                onChange={(e) => updateChecklist(item.key, { value: e.target.value })}
+                                placeholder="Respuesta libre"
+                                className="w-72 px-3.5 py-2.5 rounded-xl border-2 border-[#c8ddf0] bg-white text-[#0f2744] text-sm focus:outline-none focus:border-[#1a6fc4] focus:ring-2 focus:ring-[#1a6fc4]/20 transition placeholder:text-[#94afc8] resize-none"
                               />
-                              {opt}
-                            </label>
-                          ))}
+                            ) : tipo === 'seleccion' ? (
+                              <select
+                                value={String(item.value ?? '')}
+                                onChange={(e) => updateChecklist(item.key, { value: e.target.value })}
+                                className="px-3.5 py-2 rounded-xl border-2 border-[#c8ddf0] bg-white text-[#0f2744] text-sm focus:outline-none focus:border-[#1a6fc4] focus:ring-2 focus:ring-[#1a6fc4]/20 transition"
+                              >
+                                <option value="">Seleccionar</option>
+                                {(item.opciones || []).map((op) => (
+                                  <option key={op} value={op}>{op}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                value={String(item.value ?? '')}
+                                onChange={(e) => updateChecklist(item.key, { value: e.target.value })}
+                                className="px-3.5 py-2 rounded-xl border-2 border-[#c8ddf0] bg-white text-[#0f2744] text-sm focus:outline-none focus:border-[#1a6fc4] focus:ring-2 focus:ring-[#1a6fc4]/20 transition"
+                              />
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      {item.value === 'NO' && (
-                        <div className="mt-3">
-                          <FieldLabel required>Comentario obligatorio</FieldLabel>
-                          <textarea
-                            rows={2}
-                            value={item.comentario}
-                            onChange={(e) => updateChecklist(item.key, { comentario: e.target.value })}
-                            placeholder="Explica el motivo o falla encontrada..."
-                            className="w-full px-3.5 py-2.5 rounded-xl border-2 border-[#f9a8a8] bg-white text-[#0f2744] text-sm focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-200 transition placeholder:text-[#d4a0a0] resize-none"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        {tipo === 'si_no' && item.value === 'NO' && (
+                          <div className="mt-3">
+                            <FieldLabel required>Comentario obligatorio</FieldLabel>
+                            <textarea
+                              rows={2}
+                              value={item.comentario}
+                              onChange={(e) => updateChecklist(item.key, { comentario: e.target.value })}
+                              placeholder="Explica el motivo o falla encontrada..."
+                              className="w-full px-3.5 py-2.5 rounded-xl border-2 border-[#f9a8a8] bg-white text-[#0f2744] text-sm focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-200 transition placeholder:text-[#d4a0a0] resize-none"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
