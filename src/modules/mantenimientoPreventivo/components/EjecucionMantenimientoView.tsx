@@ -711,13 +711,47 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
 
         const assetsData = toArray<Record<string, unknown>>(inventarioResp).map(mapAsset);
         setAssets(assetsData);
-
         setStatusByAsset(
           assetsData.reduce<Record<string, EstadoActivo>>((acc, asset) => {
             acc[asset.id] = 'PENDIENTE';
             return acc;
           }, {})
         );
+
+        // Prefetch execution status for each asset so UI reflects backend state after reload
+        if (context.mantenimientoId) {
+          try {
+            const settled = await Promise.allSettled(
+              assetsData.map((asset) => getActivoExecution(context.mantenimientoId as string, asset.id))
+            );
+
+            const nextStatus: Record<string, EstadoActivo> = {};
+            for (let i = 0; i < settled.length; i += 1) {
+              const asset = assetsData[i];
+              const res = settled[i];
+              if (res.status === 'fulfilled' && res.value) {
+                const existing = res.value;
+                const backendEstado = String(existing?.estado ?? '').trim().toUpperCase();
+                const completedEstados = new Set(['COMPLETADO', 'EJECUTADO', 'FINALIZADO', 'CERRADO']);
+
+                if (existing?.ejecucionId) {
+                  if (completedEstados.has(backendEstado)) {
+                    nextStatus[asset.id] = 'COMPLETADO';
+                  } else {
+                    nextStatus[asset.id] = 'EN_PROCESO';
+                  }
+                }
+              }
+            }
+
+            if (Object.keys(nextStatus).length > 0) {
+              setStatusByAsset((prev) => ({ ...prev, ...nextStatus }));
+            }
+          } catch (e) {
+            // don't block UI on prefetch errors
+            console.warn('No se pudo precargar estado de ejecuciones:', e);
+          }
+        }
 
         const parsedAreas = toArray<Record<string, unknown>>(areasResp) as AreaItem[];
         setAreas(parsedAreas);
