@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { getUsuariosByEmpresa, type Usuario } from '@/modules/usuarios/services/usuariosService';
 import axiosClient from '@/api/axiosClient';
 import RegisterAssetModal from '@/modules/inventario/components/RegisterAssetModal';
 import { getAreasByEmpresa } from '@/modules/inventario/services/areasService';
@@ -677,6 +678,13 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
   const [savingAsset, setSavingAsset] = useState<string | null>(null);
   const [pdfUrlByAsset, setPdfUrlByAsset] = useState<Record<string, string>>({});
   const [isReadOnly, setIsReadOnly] = useState(false);
+  const [showFinalizeModal, setShowFinalizeModal] = useState(false);
+  const [finalizeUsuarios, setFinalizeUsuarios] = useState<Usuario[]>([]);
+  const [selectedUsuarioEncargado, setSelectedUsuarioEncargado] = useState<string>('');
+  const [firmaModoFinalizar, setFirmaModoFinalizar] = useState<'AUTO'|'TRAZAR'>('AUTO');
+  const [firmaFinalizar, setFirmaFinalizar] = useState<string>('');
+  const [reprogramacionFecha, setReprogramacionFecha] = useState<string>('');
+  const [motivoNoAtendidos, setMotivoNoAtendidos] = useState<string>('');
 
   const [areas, setAreas] = useState<AreaItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -753,6 +761,9 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
   );
 
   const progreso = totalActivos === 0 ? 0 : Math.round((completados / totalActivos) * 100);
+
+  const atendidosCount = completados;
+  const noAtendidosCount = totalActivos - completados;
 
   const activeDraft = activeAsset ? draftByAsset[activeAsset.id] || buildEmptyDraft() : buildEmptyDraft();
   const currentUserIdentity = getCurrentUserIdentity();
@@ -945,6 +956,16 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
         ...prev,
         [asset.id]: prev[asset.id] === 'COMPLETADO' ? 'COMPLETADO' : 'EN_PROCESO',
       }));
+    }
+  };
+
+  const openFinalizeModal = async () => {
+    setShowFinalizeModal(true);
+    try {
+      const usuarios = await getUsuariosByEmpresa(context.empresaId);
+      setFinalizeUsuarios(Array.isArray(usuarios) ? usuarios : []);
+    } catch (err) {
+      setFinalizeUsuarios([]);
     }
   };
 
@@ -1349,17 +1370,28 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
         </div>
       </div>
 
-      {/* Botón reprogramar */}
-      {completados < totalActivos && (
-        <div className="flex justify-end">
+      {/* Acciones generales debajo de la tabla */}
+      <div className="flex justify-end gap-3">
+        {completados < totalActivos && (
           <button
             type="button"
             className="px-5 py-2.5 rounded-xl bg-white border-2 border-[#1a6fc4] text-[#1a4d8f] text-sm font-bold hover:bg-[#e8f1fb] transition shadow-sm"
           >
             Reprogramar activos pendientes
           </button>
-        </div>
-      )}
+        )}
+
+        {/* Diseño: botón Finalizar Mantenimiento (fuera de 'Ver detalle', UI sólo) */}
+        <button
+          type="button"
+          onClick={openFinalizeModal}
+          disabled={totalActivos === 0}
+          className="px-5 py-2.5 rounded-xl bg-[#ff8a65] text-white text-sm font-bold disabled:opacity-60 disabled:cursor-not-allowed hover:bg-[#ff7043] transition shadow-sm"
+          title="Abrir formulario de finalización"
+        >
+          Finalizar Mantenimiento
+        </button>
+      </div>
 
       {/* Error global */}
       {errorMessage && (
@@ -1837,22 +1869,37 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                   {isReadOnly ? 'Cerrar' : 'Cancelar'}
                 </button>
                 {!isReadOnly && (
-                  <button
-                    type="button"
-                    onClick={handleSaveAssetExecution}
-                    disabled={savingAsset === activeAsset?.id}
-                    className="px-6 py-2.5 rounded-xl bg-[#1a6fc4] text-white text-sm font-bold hover:bg-[#145faa] disabled:opacity-60 disabled:cursor-not-allowed shadow-md transition flex items-center gap-2"
-                  >
-                    {savingAsset === activeAsset?.id ? (
-                      <>
-                        <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                        Guardando...
-                      </>
-                    ) : (
-                      'Guardar ejecución'
-                    )}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleSaveAssetExecution}
+                      disabled={savingAsset === activeAsset?.id}
+                      className="px-6 py-2.5 rounded-xl bg-[#1a6fc4] text-white text-sm font-bold hover:bg-[#145faa] disabled:opacity-60 disabled:cursor-not-allowed shadow-md transition flex items-center gap-2"
+                    >
+                      {savingAsset === activeAsset?.id ? (
+                        <>
+                          <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                          Guardando...
+                        </>
+                      ) : (
+                        'Guardar ejecución'
+                      )}
+                    </button>
+
+                    
+                  </>
                 )}
+
+                {/* Diseño: botón Finalizar Mantenimiento (UI solamente, siempre visible) */}
+                <button
+                  type="button"
+                  disabled
+                  className="px-6 py-2.5 rounded-xl bg-[#ff8a65] text-white text-sm font-bold disabled:opacity-80 disabled:cursor-not-allowed shadow-md transition ml-2"
+                  title="Diseño — sin acción aún"
+                >
+                  Finalizar Mantenimiento
+                </button>
+
                 {pdfUrlByAsset[activeAsset?.id || ''] && (
                   <a
                     href={pdfUrlByAsset[activeAsset?.id || '']}
@@ -1888,6 +1935,112 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
             setShowRegisterAssetModal(false);
           }}
         />
+      )}
+
+      {/* Modal: Finalizar Mantenimiento (UI) */}
+      {showFinalizeModal && (
+        <div className="fixed inset-0 z-50 bg-[#0f2d5e]/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-[#bdd7f0]">
+            <div className="bg-[#0f2d5e] px-6 py-4 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#7eb8e8] mb-0.5">Finalizar Mantenimiento</p>
+                <h4 className="text-lg font-extrabold text-white">Resumen y reprogramación</h4>
+              </div>
+              <button type="button" onClick={() => setShowFinalizeModal(false)} className="text-[#a8ccf0] hover:text-white text-xl font-bold leading-none">✕</button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto bg-[#f7faff]">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white rounded-xl border border-[#daeaf8] p-4">
+                  <p className="text-xs font-bold text-[#5a80a8]">Equipos atendidos</p>
+                  <p className="text-2xl font-extrabold text-[#1a6fc4]">{atendidosCount}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-[#daeaf8] p-4">
+                  <p className="text-xs font-bold text-[#5a80a8]">Equipos no atendidos</p>
+                  <p className="text-2xl font-extrabold text-[#b91c1c]">{noAtendidosCount}</p>
+                </div>
+              </div>
+
+              {noAtendidosCount > 0 && (
+                <div className="bg-white rounded-xl border border-[#f9a8a8] p-4">
+                  <p className="text-xs font-bold uppercase text-[#b91c1c] mb-2">Motivo por equipos no atendidos (obligatorio)</p>
+                  <textarea
+                    rows={3}
+                    value={motivoNoAtendidos}
+                    onChange={(e) => setMotivoNoAtendidos(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border-2 border-[#f9a8a8] bg-white text-[#0f2744] text-sm focus:outline-none focus:border-red-400 transition"
+                    placeholder="Explica por qué algunos equipos no fueron atendidos..."
+                  />
+                </div>
+              )}
+
+              {noAtendidosCount > 0 && (
+                <div className="bg-white rounded-xl border border-[#daeaf8] p-4">
+                  <p className="text-xs font-bold uppercase text-[#5a80a8] mb-2">Fecha de reprogramación de equipos restantes</p>
+                  <p className="text-xs text-[#94afc8] mb-2">Selecciona una fecha (fechas ya usadas están deshabilitadas)</p>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="date"
+                      value={reprogramacionFecha}
+                      onChange={(e) => setReprogramacionFecha(e.target.value)}
+                      min={new Date().toISOString().slice(0,10)}
+                      className="px-3.5 py-2.5 rounded-xl border-2 border-[#c8ddf0] bg-white text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-white rounded-xl border border-[#daeaf8] p-4">
+                <p className="text-xs font-bold uppercase text-[#5a80a8] mb-2">Firma de técnico</p>
+                <div className="inline-flex rounded-xl border-2 border-[#c8ddf0] bg-[#f0f6fd] p-0.5 gap-0.5 mb-3">
+                  {(['AUTO','TRAZAR'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setFirmaModoFinalizar(m)}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${firmaModoFinalizar===m ? 'bg-[#1a6fc4] text-white shadow' : 'text-[#3a5a8a]'}`}
+                    >{m==='AUTO' ? 'Automática' : 'Trazar'}</button>
+                  ))}
+
+                </div>
+                {firmaModoFinalizar === 'AUTO' ? (
+                  <div className="h-32 rounded-xl border-2 border-[#c8ddf0] bg-white flex items-center px-5 overflow-hidden">
+                    <p
+                      className="text-[#0f2744] w-full whitespace-nowrap overflow-hidden text-ellipsis"
+                      style={{ fontFamily: '"Segoe Script", "Brush Script MT", cursive', fontSize: getAutoSignatureFontSize(tecnicoFirmaNombre), lineHeight: 1, letterSpacing: '0.01em' }}
+                    >
+                      {tecnicoFirmaNombre}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <SignaturePad value={firmaFinalizar} onChange={(v) => setFirmaFinalizar(v)} />
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-white rounded-xl border border-[#daeaf8] p-4">
+                <p className="text-xs font-bold uppercase text-[#5a80a8] mb-2">Enviar correo al encargado</p>
+                <select
+                  value={selectedUsuarioEncargado}
+                  onChange={(e) => setSelectedUsuarioEncargado(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border-2 border-[#c8ddf0] bg-white text-sm"
+                >
+                  <option value="">Seleccionar usuario encargado</option>
+                  {finalizeUsuarios.map((u) => (
+                    <option key={String(u.id ?? u._id)} value={String(u.id ?? u._id)}>{u.nombreCompleto} — {u.correo}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-[#94afc8] mt-2">Solo se puede seleccionar un usuario.</p>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-[#daeaf8] bg-white flex items-center justify-end gap-3">
+              <button type="button" onClick={() => setShowFinalizeModal(false)} className="px-4 py-2 rounded-xl border-2 border-[#c8ddf0] text-sm font-bold">Cerrar</button>
+              <button type="button" disabled className="px-4 py-2 rounded-xl bg-[#1a6fc4] text-white text-sm font-bold disabled:opacity-60" title="Deshabilitado: esperando instrucciones">Enviar</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showEditComponentsModal && selectedAssetForEdit && (
