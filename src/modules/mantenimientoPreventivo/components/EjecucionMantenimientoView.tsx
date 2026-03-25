@@ -681,6 +681,8 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [finalizeUsuarios, setFinalizeUsuarios] = useState<Usuario[]>([]);
   const [selectedUsuarioEncargado, setSelectedUsuarioEncargado] = useState<string>('');
+  const [encargadoSearch, setEncargadoSearch] = useState<string>('');
+  const [encargadoDropdownOpen, setEncargadoDropdownOpen] = useState<boolean>(false);
   const [firmaModoFinalizar, setFirmaModoFinalizar] = useState<'AUTO'|'TRAZAR'>('AUTO');
   const [firmaFinalizar, setFirmaFinalizar] = useState<string>('');
   const [reprogramacionFecha, setReprogramacionFecha] = useState<string>('');
@@ -2055,16 +2057,52 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
 
               <div className="bg-white rounded-xl border border-[#daeaf8] p-4">
                 <p className="text-xs font-bold uppercase text-[#5a80a8] mb-2">Enviar correo al encargado</p>
-                <select
-                  value={selectedUsuarioEncargado}
-                  onChange={(e) => setSelectedUsuarioEncargado(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border-2 border-[#c8ddf0] bg-white text-sm"
-                >
-                  <option value="">Seleccionar usuario encargado</option>
-                  {finalizeUsuarios.map((u) => (
-                    <option key={String(u.id ?? u._id)} value={String(u.id ?? u._id)}>{u.nombreCompleto} — {u.correo}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={encargadoSearch || (finalizeUsuarios.find((u) => String(u.id ?? u._id) === selectedUsuarioEncargado)?.nombreCompleto ?? '')}
+                    onChange={(e) => {
+                      setEncargadoSearch(e.target.value);
+                      setEncargadoDropdownOpen(true);
+                    }}
+                    onFocus={() => setEncargadoDropdownOpen(true)}
+                    placeholder="Buscar usuario por nombre o correo..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border-2 border-[#c8ddf0] bg-white text-sm"
+                  />
+
+                  {encargadoDropdownOpen && (
+                    <div className="absolute z-40 left-0 right-0 mt-2 bg-white border border-slate-200 rounded-lg shadow-md max-h-48 overflow-auto">
+                      {finalizeUsuarios.filter((u) => {
+                        const q = (encargadoSearch || '').toLowerCase().trim();
+                        if (!q) return true;
+                        const text = `${u.nombreCompleto || ''} ${u.correo || ''}`.toLowerCase();
+                        return text.includes(q);
+                      }).map((u) => (
+                        <button
+                          key={String(u.id ?? u._id)}
+                          type="button"
+                          onClick={() => {
+                            setSelectedUsuarioEncargado(String(u.id ?? u._id));
+                            setEncargadoSearch(u.nombreCompleto || '');
+                            setEncargadoDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-3.5 py-2 hover:bg-slate-50 border-b last:border-b-0"
+                        >
+                          <div className="text-sm font-semibold text-slate-700">{u.nombreCompleto}</div>
+                          <div className="text-xs text-slate-400">{u.correo}</div>
+                        </button>
+                      ))}
+                      {finalizeUsuarios.filter((u) => {
+                        const q = (encargadoSearch || '').toLowerCase().trim();
+                        if (!q) return true;
+                        const text = `${u.nombreCompleto || ''} ${u.correo || ''}`.toLowerCase();
+                        return text.includes(q);
+                      }).length === 0 && (
+                        <div className="p-3 text-sm text-slate-500">No se encontraron usuarios.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <p className="text-xs text-[#94afc8] mt-2">Solo se puede seleccionar un usuario.</p>
               </div>
             </div>
