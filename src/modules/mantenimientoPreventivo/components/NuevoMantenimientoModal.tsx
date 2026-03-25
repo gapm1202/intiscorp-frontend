@@ -4,7 +4,7 @@ import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
 import { getContratoActivo } from '@/modules/empresas/services/contratosService';
 import { usuariosInternosService } from '@/modules/usuarios/services/usuariosInternosService';
 import type { UsuarioInterno } from '@/modules/usuarios/types/usuariosInternos.types';
-import { createMantenimientoPreventivo, updateMantenimientoPreventivo, getMantenimientoPreventivoById } from '../services/mantenimientosPreventivosService';
+import { createMantenimientoPreventivo, updateMantenimientoPreventivo, getMantenimientoPreventivoById, listMantenimientosPreventivos, type MantenimientoPreventivoRecord } from '../services/mantenimientosPreventivosService';
 
 type Option = { id: string; nombre: string };
 
@@ -122,10 +122,49 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [empresaPreventivoStatus, setEmpresaPreventivoStatus] = useState<'unknown' | 'checking' | 'no_contract' | 'disabled' | 'enabled'>('unknown');
+  const [blockedDates, setBlockedDates] = useState<Record<string, string>>({});
+  const [checkingBlockedDates, setCheckingBlockedDates] = useState(false);
+  const [showBlockedModal, setShowBlockedModal] = useState(false);
 
   const sedesDisponibles = useMemo(() => sedesByEmpresa[empresaId] || [], [empresaId, sedesByEmpresa]);
 
   const tecnicosSeleccionadosData = useMemo(() => tecnicos.filter((t) => tecnicosSeleccionados.includes(t.id)), [tecnicos, tecnicosSeleccionados]);
+
+  useEffect(() => {
+    let active = true;
+    const cargarBloqueadas = async () => {
+      setCheckingBlockedDates(true);
+      try {
+        if (!empresaId || !sedeId) {
+          if (active) setBlockedDates({});
+          return;
+        }
+
+        const list = await listMantenimientosPreventivos({ empresaId, sedeId });
+        if (!active) return;
+
+        const map: Record<string, string> = {};
+        list.forEach((r: MantenimientoPreventivoRecord) => {
+          const fecha = String(r.fechaProgramada || '').slice(0, 10);
+          if (!fecha) return;
+          // si estamos editando el mismo mantenimiento, no bloquear esa fecha
+          if (editing && editing.id && String(editing.id) === String(r.id)) return;
+          map[fecha] = r.id;
+        });
+
+        setBlockedDates(map);
+      } catch (e) {
+        setBlockedDates({});
+      } finally {
+        if (active) setCheckingBlockedDates(false);
+      }
+    };
+
+    cargarBloqueadas();
+    return () => {
+      active = false;
+    };
+  }, [empresaId, sedeId, editing]);
 
   useEffect(() => {
     let active = true;
@@ -484,7 +523,55 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
 
             <div>
               <label className={labelCls}>Fecha del mantenimiento</label>
-              <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputCls + ' max-w-xs'} />
+              <input
+                type="date"
+                value={fecha}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  // si la fecha está bloqueada por otro mantenimiento, impedir selección
+                  if (val && blockedDates[val]) {
+                    setSaveError('La fecha seleccionada ya tiene un mantenimiento programado. Elige otra fecha.');
+                    return;
+                  }
+                  setSaveError(null);
+                  setFecha(val);
+                }}
+                className={inputCls + ' max-w-xs'}
+              />
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBlockedModal(true)}
+                  disabled={checkingBlockedDates || Object.keys(blockedDates).length === 0}
+                  className={`ml-2 text-sm px-3 py-1.5 rounded-lg border ${checkingBlockedDates || Object.keys(blockedDates).length === 0 ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                >
+                  {checkingBlockedDates ? 'Comprobando...' : 'Ver fechas ocupadas'}
+                </button>
+              </div>
+              {showBlockedModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                  <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-bold">Fechas ocupadas</h3>
+                      <button onClick={() => setShowBlockedModal(false)} className="text-slate-500 hover:text-slate-700">Cerrar</button>
+                    </div>
+                    <div className="max-h-60 overflow-auto text-sm text-slate-700">
+                      {Object.keys(blockedDates).length === 0 ? (
+                        <p className="text-slate-500">No hay fechas ocupadas para la empresa/sede seleccionada.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {Object.keys(blockedDates).sort().map((d) => (
+                            <li key={d} className="flex items-center justify-between px-3 py-2 rounded-lg border">
+                              <span>{d}</span>
+                              <span className="text-xs text-slate-400">ID {blockedDates[d]}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
