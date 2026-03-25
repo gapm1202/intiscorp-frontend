@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getEmpresas } from '@/modules/empresas/services/empresasService';
 import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
+import { getContratoActivo } from '@/modules/empresas/services/contratosService';
 import { usuariosInternosService } from '@/modules/usuarios/services/usuariosInternosService';
 import type { UsuarioInterno } from '@/modules/usuarios/types/usuariosInternos.types';
 import { createMantenimientoPreventivo, updateMantenimientoPreventivo, getMantenimientoPreventivoById } from '../services/mantenimientosPreventivosService';
@@ -99,6 +100,11 @@ function extractTecnicos(full: Record<string, unknown>): { tecnicoIds: string[];
   return { tecnicoIds: Array.from(tecnicoIdsSet), encargadoId: encargado };
 }
 
+function contractSafeGet(obj: unknown, key: string) {
+  if (!obj || typeof obj !== 'object') return undefined;
+  return (obj as Record<string, unknown>)[key];
+}
+
 export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalProps) {
   const { onClose, onStart, editing = null, onUpdated } = props;
 
@@ -115,6 +121,7 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [empresaPreventivoStatus, setEmpresaPreventivoStatus] = useState<'unknown' | 'checking' | 'no_contract' | 'disabled' | 'enabled'>('unknown');
 
   const sedesDisponibles = useMemo(() => sedesByEmpresa[empresaId] || [], [empresaId, sedesByEmpresa]);
 
@@ -223,6 +230,98 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
       active = false;
     };
   }, [editing]);
+
+  // Cuando cambia la empresa seleccionada, comprobar si el contrato incluye preventivo
+  useEffect(() => {
+    let activeCheck = true;
+    if (!empresaId) {
+      setEmpresaPreventivoStatus('unknown');
+      return;
+    }
+
+    setEmpresaPreventivoStatus('checking');
+
+    (async () => {
+      try {
+        const contrato = await getContratoActivo(empresaId);
+        if (!activeCheck) return;
+        if (!contrato) {
+          setEmpresaPreventivoStatus('no_contract');
+        } else {
+          // Normalizar wrapper comunes (data, contract, result)
+          const normalized = (contrato as any).data ?? (contrato as any).contract ?? (contrato as any).result ?? contrato;
+          console.debug('[DEBUG] contrato activo (normalized):', normalized);
+
+          // Normalizar distintas posibles rutas y nombres que devuelve el backend
+          const services = normalized.services ?? normalized.servicios ?? normalized.services ?? null;
+          const preventivePolicy = normalized.preventivePolicy ?? normalized.preventive_policy ?? normalized.preventivo ?? null;
+
+          const val = (v: unknown) => {
+            if (v === true) return true;
+            if (v === false) return false;
+            if (typeof v === 'string') {
+              const s = v.toLowerCase().trim();
+              if (s === 'true' || s === '1' || s === 'si' || s === 'sí' || s === 'yes') return true;
+              if (s === 'false' || s === '0' || s === 'no') return false;
+            }
+            return undefined;
+          };
+
+          const candidatesYes = [
+            normalized.mantenimientoPreventivo,
+            normalized.mantenimiento_preventivo,
+            normalized.incluyePreventivo,
+            normalized.incluye_preventivo,
+            contractSafeGet(preventivePolicy, 'incluyePreventivo'),
+            contractSafeGet(preventivePolicy, 'incluye_preventivo'),
+            contractSafeGet(preventivePolicy, 'aplica'),
+            contractSafeGet(services, 'mantenimientoPreventivo'),
+            contractSafeGet(services, 'mantenimiento_preventivo'),
+            contractSafeGet(services, 'incluyePreventivo'),
+            contractSafeGet(services, 'incluye_preventivo'),
+          ];
+
+          const candidatesNo = [
+            contrato.mantenimientoPreventivo === false ? false : undefined,
+            contrato.mantenimiento_preventivo === false ? false : undefined,
+            contrato.incluyePreventivo === false ? false : undefined,
+            contrato.incluye_preventivo === false ? false : undefined,
+            contractSafeGet(preventivePolicy, 'incluyePreventivo') === false ? false : undefined,
+            contractSafeGet(preventivePolicy, 'incluye_preventivo') === false ? false : undefined,
+            contractSafeGet(services, 'mantenimientoPreventivo') === false ? false : undefined,
+          ];
+
+          // evaluar yes
+          let foundYes = false;
+          for (const c of candidatesYes) {
+            const r = val(c);
+            if (r === true) { foundYes = true; break; }
+          }
+
+          if (foundYes) {
+            setEmpresaPreventivoStatus('enabled');
+          } else {
+            // evaluar no-explicit
+            let foundNo = false;
+            for (const c of candidatesYes) {
+              const r = val(c);
+              if (r === false) { foundNo = true; break; }
+            }
+
+            if (foundNo) setEmpresaPreventivoStatus('disabled');
+            else setEmpresaPreventivoStatus('no_contract');
+          }
+        }
+      } catch (e) {
+        if (!activeCheck) return;
+        setEmpresaPreventivoStatus('no_contract');
+      }
+    })();
+
+    return () => {
+      activeCheck = false;
+    };
+  }, [empresaId]);
 
   const labelCls = 'block text-sm font-semibold text-slate-700 mb-2';
   const inputCls =
@@ -339,6 +438,50 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
               </div>
             </div>
 
+            {empresaId && (
+              <div className="mt-3">
+                {empresaPreventivoStatus === 'checking' && (
+                  <div className="rounded-lg border px-4 py-3 text-sm font-medium bg-slate-50 border-slate-200 text-slate-600">Comprobando configuración del contrato...</div>
+                )}
+
+                {empresaPreventivoStatus === 'no_contract' && (
+                  <div className="rounded-lg border px-4 py-3 text-sm font-semibold bg-red-50 border-red-200 text-red-700 flex items-center justify-between">
+                    <div>No se ha configurado el mantenimiento preventivo en el contrato de esta empresa.</div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          sessionStorage.setItem(`empresaTab_${empresaId}`, 'contrato');
+                          window.location.href = `/admin/empresas/${empresaId}`;
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700"
+                      >
+                        Ir a contrato
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {empresaPreventivoStatus === 'disabled' && (
+                  <div className="rounded-lg border px-4 py-3 text-sm font-semibold bg-red-50 border-red-200 text-red-700 flex items-center justify-between">
+                    <div>Esta empresa no tiene habilitado el mantenimiento preventivo en su contrato.</div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          sessionStorage.setItem(`empresaTab_${empresaId}`, 'contrato');
+                          window.location.href = `/admin/empresas/${empresaId}`;
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700"
+                      >
+                        Ir a contrato
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div>
               <label className={labelCls}>Fecha del mantenimiento</label>
               <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputCls + ' max-w-xs'} />
@@ -402,7 +545,7 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
 
           <div className="sticky bottom-0 bg-white border-t border-slate-100 px-7 py-4 flex items-center justify-end gap-3">
             <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition">Cancelar</button>
-            <button type="submit" disabled={!canStart || saving} className="flex items-center gap-2 px-6 py-2.5 bg-blue-700 hover:bg-blue-800 disabled:bg-blue-300 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg transition shadow-md shadow-blue-200">
+            <button type="submit" disabled={!canStart || saving || empresaPreventivoStatus === 'no_contract' || empresaPreventivoStatus === 'disabled'} className="flex items-center gap-2 px-6 py-2.5 bg-blue-700 hover:bg-blue-800 disabled:bg-blue-300 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg transition shadow-md shadow-blue-200">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
               </svg>
