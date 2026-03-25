@@ -686,7 +686,7 @@ const InventarioPage = () => {
           </>
         )}
 
-        {/* ════════════════════════════ AREAS VIEW ════════════════════════════ */}
+      {/* ════════════════════════════ AREAS VIEW ════════════════════════════ */}
         {currentView === 'areas' && (
           <>
             <PageHeader title="Gestión de Áreas" subtitle={`${areas.length} ${areas.length === 1 ? 'área registrada' : 'áreas registradas'}`} onBack={() => setCurrentView('main')}>
@@ -697,42 +697,42 @@ const InventarioPage = () => {
             </PageHeader>
             <div className={card}>
               {areas.length === 0 ? (
-                <div className="p-16 text-center">
-                  <div className="w-14 h-14 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-7 h-7 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="p-20 text-center">
+                  <div className="w-16 h-16 bg-sky-50 border border-sky-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-sky-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" />
                     </svg>
                   </div>
-                  <p className="font-semibold text-slate-700 mb-1">Sin áreas registradas</p>
-                  <p className="text-sm text-slate-400">Agrega una área para comenzar</p>
+                  <p className="font-semibold text-slate-700 mb-1 text-sm">Sin áreas registradas</p>
+                  <p className="text-xs text-slate-400">Agrega una área para comenzar</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50">
+                      <tr className="bg-gradient-to-r from-blue-700 to-blue-600">
                         {['Área', 'Responsable', 'Acciones'].map(h => (
-                          <th key={h} className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">{h}</th>
+                          <th key={h} className="px-6 py-3.5 text-left text-xs font-bold text-white uppercase tracking-widest">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {areas.map((a, i) => (
-                        <tr key={a._id ?? a.id ?? i} className="hover:bg-blue-50/30 transition-colors">
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                                <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <tr key={a._id ?? a.id ?? i} className="hover:bg-sky-50/60 transition-colors group">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm">
+                                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" />
                                 </svg>
                               </div>
-                              <span className="font-semibold text-slate-800">{String(a.name ?? a.nombre ?? '—')}</span>
+                              <span className="font-semibold text-slate-800 text-sm">{String(a.name ?? a.nombre ?? '—')}</span>
                             </div>
                           </td>
-                          <td className="px-5 py-3.5 text-slate-500">{String(a.responsable ?? '—')}</td>
-                          <td className="px-5 py-3.5">
+                          <td className="px-6 py-4 text-slate-600 text-sm">{String(a.responsable ?? '—')}</td>
+                          <td className="px-6 py-4">
                             <button onClick={() => { setEditingArea(a); setShowEditAreaModal(true); }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-medium transition-all">
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-semibold transition-all shadow-sm">
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                               Editar
                             </button>
@@ -749,7 +749,7 @@ const InventarioPage = () => {
 
         {/* ════════════════════════ CATEGORIES VIEW ═══════════════════════════ */}
         {currentView === 'categories' && (
-          <div className="space-y-5">
+          <div className="space-y-6">
             {/* Groups section */}
             <PageHeader title="Grupos de Activo" subtitle={`${groups.length} ${groups.length === 1 ? 'grupo' : 'grupos'} registrados`}>
               <button onClick={() => { setEditingGroupId(null); setGroupNameInput(''); setGroupCodeInput(''); setGroupDescriptionInput(''); setGroupActiveInput(true); setShowGroupModal(true); }} className={btn.primary}>
@@ -759,25 +759,25 @@ const InventarioPage = () => {
             </PageHeader>
             <div className={card}>
               {groups.length === 0 ? (
-                <div className="p-12 text-center text-sm text-slate-400">No hay grupos. Crea uno para agrupar los tipos de activo.</div>
+                <div className="p-14 text-center text-sm text-slate-400">No hay grupos. Crea uno para agrupar los tipos de activo.</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50">
+                      <tr className="bg-gradient-to-r from-blue-700 to-blue-600">
                         {['Nombre', 'Código', 'Acciones'].map(h => (
-                          <th key={h} className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">{h}</th>
+                          <th key={h} className="px-6 py-3.5 text-left text-xs font-bold text-white uppercase tracking-widest">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {groups.map(g => (
-                        <tr key={g.id} className="hover:bg-blue-50/30 transition-colors">
-                          <td className="px-5 py-3.5 font-semibold text-slate-800">{g.nombre}</td>
-                          <td className="px-5 py-3.5"><span className={badge.blue}>{g.codigo || '—'}</span></td>
-                          <td className="px-5 py-3.5">
+                        <tr key={g.id} className="hover:bg-sky-50/60 transition-colors">
+                          <td className="px-6 py-4 font-semibold text-slate-800 text-sm">{g.nombre}</td>
+                          <td className="px-6 py-4"><span className={badge.blue}>{g.codigo || '—'}</span></td>
+                          <td className="px-6 py-4">
                             <button onClick={() => { setEditingGroupId(g.id); setGroupNameInput(g.nombre); setGroupCodeInput(g.codigo || ''); setGroupDescriptionInput((g as any).descripcion || ''); setGroupActiveInput((g as any).activo ?? true); setShowGroupModal(true); }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-medium transition-all">
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-semibold transition-all shadow-sm">
                               Editar
                             </button>
                           </td>
@@ -798,40 +798,40 @@ const InventarioPage = () => {
             </PageHeader>
             <div className={card}>
               {!Array.isArray(categories) || categories.length === 0 ? (
-                <div className="p-12 text-center text-sm text-slate-400">No hay tipos de activo configurados.</div>
+                <div className="p-14 text-center text-sm text-slate-400">No hay tipos de activo configurados.</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50">
+                      <tr className="bg-gradient-to-r from-blue-700 to-blue-600">
                         {['Nombre', 'Marcas', 'Campos personalizados', 'Acciones'].map(h => (
-                          <th key={h} className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">{h}</th>
+                          <th key={h} className="px-6 py-3.5 text-left text-xs font-bold text-white uppercase tracking-widest">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {(Array.isArray(categories) ? categories : []).map((c, i) => (
-                        <tr key={c.id ?? i} className="hover:bg-blue-50/30 transition-colors">
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center">
-                                <svg className="w-4 h-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <tr key={c.id ?? i} className="hover:bg-sky-50/60 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 bg-violet-600 rounded-xl flex items-center justify-center shadow-sm">
+                                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                                 </svg>
                               </div>
-                              <span className="font-semibold text-slate-800">{c.nombre}</span>
+                              <span className="font-semibold text-slate-800 text-sm">{c.nombre}</span>
                             </div>
                           </td>
-                          <td className="px-5 py-3.5">
+                          <td className="px-6 py-4">
                             {(c.marcas || []).length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
+                              <div className="flex flex-wrap gap-1.5">
                                 {(c.marcas || []).map((m, mi) => <span key={mi} className={badge.blue}>{m}</span>)}
                               </div>
                             ) : <span className="text-slate-400 text-xs italic">Sin marcas</span>}
                           </td>
-                          <td className="px-5 py-3.5">
+                          <td className="px-6 py-4">
                             {c.campos && c.campos.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
+                              <div className="flex flex-wrap gap-1.5">
                                 {c.campos.map((campo, ci) => (
                                   <span key={ci} className={badge.gray}>
                                     {campo.nombre}
@@ -841,7 +841,7 @@ const InventarioPage = () => {
                               </div>
                             ) : <span className="text-slate-400 text-xs italic">Sin campos</span>}
                           </td>
-                          <td className="px-5 py-3.5">
+                          <td className="px-6 py-4">
                             <button
                               onClick={() => {
                                 setEditingCategoryId(c.id || null);
@@ -852,7 +852,7 @@ const InventarioPage = () => {
                                 setNewCategoryFields((normalizeCampos(c.campos || []) as any[]).map(f => ({ ...f, opcionesRaw: (Array.isArray(f.opciones) ? f.opciones.join(', ') : '') })));
                                 setCategoryPreview(null); setShowPreview(false); setShowCategoryModal(true);
                               }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-medium transition-all">
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-semibold transition-all shadow-sm">
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                               Editar
                             </button>
@@ -869,32 +869,32 @@ const InventarioPage = () => {
 
         {/* ═══════════════════════════ VIEW ASSET ═════════════════════════════ */}
         {currentView === 'viewAsset' && viewItem && (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {/* Asset header */}
             <div className={`${card} overflow-visible`}>
-              <div className="bg-blue-600 px-6 py-5 rounded-t-xl">
+              <div className="bg-gradient-to-r from-blue-800 via-blue-700 to-sky-600 px-7 py-6 rounded-t-xl">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-center gap-4">
-                    <button onClick={() => setCurrentView('main')} className="flex items-center justify-center w-9 h-9 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-all">
+                    <button onClick={() => setCurrentView('main')} className="flex items-center justify-center w-9 h-9 rounded-xl bg-white/20 hover:bg-white/30 text-white transition-all border border-white/20">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                     </button>
                     <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-white font-bold text-xl font-mono">{formatAssetCode(String(viewItem.assetId ?? viewItem._id ?? viewItem.id ?? ''))}</span>
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="text-white font-bold text-2xl font-mono tracking-wider">{formatAssetCode(String(viewItem.assetId ?? viewItem._id ?? viewItem.id ?? ''))}</span>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
                           String(viewItem.estadoActivo ?? '').toLowerCase() === 'activo'
-                            ? 'bg-emerald-400/20 text-emerald-100 border-emerald-400/30'
-                            : 'bg-amber-400/20 text-amber-100 border-amber-400/30'
+                            ? 'bg-emerald-400/25 text-emerald-100 border-emerald-400/40'
+                            : 'bg-amber-400/25 text-amber-100 border-amber-400/40'
                         }`}>
                           {String(viewItem.estadoActivo ?? '—').replace(/_/g, ' ').toUpperCase()}
                         </span>
                       </div>
-                      <p className="text-blue-100 text-sm mt-1">{String(viewItem.categoria ?? 'Activo')}{String(viewItem.area ?? '') ? ` · ${viewItem.area}` : ''}</p>
+                      <p className="text-sky-200 text-sm mt-1.5 font-medium">{String(viewItem.categoria ?? 'Activo')}{String(viewItem.area ?? '') ? ` · ${viewItem.area}` : ''}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2.5">
                     <button onClick={() => { setEditingAsset(viewItem); setShowRegisterModal(true); }}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-500 text-amber-900 text-sm font-semibold transition-all">
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-amber-900 text-sm font-bold transition-all shadow-md">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                       Editar
                     </button>
@@ -911,7 +911,7 @@ const InventarioPage = () => {
                           setCurrentView('historialAsset');
                         } catch (err) { alert('Error al cargar historial: ' + (err as Error).message); }
                       }}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 text-white text-sm font-semibold border border-white/20 transition-all">
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-sm font-bold border border-white/25 transition-all">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                       Historial
                     </button>
@@ -938,19 +938,18 @@ const InventarioPage = () => {
             {(() => {
               const rawDyn = viewItem.valoresDinamicos ?? viewItem.valores_dinamicos ?? viewItem.valores ?? null;
               if (!rawDyn) return null;
-              // If grouped format (componentes -> campos)
               if (Array.isArray(rawDyn) && rawDyn.length && rawDyn[0] && Array.isArray(rawDyn[0].campos)) {
                 return (
                   <InfoSection title="Componentes" color="teal" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h18M3 17h18"/></svg>}>
                     <div className="space-y-3">
                       {(rawDyn as any[]).map((comp: any, ci: number) => (
-                        <div key={ci} className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
-                          <div className="font-semibold text-sm text-slate-700 mb-2">{String(comp.nombre ?? comp.name ?? `Componente ${ci+1}`)}</div>
+                        <div key={ci} className="bg-slate-50 border border-slate-200 rounded-xl px-5 py-4">
+                          <div className="font-bold text-sm text-slate-700 mb-3 pb-2 border-b border-slate-200">{String(comp.nombre ?? comp.name ?? `Componente ${ci+1}`)}</div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                             {(comp.campos || []).map((c: any, fi: number) => (
                               <div key={fi} className="bg-white border border-slate-100 rounded-lg p-3 text-sm">
-                                <div className="text-xs text-slate-400">{String(c.nombre ?? c.label ?? `Campo ${fi+1}`)}</div>
-                                <div className="font-medium text-slate-700 mt-1">{String(c.valor ?? c.valor ?? '')}</div>
+                                <div className="text-xs font-medium text-slate-400 uppercase tracking-wide">{String(c.nombre ?? c.label ?? `Campo ${fi+1}`)}</div>
+                                <div className="font-semibold text-slate-800 mt-1">{String(c.valor ?? c.valor ?? '')}</div>
                               </div>
                             ))}
                           </div>
@@ -960,15 +959,14 @@ const InventarioPage = () => {
                   </InfoSection>
                 );
               }
-              // If flat format, render simple list
               if (Array.isArray(rawDyn) && rawDyn.length) {
                 return (
                   <InfoSection title="Componentes" color="teal" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h18M3 17h18"/></svg>}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {(rawDyn as any[]).map((v: any, i: number) => (
-                        <div key={i} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm">
-                          <div className="text-xs text-slate-400">Campo {String(v.campo_id ?? v.id ?? '')}</div>
-                          <div className="font-medium text-slate-700">{String(v.valor ?? '')}</div>
+                        <div key={i} className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm">
+                          <div className="text-xs font-medium text-slate-400 uppercase tracking-wide">Campo {String(v.campo_id ?? v.id ?? '')}</div>
+                          <div className="font-semibold text-slate-700 mt-1">{String(v.valor ?? '')}</div>
                         </div>
                       ))}
                     </div>
@@ -983,15 +981,15 @@ const InventarioPage = () => {
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             }>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Estado activo</p>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl px-5 py-4">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Estado activo</p>
                   <span className={estadoBadge(String(viewItem.estadoActivo ?? ''))}>
                     <span className={`w-1.5 h-1.5 rounded-full ${dot(String(viewItem.estadoActivo ?? ''))}`} />
                     {String(viewItem.estadoActivo ?? '—').replace(/_/g, ' ').toUpperCase()}
                   </span>
                 </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Estado operativo</p>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl px-5 py-4">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Estado operativo</p>
                   <span className={estadoBadge(String(viewItem.estadoOperativo ?? ''))}>
                     <span className={`w-1.5 h-1.5 rounded-full ${dot(String(viewItem.estadoOperativo ?? ''))}`} />
                     {String(viewItem.estadoOperativo ?? '—').replace(/_/g, ' ').toUpperCase()}
@@ -1011,9 +1009,9 @@ const InventarioPage = () => {
                 <InfoSection title={`Usuarios asignados (${list.length})`} color="purple" icon={
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                 }>
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     {list.map((u: UsuarioItem, i: number) => (
-                      <div key={i} className="grid grid-cols-3 gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+                      <div key={i} className="grid grid-cols-3 gap-3 bg-slate-50 border border-slate-200 rounded-xl px-5 py-4">
                         <Field label="Nombre" value={u.nombreCompleto || u.nombre || '—'} />
                         <Field label="Correo" value={u.correo || u.email || '—'} />
                         <Field label="Cargo" value={u.cargo || '—'} />
@@ -1038,11 +1036,10 @@ const InventarioPage = () => {
                 {String(viewItem.fechaCompra ?? viewItem.fecha_compra ?? '') === '' && String(viewItem.fechaCompraAprox ?? viewItem.fecha_compra_aprox ?? viewItem.fechaCompraAproxYear ?? viewItem.fecha_compra_aprox_year ?? '') !== '' && (
                   <Field label="Año de compra (aprox.)" value={String(viewItem.fechaCompraAprox ?? viewItem.fecha_compra_aprox ?? viewItem.fechaCompraAproxYear ?? viewItem.fecha_compra_aprox_year)} />
                 )}
-                {/* Warranty */}
                 {String(viewItem.garantiaDuracion ?? viewItem.garantia_duracion ?? viewItem.garantia ?? '') !== '' && (
-                  <div className="bg-slate-50 rounded-lg border border-slate-200 px-4 py-3 col-span-1">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Garantía</p>
-                    <p className="text-sm font-semibold text-slate-800">{String(viewItem.garantiaDuracion ?? viewItem.garantia_duracion ?? viewItem.garantia)}</p>
+                  <div className="bg-slate-50 rounded-xl border border-slate-200 px-5 py-4 col-span-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Garantía</p>
+                    <p className="text-sm font-bold text-slate-800">{String(viewItem.garantiaDuracion ?? viewItem.garantia_duracion ?? viewItem.garantia)}</p>
                     {(() => {
                       try {
                         const w = getWarrantyInfo({ estado_garantia: viewItem.estado_garantia ?? viewItem.estadoGarantia, warranty_expires_at: viewItem.warranty_expires_at ?? viewItem.warrantyExpiresAt, fechaFinGarantia: viewItem.fechaFinGarantia ?? viewItem.fecha_fin_garantia, garantiaDuracion: viewItem.garantia ?? viewItem.garantiaDuracion ?? viewItem.garantia_duracion, garantia: viewItem.garantia, fechaCompra: viewItem.fechaCompra ?? viewItem.fecha_compra ?? viewItem.fechaCompraAprox ?? viewItem.fechaCompraAproxYear ?? viewItem.fecha_compra_aprox });
@@ -1058,7 +1055,6 @@ const InventarioPage = () => {
                 {String(viewItem.ip ?? '') !== '' && <Field label="Dirección IP" value={<span className="font-mono">{String(viewItem.ip)}</span>} />}
                 {String(viewItem.mac ?? '') !== '' && <Field label="MAC Address" value={<span className="font-mono">{String(viewItem.mac)}</span>} />}
                 {String(viewItem.codigoAccesoRemoto ?? '') !== '' && <Field label="Acceso remoto" value={<span className="font-mono">{String(viewItem.codigoAccesoRemoto)}</span>} />}
-                {/* Condición física */}
                 {(() => {
                   let condicion: unknown = viewItem.condicionFisica ?? viewItem.condicion_fisica ?? viewItem.estadoFisico ?? viewItem.estado_fisico ?? '';
                   if (!condicion || String(condicion).trim() === '') {
@@ -1072,7 +1068,6 @@ const InventarioPage = () => {
                   }
                   return String(condicion ?? '') !== '' ? <Field label="Condición física" value={String(condicion)} /> : null;
                 })()}
-                {/* Antigüedad */}
                 {(() => {
                   const raw = viewItem.antiguedadCalculada ?? viewItem.antiguedad_text ?? viewItem.antiguedad ?? null;
                   if (raw) return <Field label="Antigüedad" value={String(raw)} />;
@@ -1091,7 +1086,6 @@ const InventarioPage = () => {
                   return null;
                 })()}
               </div>
-              {/* Documentos */}
               {[
                 { urlKey: 'purchaseDocumentUrl', nameKey: 'purchaseDocumentName', descKey: 'purchaseDocumentDescription', label: 'Documento de compra', altUrl: 'purchase_document_url', altName: 'purchase_document_name' },
                 { urlKey: 'warrantyDocumentUrl', nameKey: 'warrantyDocumentName', descKey: 'warrantyDocumentDescription', label: 'Documento de garantía', altUrl: 'warranty_document_url', altName: 'warranty_document_name' },
@@ -1101,11 +1095,13 @@ const InventarioPage = () => {
                 const name = String((viewItem as any)[doc.nameKey] ?? (viewItem as any)[doc.altName] ?? '').split('/').pop() ?? '';
                 const desc = String((viewItem as any)[doc.descKey] ?? '');
                 return (
-                  <div key={doc.label} className="mt-3 flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
-                    <svg className="w-5 h-5 text-blue-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  <div key={doc.label} className="mt-3 flex items-center gap-4 bg-sky-50 border border-sky-200 rounded-xl px-5 py-3.5">
+                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
+                      <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-600">{doc.label}</p>
-                      <p className="text-xs text-slate-500 truncate">{name}</p>
+                      <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">{doc.label}</p>
+                      <p className="text-xs text-slate-500 truncate mt-0.5">{name}</p>
                       {desc && <p className="text-xs text-slate-400 mt-0.5">{desc}</p>}
                     </div>
                     <a href={url} target="_blank" rel="noreferrer" className={btn.secondary + ' py-1.5 text-xs shrink-0'}>Ver</a>
@@ -1135,12 +1131,12 @@ const InventarioPage = () => {
                   <div className="space-y-3">
                     {Object.entries(arrayFields).map(([k, instances]) => (
                       <div key={k}>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{k.replace(/_/g, ' ')}</p>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">{k.replace(/_/g, ' ')}</p>
                         {instances.map((inst, i) => (
-                          <div key={i} className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 mb-2">
-                            <p className="text-xs text-slate-400 mb-1">Instancia {i + 1}</p>
+                          <div key={i} className="bg-slate-50 border border-slate-200 rounded-xl px-5 py-3.5 mb-2">
+                            <p className="text-xs font-semibold text-slate-400 mb-1.5">Instancia {i + 1}</p>
                             {Object.entries(inst).map(([sk, sv]) => (
-                              <p key={sk} className="text-xs"><span className="text-slate-500">{sk}: </span><span className="font-semibold text-slate-800">{String(sv)}</span></p>
+                              <p key={sk} className="text-xs"><span className="text-slate-500">{sk}: </span><span className="font-bold text-slate-800">{String(sv)}</span></p>
                             ))}
                           </div>
                         ))}
@@ -1190,19 +1186,19 @@ const InventarioPage = () => {
                 }>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {fotosArray.map((foto: FotoItem, i: number) => (
-                      <div key={i} className="rounded-lg border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-                        <div className="relative h-40 bg-slate-100">
+                      <div key={i} className="rounded-xl border border-slate-200 overflow-hidden hover:shadow-lg transition-shadow">
+                        <div className="relative h-44 bg-slate-100">
                           <img src={foto.url} alt={foto.description || foto.name} className="w-full h-full object-cover"
                             crossOrigin="anonymous"
                             onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="160"><rect fill="%23e2e8f0" width="200" height="160"/><text x="50%" y="50%" font-size="12" text-anchor="middle" fill="%2394a3b8">Sin imagen</text></svg>'; }}
                           />
-                          <span className="absolute top-2 right-2 bg-black/50 text-white text-xs font-bold px-1.5 py-0.5 rounded">#{i + 1}</span>
+                          <span className="absolute top-2 right-2 bg-blue-700/80 text-white text-xs font-bold px-2 py-0.5 rounded-lg backdrop-blur-sm">#{i + 1}</span>
                         </div>
-                        <div className="px-3 py-2.5">
-                          {foto.name && <p className="text-xs font-semibold text-slate-700 truncate mb-0.5">{foto.name}</p>}
+                        <div className="px-4 py-3">
+                          {foto.name && <p className="text-xs font-bold text-slate-700 truncate mb-0.5">{foto.name}</p>}
                           {foto.description && <p className="text-xs text-slate-500 truncate">{foto.description}</p>}
                           <a href={foto.url} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 mt-2 text-xs font-medium text-blue-600 hover:text-blue-700">
+                            className="inline-flex items-center gap-1 mt-2 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                             Ver imagen
                           </a>
@@ -1216,7 +1212,7 @@ const InventarioPage = () => {
 
             {/* Informe de soporte inicial */}
             <div className={card}>
-              <div className="px-5 py-4">
+              <div className="px-6 py-5">
                 {(() => {
                   const rawField = (viewItem as any)?.informe_soporte_inicial_url ?? (viewItem as any)?.informeSoporteInicialUrl ?? '';
                   const backendField = String(rawField ?? '').trim();
@@ -1224,11 +1220,16 @@ const InventarioPage = () => {
                   const isGenerated = !loading && backendField !== '' && backendField.toLowerCase() !== 'generating' && backendField.toLowerCase() !== 'null';
                   return (
                     <div className="flex items-center justify-between gap-4 flex-wrap">
-                      <div>
-                        <p className="font-semibold text-slate-800 text-sm">Informe de soporte inicial</p>
-                        <p className="text-xs text-slate-500 mt-0.5">{isGenerated ? 'El informe ya fue generado.' : 'Genera el informe PDF para este activo.'}</p>
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-center shrink-0">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800 text-sm">Informe de soporte inicial</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{isGenerated ? 'El informe ya fue generado.' : 'Genera el informe PDF para este activo.'}</p>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2.5">
                         {isGenerated && (
                           <a href={backendField} target="_blank" rel="noreferrer" className={btn.secondary + ' text-xs'}>Ver PDF</a>
                         )}
@@ -1255,14 +1256,14 @@ const InventarioPage = () => {
             <PageHeader title="Historial de cambios" subtitle={`${formatAssetCode(String(viewItem.assetId ?? viewItem.codigo ?? ''))} · ${String(viewItem.categoria ?? '')}`} onBack={() => setCurrentView('viewAsset')} />
             <div className={card}>
               {historialData.length === 0 ? (
-                <div className="p-12 text-center text-sm text-slate-400">No hay cambios registrados para este activo.</div>
+                <div className="p-14 text-center text-sm text-slate-400">No hay cambios registrados para este activo.</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50">
+                      <tr className="bg-gradient-to-r from-blue-700 to-blue-600">
                         {['Fecha y hora', 'Código', 'Campo', 'Valor nuevo', 'Motivo'].map(h => (
-                          <th key={h} className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">{h}</th>
+                          <th key={h} className="px-6 py-3.5 text-left text-xs font-bold text-white uppercase tracking-widest">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1281,20 +1282,20 @@ const InventarioPage = () => {
                         };
                         const fmtMotivo = (m: string) => { if (!m) return '—'; const match = m.match(/^TRASLADO:\s*(.+?)\.\s*Responsable/); return match ? `TRASLADO: ${match[1]}` : m; };
                         return (
-                          <tr key={reg.id || idx} className="hover:bg-blue-50/30 transition-colors">
-                            <td className="px-5 py-3.5">
-                              <p className="font-medium text-slate-800 text-xs">{new Date(reg.fecha).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })}</p>
+                          <tr key={reg.id || idx} className="hover:bg-sky-50/60 transition-colors">
+                            <td className="px-6 py-4">
+                              <p className="font-bold text-slate-800 text-xs">{new Date(reg.fecha).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })}</p>
                               <p className="text-slate-400 text-xs mt-0.5">{new Date(reg.fecha).toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' })}</p>
                             </td>
-                            <td className="px-5 py-3.5"><span className={badge.blue + ' font-mono'}>{reg.asset_id}</span></td>
-                            <td className="px-5 py-3.5"><span className={badge.gray}>{fmtCampo(reg.campo_modificado)}</span></td>
-                            <td className="px-5 py-3.5">
-                              <span className="inline-flex items-center gap-1.5 text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 px-2.5 py-1 rounded-lg max-w-xs truncate">
+                            <td className="px-6 py-4"><span className={badge.blue + ' font-mono'}>{reg.asset_id}</span></td>
+                            <td className="px-6 py-4"><span className={badge.gray}>{fmtCampo(reg.campo_modificado)}</span></td>
+                            <td className="px-6 py-4">
+                              <span className="inline-flex items-center gap-1.5 text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 font-medium px-2.5 py-1 rounded-lg max-w-xs truncate">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                                 {fmtValor(reg.valor_nuevo, reg.campo_modificado)}
                               </span>
                             </td>
-                            <td className="px-5 py-3.5 text-slate-500 text-xs italic">{fmtMotivo(reg.motivo)}</td>
+                            <td className="px-6 py-4 text-slate-600 text-xs">{fmtMotivo(reg.motivo)}</td>
                           </tr>
                         );
                       })}
@@ -1316,14 +1317,14 @@ const InventarioPage = () => {
             />
             <div className={card}>
               {items.length === 0 ? (
-                <div className="p-12 text-center text-sm text-slate-400">No hay activos registrados en ninguna sede.</div>
+                <div className="p-14 text-center text-sm text-slate-400">No hay activos registrados en ninguna sede.</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50">
+                      <tr className="bg-gradient-to-r from-blue-700 to-blue-600">
                         {['Código','Categoría','Fabricante','Modelo','N° Serie','Ubicación','Estado',''].map(h => (
-                          <th key={h} className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">{h}</th>
+                          <th key={h} className="px-6 py-3.5 text-left text-xs font-bold text-white uppercase tracking-widest">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1333,23 +1334,23 @@ const InventarioPage = () => {
                         const sedeNombre = sedes.find(s => String(s._id ?? s.id) === itemSedeId)?.nombre ?? 'Sin sede';
                         const condicion = String(item.condicionFisica ?? item.condicion_fisica ?? '');
                         return (
-                          <tr key={item.id ?? item._id ?? idx} className="hover:bg-blue-50/30 transition-colors">
-                            <td className="px-5 py-3.5 font-mono font-semibold text-slate-800 text-xs">{formatAssetCode(String(item.assetId ?? item._id ?? item.id ?? ''))}</td>
-                            <td className="px-5 py-3.5 text-slate-600 text-xs">{String(item.categoria ?? '—')}</td>
-                            <td className="px-5 py-3.5 text-slate-600 text-xs">{String(item.fabricante ?? '—')}</td>
-                            <td className="px-5 py-3.5 text-slate-600 text-xs">{String(item.modelo ?? '—')}</td>
-                            <td className="px-5 py-3.5 font-mono text-slate-400 text-xs">{String(item.serie ?? '—')}</td>
-                            <td className="px-5 py-3.5">
-                              <p className="text-xs font-semibold text-slate-800">{sedeNombre}</p>
-                              <p className="text-xs text-slate-400">{String(item.area ?? 'Sin área')}</p>
+                          <tr key={item.id ?? item._id ?? idx} className="hover:bg-sky-50/60 transition-colors">
+                            <td className="px-6 py-4 font-mono font-bold text-blue-700 text-xs">{formatAssetCode(String(item.assetId ?? item._id ?? item.id ?? ''))}</td>
+                            <td className="px-6 py-4 text-slate-700 text-xs font-medium">{String(item.categoria ?? '—')}</td>
+                            <td className="px-6 py-4 text-slate-600 text-xs">{String(item.fabricante ?? '—')}</td>
+                            <td className="px-6 py-4 text-slate-600 text-xs">{String(item.modelo ?? '—')}</td>
+                            <td className="px-6 py-4 font-mono text-slate-500 text-xs">{String(item.serie ?? '—')}</td>
+                            <td className="px-6 py-4">
+                              <p className="text-xs font-bold text-slate-800">{sedeNombre}</p>
+                              <p className="text-xs text-slate-400 mt-0.5">{String(item.area ?? 'Sin área')}</p>
                             </td>
-                            <td className="px-5 py-3.5">
+                            <td className="px-6 py-4">
                               <span className={estadoBadge(condicion || String(item.estadoActivo ?? ''))}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${dot(condicion || String(item.estadoActivo ?? ''))}`} />
                                 {(condicion || String(item.estadoActivo ?? '—')).toUpperCase()}
                               </span>
                             </td>
-                            <td className="px-5 py-3.5">
+                            <td className="px-6 py-4">
                               <button onClick={() => { setViewItem(item); setCurrentView('viewAsset'); }} className={btn.secondary + ' text-xs py-1.5'}>Ver detalles</button>
                             </td>
                           </tr>
@@ -1411,33 +1412,36 @@ const InventarioPage = () => {
 
       {/* Group modal */}
       {showGroupModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className={`${card} w-full max-w-md`}>
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-              <h3 className="font-bold text-slate-800">{editingGroupId ? 'Editar grupo' : 'Nuevo grupo'}</h3>
-              <button onClick={() => { setShowGroupModal(false); setEditingGroupId(null); setGroupNameInput(''); setGroupCodeInput(''); setGroupDescriptionInput(''); setGroupActiveInput(true); }} className={btn.icon} aria-label="Cerrar">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className={`${card} w-full max-w-md shadow-2xl`}>
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-blue-700 to-blue-600 rounded-t-xl">
+              <div>
+                <h3 className="font-bold text-white text-base">{editingGroupId ? 'Editar grupo' : 'Nuevo grupo'}</h3>
+                <p className="text-blue-200 text-xs mt-0.5">Gestión de grupos de activos</p>
+              </div>
+              <button onClick={() => { setShowGroupModal(false); setEditingGroupId(null); setGroupNameInput(''); setGroupCodeInput(''); setGroupDescriptionInput(''); setGroupActiveInput(true); }} className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/20 hover:bg-white/30 text-white transition-all" aria-label="Cerrar">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 py-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Nombre del grupo *</label>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">Nombre del grupo *</label>
                 <input value={groupNameInput} onChange={e => { setGroupNameInput(e.target.value); setGroupCodeInput(generateGroupCode(e.target.value)); }}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej: Equipos de Cómputo" />
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-800 placeholder-slate-400" placeholder="Ej: Equipos de Cómputo" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Código (auto-generado)</label>
-                <input value={groupCodeInput} readOnly className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-500" />
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">Código (auto-generado)</label>
+                <input value={groupCodeInput} readOnly className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 text-slate-500 cursor-not-allowed" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Descripción</label>
-                <textarea value={groupDescriptionInput} onChange={e => setGroupDescriptionInput(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" rows={3} placeholder="Descripción opcional" />
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">Descripción</label>
+                <textarea value={groupDescriptionInput} onChange={e => setGroupDescriptionInput(e.target.value)} className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-slate-800 placeholder-slate-400" rows={3} placeholder="Descripción opcional" />
               </div>
-              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+              <label className="flex items-center gap-2.5 text-sm text-slate-700 cursor-pointer select-none">
                 <input type="checkbox" checked={groupActiveInput} onChange={e => setGroupActiveInput(e.target.checked)} className="w-4 h-4 accent-blue-600" />
-                Activo
+                <span className="font-medium">Activo</span>
               </label>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
                 <button onClick={() => { setShowGroupModal(false); setEditingGroupId(null); setGroupNameInput(''); setGroupCodeInput(''); setGroupDescriptionInput(''); setGroupActiveInput(true); }} className={btn.ghost}>Cancelar</button>
                 <button onClick={async () => {
                     const name = String(groupNameInput || '').trim();
@@ -1494,20 +1498,20 @@ const InventarioPage = () => {
 
       {/* Category modal */}
       {showCategoryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className={`${card} w-full max-w-3xl my-8`}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className={`${card} w-full max-w-3xl my-8 shadow-2xl`}>
             {/* header */}
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-blue-600 rounded-t-xl">
+            <div className="px-7 py-5 border-b border-blue-800 flex items-center justify-between bg-gradient-to-r from-blue-800 via-blue-700 to-sky-600 rounded-t-xl">
               <div>
-                <h3 className="font-bold text-white">{editingCategoryId ? 'Editar tipo de activo' : 'Nuevo tipo de activo'}</h3>
-                <p className="text-blue-100 text-xs mt-0.5">Define el tipo y sus campos para el formulario de registro.</p>
+                <h3 className="font-bold text-white text-base">{editingCategoryId ? 'Editar tipo de activo' : 'Nuevo tipo de activo'}</h3>
+                <p className="text-sky-200 text-xs mt-0.5">Define el tipo y sus campos para el formulario de registro.</p>
               </div>
-              <button onClick={() => { setShowCategoryModal(false); setNewCategoryFields([]); setCategoryPreview(null); setShowPreview(false); setEditingCategoryId(null); setCategoryNameInput(''); setSubcategoriesInput(''); }} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/20 hover:bg-white/30 text-white transition-all">
+              <button onClick={() => { setShowCategoryModal(false); setNewCategoryFields([]); setCategoryPreview(null); setShowPreview(false); setEditingCategoryId(null); setCategoryNameInput(''); setSubcategoriesInput(''); }} className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/20 hover:bg-white/30 text-white transition-all border border-white/20">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
-            <div className="px-6 py-6 overflow-y-auto max-h-[75vh]">
+            <div className="px-7 py-6 overflow-y-auto max-h-[75vh]">
               <form onSubmit={e => {
                 e.preventDefault();
                 const cat = String(categoryNameInput || '').trim();
@@ -1525,31 +1529,31 @@ const InventarioPage = () => {
                 setCategoryPreview({ nombre: cat, grupoId: categoryGroupId || undefined, subcategorias: subs, campos: cleanedCampos, createdAt: new Date().toLocaleString() } as any);
                 setShowPreview(true);
               }}>
-                <div className="space-y-5">
+                <div className="space-y-6">
                   {/* Step 1: Básico */}
                   <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                      <span className="w-5 h-5 bg-blue-600 text-white rounded-full text-[10px] flex items-center justify-center font-bold">1</span>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2.5">
+                      <span className="w-6 h-6 bg-blue-700 text-white rounded-full text-[10px] flex items-center justify-center font-bold shrink-0">1</span>
                       Información básica
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div className="md:col-span-1">
-                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Grupo de activo</label>
+                        <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">Grupo de activo</label>
                         <select value={categoryGroupId} onChange={e => setCategoryGroupId(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                          className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-800">
                           <option value="">— Sin grupo —</option>
                           {groups.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Nombre *</label>
+                        <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">Nombre *</label>
                         <input value={categoryNameInput} onChange={e => { setCategoryNameInput(e.target.value); if (!editingCategoryId) setCategoryCodeInput(generateCategoryCode(e.target.value)); }}
-                          className={`w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${editingCategoryId ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : ''}`}
+                          className={`w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-800 ${editingCategoryId ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'placeholder-slate-400'}`}
                           placeholder="Ej: Laptop" readOnly={!!editingCategoryId} required />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Código (auto)</label>
-                        <input value={categoryCodeInput} readOnly className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-500" />
+                        <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">Código (auto)</label>
+                        <input value={categoryCodeInput} readOnly className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 text-slate-500 cursor-not-allowed" />
                       </div>
                     </div>
                   </div>
@@ -1558,23 +1562,23 @@ const InventarioPage = () => {
 
                   {/* Step 2: Marcas */}
                   <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                      <span className="w-5 h-5 bg-blue-600 text-white rounded-full text-[10px] flex items-center justify-center font-bold">2</span>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2.5">
+                      <span className="w-6 h-6 bg-blue-700 text-white rounded-full text-[10px] flex items-center justify-center font-bold shrink-0">2</span>
                       Marcas
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2.5">
                       <input value={brandInput} onChange={e => setBrandInput(e.target.value)}
-                        className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-800 placeholder-slate-400"
                         placeholder="Escribe una marca y pulsa Agregar" />
                       <button type="button" onClick={() => { const v = String(brandInput || '').trim(); if (v && !marcas.includes(v)) { setMarcas(p => [...p, v]); setBrandInput(''); } }} className={btn.secondary}>Agregar</button>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5 min-h-[28px]">
+                    <div className="mt-3 flex flex-wrap gap-1.5 min-h-[32px]">
                       {marcas.length === 0
                         ? <span className="text-xs text-slate-400 italic">Sin marcas</span>
                         : marcas.map((m, i) => (
-                          <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium">
+                          <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-xs font-semibold">
                             {m}
-                            <button type="button" onClick={() => setMarcas(p => p.filter(x => x !== m))} className="text-blue-400 hover:text-red-500 transition-colors">×</button>
+                            <button type="button" onClick={() => setMarcas(p => p.filter(x => x !== m))} className="text-blue-400 hover:text-red-500 transition-colors font-bold">×</button>
                           </span>
                         ))}
                     </div>
@@ -1584,12 +1588,12 @@ const InventarioPage = () => {
 
                   {/* Step 3: Campos */}
                   <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full text-[10px] flex items-center justify-center font-bold">3</span>
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2.5">
+                        <span className="w-6 h-6 bg-blue-700 text-white rounded-full text-[10px] flex items-center justify-center font-bold shrink-0">3</span>
                         Campos personalizados
                       </p>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2.5">
                         <select value={copyFromCategoryId} onChange={e => {
                             const id = e.target.value; setCopyFromCategoryId(id);
                             if (!id) return;
@@ -1606,7 +1610,7 @@ const InventarioPage = () => {
                               }
                             })();
                           }}
-                          className="px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                          className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium">
                           <option value="">Copiar desde…</option>
                           {(categories || []).map(c => <option key={String(c.id ?? c._id ?? '')} value={String(c.id ?? c._id ?? '')}>{c.nombre}</option>)}
                         </select>
@@ -1615,58 +1619,58 @@ const InventarioPage = () => {
                         </button>
                       </div>
                     </div>
-                    <div className="rounded-lg border border-slate-200 overflow-hidden">
+                    <div className="rounded-xl border border-slate-200 overflow-hidden">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="bg-slate-50 border-b border-slate-200">
-                            {['Nombre', 'Tipo', 'Req.', 'Opciones', ''].map(h => (
-                              <th key={h} className="px-3 py-2.5 text-left text-xs font-bold text-slate-500">{h}</th>
+                          <tr className="bg-slate-100 border-b border-slate-200">
+                            {['Nombre del campo', 'Tipo', 'Req.', 'Opciones', ''].map(h => (
+                              <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wide">{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {newCategoryFields.map((field, idx) => (
-                            <tr key={idx} className="hover:bg-blue-50/30">
-                              <td className="px-3 py-2">
+                            <tr key={idx} className="hover:bg-sky-50/40 transition-colors">
+                              <td className="px-4 py-2.5">
                                 <input type="text" value={field.nombre} onChange={e => { const u = [...newCategoryFields]; u[idx] = { ...u[idx], nombre: e.target.value }; setNewCategoryFields(u); }}
-                                  className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Campo" />
+                                  className="w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 placeholder-slate-400" placeholder="Nombre del campo" />
                               </td>
-                              <td className="px-3 py-2">
+                              <td className="px-4 py-2.5">
                                 <select value={field.tipo} onChange={e => { const u = [...newCategoryFields]; u[idx] = { ...u[idx], tipo: e.target.value as CategoryField['tipo'] }; if (e.target.value !== 'select') { u[idx].opciones = []; delete (u[idx] as any).opcionesRaw; } else { (u[idx] as any).opcionesRaw = ((u[idx] as any).opciones || []).join(', '); } setNewCategoryFields(u); }}
-                                  className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                                  className="w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-800">
                                   <option value="text">Texto</option>
                                   <option value="number">Número</option>
                                   <option value="select">Selección</option>
                                   <option value="textarea">Texto largo</option>
                                 </select>
                               </td>
-                              <td className="px-3 py-2 text-center">
+                              <td className="px-4 py-2.5 text-center">
                                 <input type="checkbox" checked={Boolean(field.requerido)} onChange={e => { const u = [...newCategoryFields]; u[idx] = { ...u[idx], requerido: e.target.checked }; setNewCategoryFields(u); }} className="w-4 h-4 accent-blue-600" />
                               </td>
-                              <td className="px-3 py-2">
+                              <td className="px-4 py-2.5">
                                 {field.tipo === 'select' ? (
                                   <input type="text" value={((field as any).opcionesRaw ?? '')}
                                     onChange={e => { const u = [...newCategoryFields]; (u[idx] as any).opcionesRaw = e.target.value; setNewCategoryFields(u); }}
                                     onBlur={() => { const u = [...newCategoryFields]; const raw = String((u[idx] as any).opcionesRaw || ''); u[idx] = { ...u[idx], opciones: raw.split(',').map((s: string) => s.trim()).filter(Boolean) } as any; setNewCategoryFields(u); }}
-                                    className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Op1, Op2" />
+                                    className="w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 placeholder-slate-400" placeholder="Op1, Op2" />
                                 ) : <span className="text-slate-300 text-xs">—</span>}
                               </td>
-                              <td className="px-3 py-2">
-                                <button type="button" onClick={() => setNewCategoryFields(newCategoryFields.filter((_, i) => i !== idx))} className="w-7 h-7 flex items-center justify-center rounded text-red-400 hover:bg-red-50 hover:text-red-600 transition-all">
+                              <td className="px-4 py-2.5">
+                                <button type="button" onClick={() => setNewCategoryFields(newCategoryFields.filter((_, i) => i !== idx))} className="w-7 h-7 flex items-center justify-center rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-all">
                                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                 </button>
                               </td>
                             </tr>
                           ))}
                           {newCategoryFields.length === 0 && (
-                            <tr><td colSpan={5} className="px-3 py-8 text-center text-xs text-slate-400 italic">Sin campos personalizados. Pulsa "+ Agregar campo".</td></tr>
+                            <tr><td colSpan={5} className="px-4 py-10 text-center text-xs text-slate-400 italic">Sin campos personalizados. Pulsa "+ Agregar campo".</td></tr>
                           )}
                         </tbody>
                       </table>
                     </div>
                   </div>
 
-                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                  <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
                     <button type="button" onClick={() => { setShowCategoryModal(false); setNewCategoryFields([]); setCategoryPreview(null); setShowPreview(false); setEditingCategoryId(null); setCategoryNameInput(''); setSubcategoriesInput(''); }} className={btn.ghost}>Cancelar</button>
                     <button type="submit" className={btn.primary}>
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
@@ -1679,31 +1683,31 @@ const InventarioPage = () => {
 
             {/* Preview overlay */}
             {showPreview && categoryPreview && (
-              <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-                <div className={`${card} w-full max-w-2xl max-h-[85vh] flex flex-col`}>
-                  <div className="px-6 py-4 border-b border-slate-200 bg-blue-600 rounded-t-xl">
-                    <h3 className="font-bold text-white">Vista previa</h3>
-                    <p className="text-blue-100 text-xs mt-0.5">Confirme la información antes de guardar</p>
+              <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                <div className={`${card} w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl`}>
+                  <div className="px-7 py-5 border-b border-blue-800 bg-gradient-to-r from-blue-800 via-blue-700 to-sky-600 rounded-t-xl">
+                    <h3 className="font-bold text-white text-base">Vista previa</h3>
+                    <p className="text-sky-200 text-xs mt-0.5">Confirme la información antes de guardar</p>
                   </div>
-                  <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-4">
-                      <p className="text-xs font-bold text-blue-400 uppercase mb-1">Nombre</p>
+                  <div className="flex-1 overflow-y-auto px-7 py-6 space-y-5">
+                    <div className="bg-sky-50 border border-sky-200 rounded-xl px-6 py-4">
+                      <p className="text-[10px] font-bold text-sky-500 uppercase tracking-widest mb-1">Nombre del tipo</p>
                       <p className="text-xl font-bold text-slate-800">{categoryPreview.nombre}</p>
                     </div>
                     {marcas.length > 0 && (
                       <div>
-                        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Marcas</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5">Marcas</p>
                         <div className="flex flex-wrap gap-1.5">{marcas.map((m, i) => <span key={i} className={badge.blue}>{m}</span>)}</div>
                       </div>
                     )}
                     {categoryPreview.campos && categoryPreview.campos.length > 0 && (
                       <div>
-                        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Campos personalizados ({categoryPreview.campos.length})</p>
-                        <div className="grid grid-cols-2 gap-2">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5">Campos personalizados ({categoryPreview.campos.length})</p>
+                        <div className="grid grid-cols-2 gap-2.5">
                           {categoryPreview.campos.map((campo, i) => (
-                            <div key={i} className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="font-semibold text-slate-800 text-sm">{campo.nombre || `Campo ${i+1}`}</span>
+                            <div key={i} className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="font-bold text-slate-800 text-sm">{campo.nombre || `Campo ${i+1}`}</span>
                                 {campo.requerido && <span className={badge.red}>Req.</span>}
                               </div>
                               <span className={badge.gray + ' capitalize'}>{campo.tipo}</span>
@@ -1716,7 +1720,7 @@ const InventarioPage = () => {
                       </div>
                     )}
                   </div>
-                  <div className="px-6 py-4 border-t border-slate-200 flex justify-between gap-2">
+                  <div className="px-7 py-4 border-t border-slate-200 flex justify-between gap-2.5">
                     <button onClick={() => { setCategoryPreview(null); setShowPreview(false); }} className={btn.ghost}>← Volver</button>
                     <button onClick={async () => {
                         try {
@@ -1764,16 +1768,16 @@ const InventarioPage = () => {
 
       {/* ── Toast success ── */}
       {showSuccessToast && (
-        <div className="fixed top-5 right-5 z-[70]">
-          <div className="flex items-start gap-3 bg-white rounded-xl border border-emerald-200 shadow-lg px-4 py-3 min-w-[280px]">
-            <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+        <div className="fixed top-5 right-5 z-[70] animate-in slide-in-from-right">
+          <div className="flex items-start gap-3 bg-white rounded-xl border border-emerald-200 shadow-xl px-5 py-4 min-w-[300px]">
+            <div className="w-9 h-9 bg-emerald-100 rounded-xl flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-slate-800 text-sm">Éxito</p>
-              <p className="text-xs text-slate-500">{successMessage}</p>
+              <p className="font-bold text-slate-800 text-sm">Operación exitosa</p>
+              <p className="text-xs text-slate-500 mt-0.5">{successMessage}</p>
             </div>
-            <button onClick={() => setShowSuccessToast(false)} className="text-slate-400 hover:text-slate-600">
+            <button onClick={() => setShowSuccessToast(false)} className="text-slate-300 hover:text-slate-600 transition-colors mt-0.5">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
@@ -1783,15 +1787,15 @@ const InventarioPage = () => {
       {/* ── Toast error ── */}
       {showErrorToast && (
         <div className="fixed top-5 right-5 z-[70]">
-          <div className="flex items-start gap-3 bg-white rounded-xl border border-red-200 shadow-lg px-4 py-3 min-w-[280px]">
-            <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          <div className="flex items-start gap-3 bg-white rounded-xl border border-red-200 shadow-xl px-5 py-4 min-w-[300px]">
+            <div className="w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-slate-800 text-sm">Error</p>
-              <p className="text-xs text-slate-500">{errorMessage}</p>
+              <p className="font-bold text-slate-800 text-sm">Ha ocurrido un error</p>
+              <p className="text-xs text-slate-500 mt-0.5">{errorMessage}</p>
             </div>
-            <button onClick={() => setShowErrorToast(false)} className="text-slate-400 hover:text-slate-600">
+            <button onClick={() => setShowErrorToast(false)} className="text-slate-300 hover:text-slate-600 transition-colors mt-0.5">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
