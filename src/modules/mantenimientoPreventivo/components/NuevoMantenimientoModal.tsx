@@ -127,7 +127,6 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
   const [showBlockedModal, setShowBlockedModal] = useState(false);
 
   const sedesDisponibles = useMemo(() => sedesByEmpresa[empresaId] || [], [empresaId, sedesByEmpresa]);
-
   const tecnicosSeleccionadosData = useMemo(() => tecnicos.filter((t) => tecnicosSeleccionados.includes(t.id)), [tecnicos, tecnicosSeleccionados]);
 
   useEffect(() => {
@@ -139,19 +138,15 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
           if (active) setBlockedDates({});
           return;
         }
-
         const list = await listMantenimientosPreventivos({ empresaId, sedeId });
         if (!active) return;
-
         const map: Record<string, string> = {};
         list.forEach((r: MantenimientoPreventivoRecord) => {
           const fecha = String(r.fechaProgramada || '').slice(0, 10);
           if (!fecha) return;
-          // si estamos editando el mismo mantenimiento, no bloquear esa fecha
           if (editing && editing.id && String(editing.id) === String(r.id)) return;
           map[fecha] = r.id;
         });
-
         setBlockedDates(map);
       } catch (e) {
         setBlockedDates({});
@@ -159,33 +154,24 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
         if (active) setCheckingBlockedDates(false);
       }
     };
-
     cargarBloqueadas();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [empresaId, sedeId, editing]);
 
   useEffect(() => {
     let active = true;
-
     const cargarDatos = async () => {
       setLoadingData(true);
       setLoadError(null);
-
       try {
         const [empresasResp, usuariosResp] = await Promise.all([getEmpresas(), usuariosInternosService.getAll()]);
         if (!active) return;
-
         const empresasList = toArray<Record<string, unknown>>(empresasResp).map(mapEmpresaToOption).filter((i): i is Option => i !== null);
         setEmpresas(empresasList);
-
         const usuariosFiltrados = (Array.isArray(usuariosResp) ? usuariosResp : [])
           .filter((usuario: UsuarioInterno) => usuario.activo && (usuario.rol === 'administrador' || usuario.rol === 'tecnico'))
           .map((usuario: UsuarioInterno) => ({ id: String(usuario.id), nombre: usuario.nombreCompleto }));
-
         setTecnicos(usuariosFiltrados);
-
         const sedesEntries: Array<[string, Option[]]> = await Promise.all(
           empresasList.map(async (empresa): Promise<[string, Option[]]> => {
             try {
@@ -197,48 +183,32 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
             }
           })
         );
-
         if (!active) return;
-
         const nextSedesByEmpresa: Record<string, Option[]> = {};
-        sedesEntries.forEach(([id, sedes]) => {
-          nextSedesByEmpresa[id] = sedes;
-        });
-
+        sedesEntries.forEach(([id, sedes]) => { nextSedesByEmpresa[id] = sedes; });
         setSedesByEmpresa(nextSedesByEmpresa);
-
-        // si editing está presente, prefill campos desde backend (para obtener tecnicos asignados)
         if (editing && editing.id) {
           try {
             const full = await getMantenimientoPreventivoById(editing.id);
             if (full) {
-              // varios formatos posibles desde backend
               const empresaIdRaw = full.empresaId ?? full.empresa_id ?? full.empresa;
               const sedeIdRaw = full.sedeId ?? full.sede_id ?? full.sede;
               const fechaRaw = full.fechaProgramada ?? full.fecha_programada ?? full.fecha ?? '';
-
               setEmpresaId(String(empresaIdRaw ?? editing.empresaId ?? '') || '');
               setSedeId(String(sedeIdRaw ?? editing.sedeId ?? '') || '');
-              setFecha(fechaRaw ? String(fechaRaw).slice(0, 10) : (editing.fecha ? String(editing.fecha).slice(0,10) : ''));
-
+              setFecha(fechaRaw ? String(fechaRaw).slice(0, 10) : (editing.fecha ? String(editing.fecha).slice(0, 10) : ''));
               const extracted = extractTecnicos(full);
               let tecnicoIds: string[] = extracted.tecnicoIds;
               let encargadoIdVal: string | undefined = extracted.encargadoId || undefined;
-
-              // fallback: si editing prop tiene tecnicoIds, úsalo
               if (tecnicoIds.length === 0 && Array.isArray(editing.tecnicoIds) && editing.tecnicoIds.length > 0) {
                 tecnicoIds = editing.tecnicoIds.map(String);
               }
-
-              // fallback encargado
               if (!encargadoIdVal && editing.encargadoId) encargadoIdVal = editing.encargadoId;
               if (!encargadoIdVal && tecnicoIds.length === 1) encargadoIdVal = tecnicoIds[0];
-
               setTecnicosSeleccionados(tecnicoIds);
               setEncargadoId(encargadoIdVal || '');
               setObservaciones(String(full.observaciones ?? full.observacion ?? editing.observaciones ?? ''));
             } else {
-              // no hay detalle, usar lo que venga en editing
               setEmpresaId(editing.empresaId || '');
               setSedeId(editing.sedeId || '');
               setFecha(editing.fecha ? String(editing.fecha).slice(0, 10) : '');
@@ -247,7 +217,6 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
               setObservaciones(editing.observaciones || '');
             }
           } catch (e) {
-            // si falla la carga detallada, mantener lo mínimo
             setEmpresaId(editing.empresaId || '');
             setSedeId(editing.sedeId || '');
             setFecha(editing.fecha ? String(editing.fecha).slice(0, 10) : '');
@@ -258,28 +227,22 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
         }
       } catch (err) {
         if (!active) return;
-        setLoadError('No se pudieron cargar empresas, sedes o tecnicos.');
+        setLoadError('No se pudieron cargar empresas, sedes o técnicos.');
       } finally {
         if (active) setLoadingData(false);
       }
     };
-
     cargarDatos();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [editing]);
 
-  // Cuando cambia la empresa seleccionada, comprobar si el contrato incluye preventivo
   useEffect(() => {
     let activeCheck = true;
     if (!empresaId) {
       setEmpresaPreventivoStatus('unknown');
       return;
     }
-
     setEmpresaPreventivoStatus('checking');
-
     (async () => {
       try {
         const contrato = await getContratoActivo(empresaId);
@@ -287,14 +250,9 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
         if (!contrato) {
           setEmpresaPreventivoStatus('no_contract');
         } else {
-          // Normalizar wrapper comunes (data, contract, result)
           const normalized = (contrato as any).data ?? (contrato as any).contract ?? (contrato as any).result ?? contrato;
-          console.debug('[DEBUG] contrato activo (normalized):', normalized);
-
-          // Normalizar distintas posibles rutas y nombres que devuelve el backend
           const services = normalized.services ?? normalized.servicios ?? normalized.services ?? null;
           const preventivePolicy = normalized.preventivePolicy ?? normalized.preventive_policy ?? normalized.preventivo ?? null;
-
           const val = (v: unknown) => {
             if (v === true) return true;
             if (v === false) return false;
@@ -305,7 +263,6 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
             }
             return undefined;
           };
-
           const candidatesYes = [
             normalized.mantenimientoPreventivo,
             normalized.mantenimiento_preventivo,
@@ -319,34 +276,19 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
             contractSafeGet(services, 'incluyePreventivo'),
             contractSafeGet(services, 'incluye_preventivo'),
           ];
-
-          const candidatesNo = [
-            contrato.mantenimientoPreventivo === false ? false : undefined,
-            contrato.mantenimiento_preventivo === false ? false : undefined,
-            contrato.incluyePreventivo === false ? false : undefined,
-            contrato.incluye_preventivo === false ? false : undefined,
-            contractSafeGet(preventivePolicy, 'incluyePreventivo') === false ? false : undefined,
-            contractSafeGet(preventivePolicy, 'incluye_preventivo') === false ? false : undefined,
-            contractSafeGet(services, 'mantenimientoPreventivo') === false ? false : undefined,
-          ];
-
-          // evaluar yes
           let foundYes = false;
           for (const c of candidatesYes) {
             const r = val(c);
             if (r === true) { foundYes = true; break; }
           }
-
           if (foundYes) {
             setEmpresaPreventivoStatus('enabled');
           } else {
-            // evaluar no-explicit
             let foundNo = false;
             for (const c of candidatesYes) {
               const r = val(c);
               if (r === false) { foundNo = true; break; }
             }
-
             if (foundNo) setEmpresaPreventivoStatus('disabled');
             else setEmpresaPreventivoStatus('no_contract');
           }
@@ -356,291 +298,524 @@ export default function NuevoMantenimientoModal(props: NuevoMantenimientoModalPr
         setEmpresaPreventivoStatus('no_contract');
       }
     })();
-
-    return () => {
-      activeCheck = false;
-    };
+    return () => { activeCheck = false; };
   }, [empresaId]);
 
-  const labelCls = 'block text-sm font-semibold text-slate-700 mb-2';
-  const inputCls =
-    'w-full px-4 py-2.5 border border-blue-100 rounded-xl text-sm bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition';
-
   const canStart = Boolean(empresaId && sedeId && fecha && tecnicosSeleccionados.length > 0 && encargadoId);
-
-  const title = editing ? 'Editar mantenimiento' : 'Nuevo mantenimiento';
+  const title = editing ? 'Editar Mantenimiento' : 'Nuevo Mantenimiento';
   const submitLabel = editing ? 'Guardar cambios' : 'Crear mantenimiento';
 
+  // ── Shared style tokens ──────────────────────────────────────────────────
+  const fieldLabel = 'block text-xs font-bold uppercase tracking-widest text-[#1e3a5f] mb-1.5';
+  const selectInput =
+    'w-full px-3.5 py-2.5 rounded-lg border border-[#c8ddf0] bg-white text-[#0f2744] text-sm font-medium shadow-sm ' +
+    'focus:outline-none focus:ring-2 focus:ring-[#2e7fcc]/40 focus:border-[#2e7fcc] transition placeholder:text-slate-400 ' +
+    'disabled:bg-[#f0f6fc] disabled:text-slate-400 disabled:cursor-not-allowed';
+  const sectionCard = 'bg-[#f4f8fd] rounded-xl border border-[#daeaf7] p-5 space-y-4';
+
+  // ── Section divider label ────────────────────────────────────────────────
+  const SectionTitle = ({ icon, label }: { icon: React.ReactNode; label: string }) => (
+    <div className="flex items-center gap-2 mb-4">
+      <span className="flex items-center justify-center w-7 h-7 rounded-md bg-[#1a5fa8] text-white text-sm">{icon}</span>
+      <span className="text-sm font-bold text-[#1a5fa8] uppercase tracking-wider">{label}</span>
+      <div className="flex-1 h-px bg-[#c8ddf0]" />
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
-        <div className="bg-linear-to-r from-blue-900 to-blue-700 px-7 py-5 flex items-center justify-between shrink-0">
-          <div>
-            <p className="text-blue-300 text-xs font-semibold uppercase tracking-widest mb-0.5">Mantenimiento Preventivo</p>
-            <h2 className="text-xl font-bold text-white tracking-tight">{title}</h2>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+        .mant-modal * { font-family: 'DM Sans', sans-serif; }
+        .mant-scroll::-webkit-scrollbar { width: 5px; }
+        .mant-scroll::-webkit-scrollbar-track { background: #f0f6fc; }
+        .mant-scroll::-webkit-scrollbar-thumb { background: #93c0e8; border-radius: 99px; }
+        .mant-multi::-webkit-scrollbar { width: 5px; }
+        .mant-multi::-webkit-scrollbar-track { background: #f0f6fc; }
+        .mant-multi::-webkit-scrollbar-thumb { background: #93c0e8; border-radius: 99px; }
+        .mant-multi option:checked { background: #1a5fa8; color: #fff; }
+        .mant-multi option:hover { background: #daeaf7; }
+      `}</style>
+
+      <div className="mant-modal fixed inset-0 bg-[#0a1929]/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[94vh] flex flex-col overflow-hidden border border-[#c8ddf0]">
+
+          {/* ── Header ──────────────────────────────────────────────────── */}
+          <div className="relative overflow-hidden bg-[#0f2744] px-8 py-6 shrink-0">
+            {/* decorative circles */}
+            <div className="absolute -top-8 -right-8 w-36 h-36 rounded-full bg-white/5" />
+            <div className="absolute -bottom-10 -left-6 w-28 h-28 rounded-full bg-white/5" />
+
+            <div className="relative flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-[#2e7fcc] flex items-center justify-center shrink-0 shadow-lg">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-[#7bb8e8] text-[11px] font-bold uppercase tracking-[0.15em] mb-0.5">Mantenimiento Preventivo</p>
+                  <h2 className="text-xl font-bold text-white leading-tight">{title}</h2>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-9 h-9 flex items-center justify-center rounded-xl text-[#7bb8e8] hover:bg-white/15 hover:text-white transition"
+                aria-label="Cerrar"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-blue-200 hover:bg-white/20 hover:text-white transition" aria-label="Cerrar">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
 
-        <form
-          className="flex-1 overflow-y-auto"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (!canStart || saving) return;
-
-            setSaveError(null);
-            setSaving(true);
-
-            const empresa = empresas.find((item) => item.id === empresaId);
-            const sede = sedesDisponibles.find((item) => item.id === sedeId);
-
-            try {
-              if (editing && editing.id) {
-                await updateMantenimientoPreventivo(editing.id, {
-                  empresaId,
-                  sedeId,
-                  fecha,
+          {/* ── Body ────────────────────────────────────────────────────── */}
+          <form
+            className="flex-1 overflow-y-auto mant-scroll"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!canStart || saving) return;
+              setSaveError(null);
+              setSaving(true);
+              const empresa = empresas.find((item) => item.id === empresaId);
+              const sede = sedesDisponibles.find((item) => item.id === sedeId);
+              try {
+                if (editing && editing.id) {
+                  await updateMantenimientoPreventivo(editing.id, {
+                    empresaId, sedeId, fecha,
+                    tecnicoIds: tecnicosSeleccionados,
+                    encargadoId, observaciones,
+                  });
+                  onUpdated?.({ id: editing.id });
+                  onClose();
+                  return;
+                }
+                const created = await createMantenimientoPreventivo({
+                  empresaId, sedeId, fecha,
                   tecnicoIds: tecnicosSeleccionados,
-                  encargadoId,
-                  observaciones,
+                  encargadoId, observaciones,
                 });
-
-                onUpdated?.({ id: editing.id });
+                await onStart?.({
+                  mantenimientoId: String(created.id ?? created._id ?? ''),
+                  empresaId,
+                  empresaNombre: empresa?.nombre || 'Empresa',
+                  sedeId,
+                  sedeNombre: sede?.nombre || 'Sede',
+                  fecha,
+                  tecnicos: tecnicosSeleccionadosData,
+                });
                 onClose();
-                return;
+              } catch (error) {
+                const message = error instanceof Error ? error.message : 'No se pudo crear/actualizar el mantenimiento.';
+                setSaveError(message);
+              } finally {
+                setSaving(false);
               }
+            }}
+          >
+            <div className="px-8 py-6 space-y-6">
 
-              const created = await createMantenimientoPreventivo({
-                empresaId,
-                sedeId,
-                fecha,
-                tecnicoIds: tecnicosSeleccionados,
-                encargadoId,
-                observaciones,
-              });
+              {/* Loading state */}
+              {loadingData && (
+                <div className="flex items-center gap-3 rounded-xl border border-[#c8ddf0] bg-[#f4f8fd] px-5 py-4 text-sm text-[#1a5fa8] font-medium">
+                  <svg className="w-4 h-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+                  </svg>
+                  Cargando empresas, sedes y técnicos...
+                </div>
+              )}
 
-              await onStart?.({
-                mantenimientoId: String(created.id ?? created._id ?? ''),
-                empresaId,
-                empresaNombre: empresa?.nombre || 'Empresa',
-                sedeId,
-                sedeNombre: sede?.nombre || 'Sede',
-                fecha,
-                tecnicos: tecnicosSeleccionadosData,
-              });
+              {loadError && (
+                <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700 font-semibold">
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {loadError}
+                </div>
+              )}
 
-              onClose();
-            } catch (error) {
-              const message = error instanceof Error ? error.message : 'No se pudo crear/actualizar el mantenimiento.';
-              setSaveError(message);
-            } finally {
-              setSaving(false);
-            }
-          }}
-        >
-          <div className="px-7 py-6 space-y-7">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* ── Sección 1: Ubicación ─────────────────────────────── */}
               <div>
-                <label className={labelCls}>Empresa</label>
-                <select
-                  value={empresaId}
-                  onChange={(e) => {
-                    setEmpresaId(e.target.value);
-                    setSedeId('');
-                  }}
-                  disabled={loadingData}
-                  className={inputCls}
-                >
-                  <option value="">Seleccionar empresa...</option>
-                  {empresas.map((empresa) => (
-                    <option key={empresa.id} value={empresa.id}>
-                      {empresa.nombre}
-                    </option>
-                  ))}
-                </select>
+                <SectionTitle
+                  label="Ubicación"
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  }
+                />
+                <div className={sectionCard}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className={fieldLabel}>Empresa</label>
+                      <select
+                        value={empresaId}
+                        onChange={(e) => { setEmpresaId(e.target.value); setSedeId(''); }}
+                        disabled={loadingData}
+                        className={selectInput}
+                      >
+                        <option value="">Seleccionar empresa...</option>
+                        {empresas.map((empresa) => (
+                          <option key={empresa.id} value={empresa.id}>{empresa.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className={fieldLabel}>Sede</label>
+                      <select
+                        value={sedeId}
+                        onChange={(e) => setSedeId(e.target.value)}
+                        disabled={!empresaId || loadingData}
+                        className={selectInput}
+                      >
+                        <option value="">Seleccionar sede...</option>
+                        {sedesDisponibles.map((sede) => (
+                          <option key={sede.id} value={sede.id}>{sede.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Contract status banner */}
+                  {empresaId && empresaPreventivoStatus === 'checking' && (
+                    <div className="flex items-center gap-2.5 rounded-lg border border-[#c8ddf0] bg-white px-4 py-3 text-sm text-[#1a5fa8] font-medium">
+                      <svg className="w-4 h-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+                      </svg>
+                      Verificando contrato de la empresa...
+                    </div>
+                  )}
+
+                  {empresaId && empresaPreventivoStatus === 'no_contract' && (
+                    <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+                      <div className="flex items-start gap-2.5">
+                        <svg className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <span className="text-sm font-semibold text-amber-800">No se ha configurado el mantenimiento preventivo en el contrato de esta empresa.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          sessionStorage.setItem(`empresaTab_${empresaId}`, 'contrato');
+                          window.location.href = `/admin/empresas/${empresaId}`;
+                        }}
+                        className="shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 transition whitespace-nowrap"
+                      >
+                        Ir al contrato →
+                      </button>
+                    </div>
+                  )}
+
+                  {empresaId && empresaPreventivoStatus === 'disabled' && (
+                    <div className="flex items-center justify-between gap-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                      <div className="flex items-start gap-2.5">
+                        <svg className="w-4 h-4 text-red-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                        <span className="text-sm font-semibold text-red-700">Esta empresa no tiene habilitado el mantenimiento preventivo en su contrato.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          sessionStorage.setItem(`empresaTab_${empresaId}`, 'contrato');
+                          window.location.href = `/admin/empresas/${empresaId}`;
+                        }}
+                        className="shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-red-600 text-white hover:bg-red-700 transition whitespace-nowrap"
+                      >
+                        Ir al contrato →
+                      </button>
+                    </div>
+                  )}
+
+                  {empresaId && empresaPreventivoStatus === 'enabled' && (
+                    <div className="flex items-center gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Mantenimiento preventivo habilitado en el contrato.
+                    </div>
+                  )}
+                </div>
               </div>
 
+              {/* ── Sección 2: Fecha ─────────────────────────────────── */}
               <div>
-                <label className={labelCls}>Sede</label>
-                <select value={sedeId} onChange={(e) => setSedeId(e.target.value)} disabled={!empresaId || loadingData} className={inputCls}>
-                  <option value="">Seleccionar sede...</option>
-                  {sedesDisponibles.map((sede) => (
-                    <option key={sede.id} value={sede.id}>
-                      {sede.nombre}
-                    </option>
-                  ))}
-                </select>
+                <SectionTitle
+                  label="Programación"
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  }
+                />
+                <div className={sectionCard}>
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div className="flex-1 min-w-[160px]">
+                      <label className={fieldLabel}>Fecha del mantenimiento</label>
+                      <input
+                        type="date"
+                        value={fecha}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val && blockedDates[val]) {
+                            setSaveError('La fecha seleccionada ya tiene un mantenimiento programado. Elige otra fecha.');
+                            return;
+                          }
+                          setSaveError(null);
+                          setFecha(val);
+                        }}
+                        className={selectInput + ' max-w-xs'}
+                      />
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setShowBlockedModal(true)}
+                        disabled={checkingBlockedDates || Object.keys(blockedDates).length === 0}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold border transition
+                          ${checkingBlockedDates || Object.keys(blockedDates).length === 0
+                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                            : 'bg-white text-[#1a5fa8] border-[#c8ddf0] hover:bg-[#f4f8fd] hover:border-[#2e7fcc]'
+                          }`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        {checkingBlockedDates ? 'Verificando...' : `Ver fechas ocupadas${Object.keys(blockedDates).length > 0 ? ` (${Object.keys(blockedDates).length})` : ''}`}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
+
+              {/* ── Sección 3: Técnicos ──────────────────────────────── */}
+              <div>
+                <SectionTitle
+                  label="Técnicos asignados"
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  }
+                />
+                <div className={sectionCard}>
+                  <div>
+                    <label className={fieldLabel}>Seleccionar técnicos</label>
+                    <select
+                      multiple
+                      value={tecnicosSeleccionados}
+                      onChange={(e) => {
+                        const selected = Array.from(e.target.selectedOptions).map((opt) => opt.value);
+                        setTecnicosSeleccionados(selected);
+                        if (!selected.includes(encargadoId)) setEncargadoId('');
+                      }}
+                      disabled={loadingData}
+                      className={selectInput + ' mant-multi min-h-36 !py-1'}
+                    >
+                      {tecnicos.map((tecnico) => (
+                        <option key={tecnico.id} value={tecnico.id} className="py-2 px-1">{tecnico.nombre}</option>
+                      ))}
+                    </select>
+                    <p className="mt-2 text-xs text-[#4a7fa5] font-medium">Mantén presionada la tecla <kbd className="px-1.5 py-0.5 rounded bg-[#daeaf7] text-[#1a5fa8] font-bold text-[11px]">Ctrl</kbd> para seleccionar varios técnicos.</p>
+                  </div>
+
+                  {/* Selected technicians panel */}
+                  {tecnicosSeleccionadosData.length > 0 ? (
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center gap-2 px-1">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#2e7fcc] text-white text-xs font-bold">{tecnicosSeleccionadosData.length}</span>
+                        <p className="text-xs font-bold text-[#1a5fa8] uppercase tracking-wider">Seleccionados — marca al encargado</p>
+                      </div>
+                      <div className="space-y-2">
+                        {tecnicosSeleccionadosData.map((tecnico) => {
+                          const esEncargado = tecnico.id === encargadoId;
+                          return (
+                            <div
+                              key={tecnico.id}
+                              className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all
+                                ${esEncargado
+                                  ? 'bg-[#1a5fa8] border-[#1a5fa8] shadow-md shadow-[#1a5fa8]/20'
+                                  : 'bg-white border-[#c8ddf0] hover:border-[#93c0e8]'
+                                }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0
+                                  ${esEncargado ? 'bg-white/20 text-white' : 'bg-[#daeaf7] text-[#1a5fa8]'}`}>
+                                  {tecnico.nombre.charAt(0).toUpperCase()}
+                                </div>
+                                <span className={`font-semibold text-sm ${esEncargado ? 'text-white' : 'text-[#0f2744]'}`}>
+                                  {tecnico.nombre}
+                                </span>
+                                {esEncargado && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] bg-white/20 text-white px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
+                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                    </svg>
+                                    Encargado
+                                  </span>
+                                )}
+                              </div>
+                              {!esEncargado && (
+                                <button
+                                  type="button"
+                                  onClick={() => setEncargadoId(tecnico.id)}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#f4f8fd] text-[#1a5fa8] border border-[#c8ddf0] hover:bg-[#daeaf7] hover:border-[#93c0e8] transition"
+                                >
+                                  Designar encargado
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-[#c8ddf0] bg-white text-sm text-[#4a7fa5]">
+                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Selecciona técnicos para definir al encargado.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Sección 4: Observaciones ─────────────────────────── */}
+              <div>
+                <SectionTitle
+                  label="Observaciones"
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  }
+                />
+                <div className={sectionCard}>
+                  <textarea
+                    rows={3}
+                    value={observaciones}
+                    onChange={(e) => setObservaciones(e.target.value)}
+                    placeholder="Notas adicionales del mantenimiento (opcional)..."
+                    className={selectInput + ' resize-none'}
+                  />
+                </div>
+              </div>
+
+              {/* Save error */}
+              {saveError && (
+                <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700">
+                  <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {saveError}
+                </div>
+              )}
             </div>
 
-            {empresaId && (
-              <div className="mt-3">
-                {empresaPreventivoStatus === 'checking' && (
-                  <div className="rounded-lg border px-4 py-3 text-sm font-medium bg-slate-50 border-slate-200 text-slate-600">Comprobando configuración del contrato...</div>
-                )}
-
-                {empresaPreventivoStatus === 'no_contract' && (
-                  <div className="rounded-lg border px-4 py-3 text-sm font-semibold bg-red-50 border-red-200 text-red-700 flex items-center justify-between">
-                    <div>No se ha configurado el mantenimiento preventivo en el contrato de esta empresa.</div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          sessionStorage.setItem(`empresaTab_${empresaId}`, 'contrato');
-                          window.location.href = `/admin/empresas/${empresaId}`;
-                        }}
-                        className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700"
-                      >
-                        Ir a contrato
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {empresaPreventivoStatus === 'disabled' && (
-                  <div className="rounded-lg border px-4 py-3 text-sm font-semibold bg-red-50 border-red-200 text-red-700 flex items-center justify-between">
-                    <div>Esta empresa no tiene habilitado el mantenimiento preventivo en su contrato.</div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          sessionStorage.setItem(`empresaTab_${empresaId}`, 'contrato');
-                          window.location.href = `/admin/empresas/${empresaId}`;
-                        }}
-                        className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700"
-                      >
-                        Ir a contrato
-                      </button>
-                    </div>
-                  </div>
+            {/* ── Footer ────────────────────────────────────────────── */}
+            <div className="sticky bottom-0 bg-white border-t border-[#daeaf7] px-8 py-4 flex items-center justify-between gap-3">
+              <div className="text-xs text-[#4a7fa5] font-medium">
+                {!canStart && (
+                  <span className="flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Completa todos los campos requeridos
+                  </span>
                 )}
               </div>
-            )}
-
-            <div>
-              <label className={labelCls}>Fecha del mantenimiento</label>
-              <input
-                type="date"
-                value={fecha}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  // si la fecha está bloqueada por otro mantenimiento, impedir selección
-                  if (val && blockedDates[val]) {
-                    setSaveError('La fecha seleccionada ya tiene un mantenimiento programado. Elige otra fecha.');
-                    return;
-                  }
-                  setSaveError(null);
-                  setFecha(val);
-                }}
-                className={inputCls + ' max-w-xs'}
-              />
-              <div className="mt-2">
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowBlockedModal(true)}
-                  disabled={checkingBlockedDates || Object.keys(blockedDates).length === 0}
-                  className={`ml-2 text-sm px-3 py-1.5 rounded-lg border ${checkingBlockedDates || Object.keys(blockedDates).length === 0 ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                  onClick={onClose}
+                  className="px-5 py-2.5 text-sm font-semibold text-[#1a5fa8] bg-[#f4f8fd] hover:bg-[#daeaf7] border border-[#c8ddf0] rounded-xl transition"
                 >
-                  {checkingBlockedDates ? 'Comprobando...' : 'Ver fechas ocupadas'}
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!canStart || saving || empresaPreventivoStatus === 'no_contract' || empresaPreventivoStatus === 'disabled'}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-[#1a5fa8] hover:bg-[#154e8f] disabled:bg-[#93c0e8] disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition shadow-md shadow-[#1a5fa8]/25"
+                >
+                  {saving ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+                      </svg>
+                      {editing ? 'Guardando...' : 'Creando...'}
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d={editing ? 'M5 13l4 4L19 7' : 'M12 4v16m8-8H4'} />
+                      </svg>
+                      {submitLabel}
+                    </>
+                  )}
                 </button>
               </div>
-              {showBlockedModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                  <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-bold">Fechas ocupadas</h3>
-                      <button onClick={() => setShowBlockedModal(false)} className="text-slate-500 hover:text-slate-700">Cerrar</button>
-                    </div>
-                    <div className="max-h-60 overflow-auto text-sm text-slate-700">
-                      {Object.keys(blockedDates).length === 0 ? (
-                        <p className="text-slate-500">No hay fechas ocupadas para la empresa/sede seleccionada.</p>
-                      ) : (
-                        <ul className="space-y-2">
-                          {Object.keys(blockedDates).sort().map((d) => (
-                            <li key={d} className="flex items-center justify-between px-3 py-2 rounded-lg border">
-                              <span>{d}</span>
-                              <span className="text-xs text-slate-400">ID {blockedDates[d]}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
-
-            <div>
-              <label className={labelCls}>Tecnicos asignados</label>
-              <select
-                multiple
-                value={tecnicosSeleccionados}
-                onChange={(e) => {
-                  const selected = Array.from(e.target.selectedOptions).map((opt) => opt.value);
-                  setTecnicosSeleccionados(selected);
-                  if (!selected.includes(encargadoId)) setEncargadoId('');
-                }}
-                disabled={loadingData}
-                className={inputCls + ' min-h-40'}
-              >
-                {tecnicos.map((tecnico) => (
-                  <option key={tecnico.id} value={tecnico.id}>
-                    {tecnico.nombre}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1.5 text-xs text-slate-500">Mantén presionada la tecla Ctrl para seleccionar varios tecnicos.</p>
-
-              {tecnicosSeleccionadosData.length > 0 ? (
-                <div className="mt-3 space-y-2 bg-slate-50 rounded-xl border border-slate-200 p-3">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1 pb-1">Seleccionados: {tecnicosSeleccionadosData.length} - marca un encargado</p>
-                  {tecnicosSeleccionadosData.map((tecnico) => {
-                    const esEncargado = tecnico.id === encargadoId;
-                    return (
-                      <div key={tecnico.id} className={`flex items-center justify-between px-4 py-3 rounded-lg border transition ${esEncargado ? 'bg-blue-50 border-blue-300' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-800 text-sm">{tecnico.nombre}</span>
-                          {esEncargado && <span className="inline-flex items-center text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">Encargado</span>}
-                        </div>
-                        <button type="button" onClick={() => setEncargadoId(tecnico.id)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${esEncargado ? 'bg-blue-100 text-blue-700 cursor-default' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`} disabled={esEncargado}>
-                          {esEncargado ? 'Encargado actual' : 'Marcar encargado'}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="mt-3 flex items-center gap-2 text-sm text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-xl px-4 py-3">Selecciona tecnicos para definir al encargado</div>
-              )}
-            </div>
-
-            {(loadingData || loadError) && (
-              <div className="rounded-lg border px-4 py-3 text-sm font-medium bg-slate-50 border-slate-200 text-slate-600">{loadingData ? 'Cargando empresas, sedes y tecnicos...' : loadError}</div>
-            )}
-
-            <div>
-              <label className={labelCls}>Observaciones</label>
-              <textarea rows={4} value={observaciones} onChange={(e) => setObservaciones(e.target.value)} placeholder="Notas adicionales del mantenimiento..." className={inputCls + ' resize-none'} />
-            </div>
-
-            {saveError && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{saveError}</div>}
-          </div>
-
-          <div className="sticky bottom-0 bg-white border-t border-slate-100 px-7 py-4 flex items-center justify-end gap-3">
-            <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition">Cancelar</button>
-            <button type="submit" disabled={!canStart || saving || empresaPreventivoStatus === 'no_contract' || empresaPreventivoStatus === 'disabled'} className="flex items-center gap-2 px-6 py-2.5 bg-blue-700 hover:bg-blue-800 disabled:bg-blue-300 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg transition shadow-md shadow-blue-200">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-              </svg>
-              {saving ? (editing ? 'Guardando...' : 'Creando...') : submitLabel}
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
-    </div>
+
+      {/* ── Blocked dates modal ───────────────────────────────────────── */}
+      {showBlockedModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#0a1929]/70 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-[#c8ddf0] overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#daeaf7] bg-[#f4f8fd]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-[#1a5fa8] flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm font-bold text-[#0f2744] uppercase tracking-wider">Fechas Ocupadas</h3>
+              </div>
+              <button
+                onClick={() => setShowBlockedModal(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-[#4a7fa5] hover:bg-[#daeaf7] hover:text-[#1a5fa8] transition"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="max-h-64 overflow-auto mant-scroll p-4">
+              {Object.keys(blockedDates).length === 0 ? (
+                <p className="text-sm text-[#4a7fa5] text-center py-4">No hay fechas ocupadas para la selección actual.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {Object.keys(blockedDates).sort().map((d) => (
+                    <li key={d} className="flex items-center justify-between px-4 py-2.5 rounded-xl border border-[#daeaf7] bg-[#f4f8fd]">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-2 h-2 rounded-full bg-[#2e7fcc]" />
+                        <span className="text-sm font-semibold text-[#0f2744]">{d}</span>
+                      </div>
+                      <span className="text-xs text-[#4a7fa5] font-mono bg-white border border-[#c8ddf0] px-2 py-0.5 rounded-md">#{blockedDates[d]}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="px-4 pb-4 flex justify-end">
+              <button
+                onClick={() => setShowBlockedModal(false)}
+                className="px-5 py-2 rounded-xl text-sm font-bold bg-[#1a5fa8] text-white hover:bg-[#154e8f] transition"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
