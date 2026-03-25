@@ -32,6 +32,7 @@ import UsuariosInternosViewPage from "../modules/usuarios/pages/UsuariosInternos
 import VisitasPage from "../modules/visitas/pages/VisitasPage";
 import BaseConocimientosPage from "../modules/baseConocimientos/pages/BaseConocimientosPage";
 import MantenimientoPreventivoPage from "../modules/mantenimientoPreventivo/pages/MantenimientoPreventivoPage";
+import FirmaConformidadMantenimientoPage from "../modules/mantenimientoPreventivo/pages/FirmaConformidadMantenimientoPage";
 
 const AppRouter = () => {
   return (
@@ -42,6 +43,7 @@ const AppRouter = () => {
       <Route path="/portal-soporte/login" element={<LoginEmpresaPage />} />
       <Route path="/portal-soporte/reportar-incidencia" element={<ReporteIncidenciaPage />} />
       <Route path="/firma-conformidad/:token" element={<FirmaConformidadPage />} />
+      <Route path="/firma-conformidad-mantenimiento/:token" element={<FirmaConformidadMantenimientoPage />} />
 
       <Route element={<PrivateRoute />}>
         {/* Ruta principal del dashboard */}

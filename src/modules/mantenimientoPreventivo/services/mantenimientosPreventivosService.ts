@@ -622,3 +622,190 @@ export async function saveActivoExecution(
     throw new Error(serverMessage);
   }
 }
+
+// ─── Finalización de Mantenimiento ────────────────────────────────────────
+
+export type EstadoMantenimiento =
+  | 'PENDIENTE'
+  | 'PROGRAMADO'
+  | 'EN_PROCESO'
+  | 'PENDIENTE_FIRMA'
+  | 'FINALIZADO'
+  | 'EJECUTADO'
+  | 'ATRASADO';
+
+export type FinalizarMantenimientoPayload = {
+  mantenimientoId: string;
+  firmaTecnicoTipo: 'AUTO' | 'TRAZAR';
+  firmaTecnicoValor: string;
+  tecnicoNombre: string;
+  destinatarioId: string;
+  destinatarioNombre: string;
+  destinatarioCorreo: string;
+  pdfBase64: string;
+  pdfFileName: string;
+  activosAtendidos: string[];
+  activosNoAtendidos: string[];
+  motivoNoAtendidos?: string;
+  reprogramacionFecha?: string;
+  observaciones?: string;
+};
+
+export type FinalizarMantenimientoResponse = {
+  id: string;
+  estado: EstadoMantenimiento;
+  firmaToken?: string;
+  mensaje?: string;
+};
+
+/**
+ * Finaliza un mantenimiento preventivo, genera el PDF consolidado
+ * y envía el correo de firma de conformidad al usuario seleccionado.
+ */
+export async function finalizarMantenimiento(
+  payload: FinalizarMantenimientoPayload
+): Promise<FinalizarMantenimientoResponse> {
+  const { mantenimientoId, ...body } = payload;
+
+  const bodyCamel = {
+    firmaTecnicoTipo: body.firmaTecnicoTipo,
+    firmaTecnicoValor: body.firmaTecnicoValor,
+    tecnicoNombre: body.tecnicoNombre,
+    destinatarioId: body.destinatarioId,
+    destinatarioNombre: body.destinatarioNombre,
+    destinatarioCorreo: body.destinatarioCorreo,
+    pdfBase64: body.pdfBase64,
+    pdfFileName: body.pdfFileName,
+    activosAtendidos: body.activosAtendidos,
+    activosNoAtendidos: body.activosNoAtendidos,
+    motivoNoAtendidos: body.motivoNoAtendidos || '',
+    reprogramacionFecha: body.reprogramacionFecha || '',
+    observaciones: body.observaciones || '',
+  };
+
+  const bodySnake = {
+    firma_tecnico_tipo: body.firmaTecnicoTipo,
+    firma_tecnico_valor: body.firmaTecnicoValor,
+    tecnico_nombre: body.tecnicoNombre,
+    destinatario_id: body.destinatarioId,
+    destinatario_nombre: body.destinatarioNombre,
+    destinatario_correo: body.destinatarioCorreo,
+    pdf_base64: body.pdfBase64,
+    pdf_file_name: body.pdfFileName,
+    activos_atendidos: body.activosAtendidos,
+    activos_no_atendidos: body.activosNoAtendidos,
+    motivo_no_atendidos: body.motivoNoAtendidos || '',
+    reprogramacion_fecha: body.reprogramacionFecha || '',
+    observaciones: body.observaciones || '',
+  };
+
+  const url = `/api/mantenimientos/${mantenimientoId}/finalizar`;
+
+  try {
+    const response = await axiosClient.patch(url, bodyCamel);
+    return (response?.data?.data || response?.data || {}) as FinalizarMantenimientoResponse;
+  } catch (error: unknown) {
+    const firstErr = error as AxiosErrorLike;
+    const status = firstErr.response?.status;
+
+    if (status === 400 || status === 422) {
+      try {
+        const fallback = await axiosClient.patch(url, bodySnake);
+        return (fallback?.data?.data || fallback?.data || {}) as FinalizarMantenimientoResponse;
+      } catch (fallbackError: unknown) {
+        const fErr = fallbackError as AxiosErrorLike;
+        throw new Error(
+          extractBackendErrorMessage(fErr.response?.data) ||
+          fErr.message ||
+          'No se pudo finalizar el mantenimiento.'
+        );
+      }
+    }
+
+    if (status === 405) {
+      try {
+        const postResp = await axiosClient.post(url, bodyCamel);
+        return (postResp?.data?.data || postResp?.data || {}) as FinalizarMantenimientoResponse;
+      } catch (postErr: unknown) {
+        const pErr = postErr as AxiosErrorLike;
+        throw new Error(
+          extractBackendErrorMessage(pErr.response?.data) ||
+          pErr.message ||
+          'No se pudo finalizar el mantenimiento.'
+        );
+      }
+    }
+
+    throw new Error(
+      extractBackendErrorMessage(firstErr.response?.data) ||
+      firstErr.message ||
+      'No se pudo finalizar el mantenimiento.'
+    );
+  }
+}
+
+/**
+ * Consulta el estado público de firma de conformidad de un mantenimiento.
+ * Endpoint público (sin auth).
+ */
+export async function consultarFirmaConformidadMantenimiento(
+  token: string
+): Promise<Record<string, unknown>> {
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const url = `${API_BASE}/api/mantenimientos/firma-conformidad/${encodeURIComponent(token)}`;
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  const text = await res.text();
+  let json: Record<string, unknown> = {};
+  try { json = JSON.parse(text); } catch { json = { message: text }; }
+
+  if (!res.ok) {
+    const error = new Error(
+      typeof json?.message === 'string' ? json.message as string : `Error consultando firma: ${res.status}`
+    ) as Error & { status?: number; payload?: unknown };
+    error.status = res.status;
+    error.payload = json;
+    throw error;
+  }
+
+  return json;
+}
+
+/**
+ * Registra la firma del cliente para un mantenimiento.
+ * Endpoint público (sin auth).
+ */
+export async function registrarFirmaConformidadMantenimiento(payload: {
+  token: string;
+  firma_cliente_base64: string;
+  nombre_cliente: string;
+  calificacion: number;
+}): Promise<Record<string, unknown>> {
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const url = `${API_BASE}/api/mantenimientos/firma-conformidad`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await res.text();
+  let json: Record<string, unknown> = {};
+  try { json = JSON.parse(text); } catch { json = { message: text }; }
+
+  if (!res.ok) {
+    const error = new Error(
+      typeof json?.message === 'string' ? json.message as string : `Error registrando firma: ${res.status}`
+    ) as Error & { status?: number; payload?: unknown };
+    error.status = res.status;
+    error.payload = json;
+    throw error;
+  }
+
+  return json;
+}

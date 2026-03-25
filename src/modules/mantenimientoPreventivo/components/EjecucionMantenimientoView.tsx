@@ -5,7 +5,9 @@ import RegisterAssetModal from '@/modules/inventario/components/RegisterAssetMod
 import { getAreasByEmpresa } from '@/modules/inventario/services/areasService';
 import { getCategorias, type Category } from '@/modules/inventario/services/categoriasService';
 import { getInventarioBySede } from '@/modules/inventario/services/inventarioService';
-import { getActivoExecution, saveActivoExecution } from '../services/mantenimientosPreventivosService';
+import { getActivoExecution, saveActivoExecution, finalizarMantenimiento } from '../services/mantenimientosPreventivosService';
+import { htmlToPdfBase64 } from '@/modules/visitas/services/pdfService';
+import { generateMantenimientoReportHtml, type ActivoReportData } from '../utils/mantenimientoReportTemplate';
 import { listPreguntas, type ChecklistQuestion } from '@/modules/inventario/services/checklistService';
 
 type TecnicoInfo = {
@@ -687,6 +689,9 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
   const [firmaFinalizar, setFirmaFinalizar] = useState<string>('');
   const [reprogramacionFecha, setReprogramacionFecha] = useState<string>('');
   const [motivoNoAtendidos, setMotivoNoAtendidos] = useState<string>('');
+  const [finalizando, setFinalizando] = useState(false);
+  const [finalizadoExito, setFinalizadoExito] = useState(false);
+  const [estadoMantenimiento, setEstadoMantenimiento] = useState<string>('EN_PROCESO');
 
   const [areas, setAreas] = useState<AreaItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -1002,6 +1007,209 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
       setFinalizeUsuarios(Array.isArray(usuarios) ? usuarios : []);
     } catch (err) {
       setFinalizeUsuarios([]);
+    }
+  };
+
+  const fileToDataUri = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const generarFirmaAutomaticaDataUri = async (nombre: string): Promise<string> => {
+    const text = nombre.trim() || 'Técnico';
+    const canvas = document.createElement('canvas');
+    canvas.width = 960;
+    canvas.height = 260;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = 'rgba(37, 99, 235, 0.18)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(44, 192);
+    ctx.lineTo(canvas.width - 44, 192);
+    ctx.stroke();
+    let fontSize = 72;
+    const maxTextWidth = canvas.width - 88;
+    do {
+      ctx.font = `italic ${fontSize}px "Segoe Script", "Brush Script MT", cursive`;
+      if (ctx.measureText(text).width <= maxTextWidth || fontSize <= 36) break;
+      fontSize -= 2;
+    } while (fontSize >= 36);
+    ctx.fillStyle = '#1e3a8a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, canvas.width / 2, 130);
+    return canvas.toDataURL('image/png');
+  };
+
+  const handleFinalizarMantenimiento = async () => {
+    // Validaciones
+    if (completados === 0) {
+      setErrorMessage('Debes completar al menos un activo antes de finalizar.');
+      return;
+    }
+
+    if (noAtendidosCount > 0 && !motivoNoAtendidos.trim()) {
+      setErrorMessage('Debes indicar el motivo por el que quedaron equipos sin atender.');
+      return;
+    }
+
+    if (noAtendidosCount > 0 && !reprogramacionFecha) {
+      setErrorMessage('Debes seleccionar una fecha de reprogramación para los equipos no atendidos.');
+      return;
+    }
+
+    if (!selectedUsuarioEncargado) {
+      setErrorMessage('Debes seleccionar un usuario para enviar la firma de conformidad.');
+      return;
+    }
+
+    const selectedUser = finalizeUsuarios.find(
+      (u) => String(u.id ?? u._id) === selectedUsuarioEncargado
+    );
+    if (!selectedUser) {
+      setErrorMessage('Usuario seleccionado no válido.');
+      return;
+    }
+
+    if (firmaModoFinalizar === 'TRAZAR' && !firmaFinalizar) {
+      setErrorMessage('Debes trazar la firma del técnico para continuar.');
+      return;
+    }
+
+    setErrorMessage(null);
+    setFinalizando(true);
+
+    try {
+      // 1. Gather data from completed assets
+      const activosAtendidos: ActivoReportData[] = [];
+      const activosAtendidosIds: string[] = [];
+      const activosNoAtendidosIds: string[] = [];
+
+      for (const asset of assets) {
+        const estado = statusByAsset[asset.id];
+        if (estado === 'COMPLETADO') {
+          activosAtendidosIds.push(asset.id);
+          const draft = draftByAsset[asset.id];
+          if (draft) {
+            const evidAntes = draft.evidenciaAntes instanceof File
+              ? await fileToDataUri(draft.evidenciaAntes)
+              : (typeof draft.evidenciaAntes === 'string' ? draft.evidenciaAntes : undefined);
+            const evidDespues = draft.evidenciaDespues instanceof File
+              ? await fileToDataUri(draft.evidenciaDespues)
+              : (typeof draft.evidenciaDespues === 'string' ? draft.evidenciaDespues : undefined);
+
+            activosAtendidos.push({
+              codigo: asset.codigo,
+              equipo: asset.equipo,
+              usuario: asset.usuario,
+              diagnostico: draft.diagnostico,
+              trabajoRealizado: draft.trabajoRealizado,
+              recomendaciones: draft.recomendaciones,
+              observaciones: draft.observaciones,
+              cambioComponentes: draft.cambioComponentes === 'SI',
+              checklist: draft.checklist.map((c) => ({
+                label: c.label,
+                value: c.value,
+                comentario: c.comentario,
+              })),
+              evidenciaAntes: evidAntes,
+              evidenciaDespues: evidDespues,
+            });
+          } else {
+            activosAtendidos.push({
+              codigo: asset.codigo,
+              equipo: asset.equipo,
+              usuario: asset.usuario,
+              diagnostico: '',
+              trabajoRealizado: '',
+              recomendaciones: '',
+              observaciones: '',
+              cambioComponentes: false,
+              checklist: [],
+            });
+          }
+        } else {
+          activosNoAtendidosIds.push(asset.id);
+        }
+      }
+
+      // 2. Generate technician signature
+      const firmaTecnicoDataUri = firmaModoFinalizar === 'TRAZAR' && firmaFinalizar
+        ? firmaFinalizar
+        : await generarFirmaAutomaticaDataUri(tecnicoFirmaNombre);
+
+      // 3. Fetch logo
+      let logoDataUri: string | undefined;
+      try {
+        const logoResp = await fetch('/logo.png');
+        const blob = await logoResp.blob();
+        logoDataUri = await fileToDataUri(new File([blob], 'logo.png', { type: blob.type }));
+      } catch { /* logo unavailable */ }
+
+      // 4. Generate consolidated PDF HTML
+      const reportData = {
+        empresaNombre: context.empresaNombre,
+        sedeNombre: context.sedeNombre,
+        fechaMantenimiento: context.fecha || new Date().toISOString().slice(0, 10),
+        tecnicoEncargado: tecnicoFirmaNombre,
+        otrosTecnicos: context.tecnicos.length > 1
+          ? context.tecnicos.slice(1).map((t) => t.nombre).join(', ')
+          : '',
+        totalTecnicos: context.tecnicos.length,
+        activos: activosAtendidos,
+        firmaTecnicoNombre: tecnicoFirmaNombre,
+        firmaTecnicoDataUri,
+        logoDataUri,
+        fechaGeneracion: new Date().toLocaleDateString('es-ES', {
+          day: '2-digit', month: 'long', year: 'numeric',
+        }),
+      };
+
+      const html = generateMantenimientoReportHtml(reportData);
+
+      // 5. Convert HTML to PDF base64 via backend
+      const pdfBase64 = await htmlToPdfBase64(html, {
+        mantenimientoId: context.mantenimientoId || '',
+        empresaNombre: context.empresaNombre,
+        sedeNombre: context.sedeNombre,
+        fecha: context.fecha,
+        tecnicoEncargado: tecnicoFirmaNombre,
+        estado: 'PENDIENTE_FIRMA',
+      });
+
+      // 6. Call finalize endpoint
+      const pdfFileName = `mantenimiento-preventivo-${context.empresaNombre.replace(/\s+/g, '-')}-${context.fecha || 'sin-fecha'}.pdf`;
+
+      const response = await finalizarMantenimiento({
+        mantenimientoId: context.mantenimientoId || '',
+        firmaTecnicoTipo: firmaModoFinalizar,
+        firmaTecnicoValor: firmaTecnicoDataUri,
+        tecnicoNombre: tecnicoFirmaNombre,
+        destinatarioId: selectedUsuarioEncargado,
+        destinatarioNombre: selectedUser.nombreCompleto || '',
+        destinatarioCorreo: selectedUser.correoPrincipal || selectedUser.correo || '',
+        pdfBase64,
+        pdfFileName,
+        activosAtendidos: activosAtendidosIds,
+        activosNoAtendidos: activosNoAtendidosIds,
+        motivoNoAtendidos: motivoNoAtendidos.trim(),
+        reprogramacionFecha: reprogramacionFecha || undefined,
+        observaciones: '',
+      });
+
+      setEstadoMantenimiento(response.estado || 'PENDIENTE_FIRMA');
+      setFinalizadoExito(true);
+      setShowFinalizeModal(false);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      setErrorMessage(err.message || 'Error al finalizar el mantenimiento.');
+    } finally {
+      setFinalizando(false);
     }
   };
 
@@ -1408,7 +1616,7 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
 
       {/* Acciones generales debajo de la tabla */}
       <div className="flex justify-end gap-3">
-        {completados < totalActivos && (
+        {completados < totalActivos && !finalizadoExito && (
           <button
             type="button"
             className="px-5 py-2.5 rounded-xl bg-white border-2 border-[#1a6fc4] text-[#1a4d8f] text-sm font-bold hover:bg-[#e8f1fb] transition shadow-sm"
@@ -1417,15 +1625,15 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
           </button>
         )}
 
-        {/* Diseño: botón Finalizar Mantenimiento (fuera de 'Ver detalle', UI sólo) */}
+        {/* Botón Finalizar Mantenimiento */}
         <button
           type="button"
           onClick={openFinalizeModal}
-          disabled={totalActivos === 0}
+          disabled={totalActivos === 0 || completados === 0 || finalizadoExito}
           className="px-5 py-2.5 rounded-xl bg-[#ff8a65] text-white text-sm font-bold disabled:opacity-60 disabled:cursor-not-allowed hover:bg-[#ff7043] transition shadow-sm"
-          title="Abrir formulario de finalización"
+          title={finalizadoExito ? 'Mantenimiento ya finalizado' : completados === 0 ? 'Completa al menos un activo' : 'Abrir formulario de finalización'}
         >
-          Finalizar Mantenimiento
+          {finalizadoExito ? `Mantenimiento ${estadoMantenimiento === 'FINALIZADO' ? 'Finalizado' : 'Pendiente de Firma'}` : 'Finalizar Mantenimiento'}
         </button>
       </div>
 
@@ -1434,6 +1642,28 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
         <div className="rounded-xl border border-red-300 bg-red-50 px-5 py-3.5 flex items-start gap-3">
           <span className="text-red-500 text-lg mt-0.5">⚠</span>
           <p className="text-sm font-semibold text-red-700">{errorMessage}</p>
+        </div>
+      )}
+
+      {/* Success: mantenimiento finalizado */}
+      {finalizadoExito && (
+        <div className="rounded-xl border border-[#7dd3af] bg-[#f0fdf4] px-5 py-4 flex items-start gap-3">
+          <span className="text-[#22c47a] text-lg mt-0.5">✓</span>
+          <div>
+            <p className="text-sm font-bold text-[#166534]">
+              Mantenimiento finalizado correctamente
+            </p>
+            <p className="text-xs text-[#0d5c39] mt-1">
+              {estadoMantenimiento === 'FINALIZADO'
+                ? 'El mantenimiento ha sido finalizado. Se ha enviado el PDF firmado al cliente.'
+                : 'Se ha enviado un correo con el PDF y enlace de firma de conformidad al usuario seleccionado. El estado del mantenimiento es "Pendiente de Firma" hasta que el cliente firme.'}
+            </p>
+            {noAtendidosCount > 0 && reprogramacionFecha && (
+              <p className="text-xs text-[#92400e] mt-1 bg-[#fffbeb] rounded-lg px-3 py-1.5 border border-[#fde68a] inline-block">
+                Se reprogramaron {noAtendidosCount} activos no atendidos para el {reprogramacionFecha}.
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -1926,15 +2156,16 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                   </>
                 )}
 
-                {/* Diseño: botón Finalizar Mantenimiento (UI solamente, siempre visible) */}
-                <button
-                  type="button"
-                  disabled
-                  className="px-6 py-2.5 rounded-xl bg-[#ff8a65] text-white text-sm font-bold disabled:opacity-80 disabled:cursor-not-allowed shadow-md transition ml-2"
-                  title="Diseño — sin acción aún"
-                >
-                  Finalizar Mantenimiento
-                </button>
+                {/* Botón Finalizar Mantenimiento — navega al modal principal */}
+                {statusByAsset[activeAsset?.id || ''] === 'COMPLETADO' && !finalizadoExito && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowExecutionModal(false); openFinalizeModal(); }}
+                    className="px-6 py-2.5 rounded-xl bg-[#ff8a65] text-white text-sm font-bold hover:bg-[#ff7043] shadow-md transition ml-2"
+                  >
+                    Finalizar Mantenimiento
+                  </button>
+                )}
 
                 {pdfUrlByAsset[activeAsset?.id || ''] && (
                   <a
@@ -2056,7 +2287,8 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
               </div>
 
               <div className="bg-white rounded-xl border border-[#daeaf8] p-4">
-                <p className="text-xs font-bold uppercase text-[#5a80a8] mb-2">Enviar correo al encargado</p>
+                <p className="text-xs font-bold uppercase text-[#5a80a8] mb-2">Firma de conformidad — Enviar correo al encargado</p>
+                <p className="text-xs text-[#94afc8] mb-3">Se enviará un correo con el PDF consolidado y un enlace para firmar la conformidad del mantenimiento.</p>
                 <div className="relative">
                   <input
                     type="text"
@@ -2105,11 +2337,35 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                 </div>
                 <p className="text-xs text-[#94afc8] mt-2">Solo se puede seleccionar un usuario.</p>
               </div>
+
+              {/* Alerta si no hay activos completados */}
+              {completados === 0 && (
+                <div className="rounded-xl border border-[#f9a8a8] bg-[#fff5f5] px-4 py-3 flex items-start gap-2">
+                  <span className="text-red-500 mt-0.5">⚠</span>
+                  <p className="text-xs font-semibold text-[#b91c1c]">
+                    No se puede finalizar el mantenimiento. Debes completar al menos un activo.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="px-6 py-4 border-t border-[#daeaf8] bg-white flex items-center justify-end gap-3">
-              <button type="button" onClick={() => setShowFinalizeModal(false)} className="px-4 py-2 rounded-xl border-2 border-[#c8ddf0] text-sm font-bold">Cerrar</button>
-              <button type="button" disabled className="px-4 py-2 rounded-xl bg-[#1a6fc4] text-white text-sm font-bold disabled:opacity-60" title="Deshabilitado: esperando instrucciones">Enviar</button>
+              <button type="button" onClick={() => setShowFinalizeModal(false)} disabled={finalizando} className="px-4 py-2 rounded-xl border-2 border-[#c8ddf0] text-sm font-bold disabled:opacity-50">Cerrar</button>
+              <button
+                type="button"
+                onClick={handleFinalizarMantenimiento}
+                disabled={finalizando || completados === 0 || !selectedUsuarioEncargado || (noAtendidosCount > 0 && (!motivoNoAtendidos.trim() || !reprogramacionFecha))}
+                className="px-5 py-2.5 rounded-xl bg-[#1a6fc4] text-white text-sm font-bold disabled:opacity-60 disabled:cursor-not-allowed hover:bg-[#145faa] transition shadow-md flex items-center gap-2"
+              >
+                {finalizando ? (
+                  <>
+                    <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    Generando PDF y enviando...
+                  </>
+                ) : (
+                  <>Enviar</>
+                )}
+              </button>
             </div>
           </div>
         </div>
