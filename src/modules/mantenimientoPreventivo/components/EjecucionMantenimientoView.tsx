@@ -935,53 +935,24 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
 
       // Mapear preguntas al draft
       if (preguntas && preguntas.length > 0) {
+        // Solo usar preguntas del backend, no mezclar con draft anterior ni CHECKLIST_BASE
         setDraftByAsset((prev) => {
+          const newChecklist: ChecklistRow[] = preguntas.map((q) => ({
+            key: q.id ? String(q.id) : q.pregunta.slice(0, 24).replace(/\s+/g, '_'),
+            label: q.pregunta,
+            value: q.tipo === 'si_no' ? null : '',
+            comentario: '',
+            tipo: q.tipo,
+            opciones: Array.isArray(q.opciones) ? q.opciones : [],
+          }));
           const currentDraft = prev[asset.id] || loadedDraft || (canUseCachedDraft ? cachedDraft : null) || buildEmptyDraft();
-
-          const savedByKey = new Map<string, ChecklistRow>(currentDraft.checklist.map((it) => [it.key, it]));
-          const savedByLabel = new Map<string, ChecklistRow>();
-          currentDraft.checklist.forEach((it) => savedByLabel.set(String(it.label).trim().toLowerCase(), it));
-
-          const merged: ChecklistRow[] = preguntas.map((q) => {
-            const qId = q.id ? String(q.id) : '';
-            const slug = q.pregunta.slice(0, 24).replace(/\s+/g, '_');
-
-            let saved: ChecklistRow | undefined = undefined;
-            if (qId && savedByKey.has(qId)) saved = savedByKey.get(qId);
-            if (!saved && savedByLabel.has(String(q.pregunta).trim().toLowerCase())) saved = savedByLabel.get(String(q.pregunta).trim().toLowerCase());
-            if (!saved && savedByKey.has(slug)) saved = savedByKey.get(slug);
-
-            if (saved) {
-              return {
-                ...saved,
-                key: saved.key || qId || slug,
-                label: q.pregunta,
-                tipo: q.tipo,
-                opciones: Array.isArray(q.opciones) ? q.opciones : [],
-              };
-            }
-
-            return {
-              key: qId || slug,
-              label: q.pregunta,
-              value: q.tipo === 'si_no' ? null : '',
-              comentario: '',
-              tipo: q.tipo,
-              opciones: Array.isArray(q.opciones) ? q.opciones : [],
-            };
-          });
-
-          // preserve any saved items that didn't match the preguntas list (append extras)
-          const mergedKeys = new Set(merged.map((m) => m.key));
-          const extras = currentDraft.checklist.filter((it) => !mergedKeys.has(it.key));
-
           return {
             ...prev,
-            [asset.id]: { ...currentDraft, checklist: merged.concat(extras) },
+            [asset.id]: { ...currentDraft, checklist: newChecklist },
           };
         });
       } else {
-        // mantener comportamiento backward-compatible: si no hay preguntas, usar CHECKLIST_BASE
+        // Si no hay preguntas, usar CHECKLIST_BASE
         setDraftByAsset((prev) => ({ ...prev, [asset.id]: prev[asset.id] || buildEmptyDraft() }));
       }
     } catch (err) {
