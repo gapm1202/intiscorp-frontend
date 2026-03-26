@@ -5,14 +5,14 @@ import { useNavigate } from 'react-router-dom';
 import { getEmpresas } from '@/modules/empresas/services/empresasService';
 import { getSedesByEmpresa } from '@/modules/empresas/services/sedesService';
 import { getContratoActivo } from '@/modules/empresas/services/contratosService';
-import { listMantenimientosPreventivos, type MantenimientoPreventivoRecord } from '../services/mantenimientosPreventivosService';
+import { listMantenimientosPreventivos, type MantenimientoPreventivoRecord, getMantenimientoPreventivoById } from '../services/mantenimientosPreventivosService';
 
 type Option = {
   id: string;
   nombre: string;
 };
 
-type EstadoMantenimiento = 'PENDIENTE' | 'PROGRAMADO' | 'EN_PROCESO' | 'EJECUTADO' | 'ATRASADO';
+type EstadoMantenimiento = 'PENDIENTE' | 'PROGRAMADO' | 'EN_PROCESO' | 'EJECUTADO' | 'FINALIZADO' | 'ATRASADO';
 
 type MantenimientoItem = {
   id: string;
@@ -29,7 +29,7 @@ type MantenimientoItem = {
 };
 
 type EstadoContratoPreventivo = 'SIN_EMPRESA' | 'CARGANDO' | 'PERMITIDO' | 'NO_INCLUIDO' | 'NO_CONFIGURADO';
-type Vista = 'CALENDARIO' | 'PROGRAMADOS';
+type Vista = 'CALENDARIO' | 'PROGRAMADOS' | 'ATENDIDOS';
 
 type Props = {
   onStartMantenimiento?: (payload: {
@@ -56,6 +56,7 @@ const estadoStyles: Record<EstadoMantenimiento, { chip: string; dot: string; lab
   PROGRAMADO: { chip: 'bg-blue-100 text-blue-800 border-blue-200', dot: 'bg-blue-500', label: 'Programado' },
   EN_PROCESO: { chip: 'bg-violet-100 text-violet-800 border-violet-200', dot: 'bg-violet-500', label: 'En proceso' },
   EJECUTADO: { chip: 'bg-emerald-100 text-emerald-800 border-emerald-200', dot: 'bg-emerald-500', label: 'Ejecutado' },
+  FINALIZADO: { chip: 'bg-emerald-100 text-emerald-800 border-emerald-200', dot: 'bg-emerald-500', label: 'Finalizado' },
   ATRASADO: { chip: 'bg-rose-100 text-rose-800 border-rose-200', dot: 'bg-rose-500', label: 'Atrasado' },
 };
 
@@ -160,6 +161,7 @@ export default function MantenimientoPreventivoCalendar({ onStartMantenimiento, 
   const [mantenimientos, setMantenimientos] = useState<MantenimientoItem[]>([]);
   const [mantenimientoToStart, setMantenimientoToStart] = useState<MantenimientoItem | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [loadingPdfId, setLoadingPdfId] = useState<string | null>(null);
 
   const sedesDisponibles = useMemo(() => {
     if (!empresaId) return [];
@@ -279,8 +281,14 @@ export default function MantenimientoPreventivoCalendar({ onStartMantenimiento, 
 
   const pendientesMes = useMemo(() => mantenimientosFiltrados.filter((item) => item.estado === 'PENDIENTE'), [mantenimientosFiltrados]);
 
+
   const programados = useMemo(
     () => mantenimientosFiltrados.filter((item) => item.estado === 'PROGRAMADO' || item.estado === 'ATRASADO' || item.estado === 'EN_PROCESO'),
+    [mantenimientosFiltrados]
+  );
+
+  const atendidos = useMemo(
+    () => mantenimientosFiltrados.filter((item) => item.estado === 'FINALIZADO'),
     [mantenimientosFiltrados]
   );
 
@@ -319,6 +327,46 @@ export default function MantenimientoPreventivoCalendar({ onStartMantenimiento, 
     if (selectedMantenimiento.estado === 'PROGRAMADO' || selectedMantenimiento.estado === 'ATRASADO') return 'Iniciar mantenimiento';
     return 'Ver detalle';
   }, [selectedMantenimiento]);
+
+  const handleViewPdf = async (item: MantenimientoItem) => {
+    try {
+      setLoadingPdfId(item.id);
+      const full = await getMantenimientoPreventivoById(item.id);
+      if (!full) {
+        window.alert('No se pudo obtener la información del mantenimiento.');
+        return;
+      }
+
+      // Prefer explicit pdf.url if available
+      const pdfObj = (full as any).pdf || (full as any).pdf_file || (full as any).pdfData || null;
+      const pdfUrl = pdfObj?.url || pdfObj?.pdfUrl || null;
+      if (pdfUrl) {
+        window.open(String(pdfUrl), '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      // Check estado or firma token to decide
+      const estadoRaw = String((full as any).estado || (full as any).status || '').toUpperCase();
+      const firmaToken = String((full as any).firmaToken ?? (full as any).firma_token ?? (full as any).firmaTokenPublico ?? '').trim();
+
+      if (estadoRaw === 'PENDIENTE_FIRMA' || firmaToken) {
+        if (firmaToken) {
+          const link = `${window.location.origin}/firma-conformidad-mantenimiento/${encodeURIComponent(firmaToken)}`;
+          window.open(link, '_blank', 'noopener,noreferrer');
+        } else {
+          window.alert('Pendiente firma del cliente');
+        }
+        return;
+      }
+
+      window.alert('PDF no disponible para este mantenimiento.');
+    } catch (err) {
+      const msg = (err as any)?.message || String(err);
+      window.alert('Error al obtener PDF: ' + msg);
+    } finally {
+      setLoadingPdfId(null);
+    }
+  };
 
   const handleIniciar = (item: MantenimientoItem) => {
     if (!canOperate) return;
@@ -375,6 +423,13 @@ export default function MantenimientoPreventivoCalendar({ onStartMantenimiento, 
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${vista === 'PROGRAMADOS' ? 'bg-white text-blue-700 shadow' : 'text-slate-600 hover:bg-white'}`}
           >
             Programados
+          </button>
+          <button
+            type="button"
+            onClick={() => setVista('ATENDIDOS')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${vista === 'ATENDIDOS' ? 'bg-white text-blue-700 shadow' : 'text-slate-600 hover:bg-white'}`}
+          >
+            Atendidos
           </button>
         </div>
       </div>
@@ -536,7 +591,7 @@ export default function MantenimientoPreventivoCalendar({ onStartMantenimiento, 
             </div>
           </div>
         </div>
-      ) : (
+      ) : vista === 'PROGRAMADOS' ? (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-700">Programados</h3>
@@ -614,6 +669,77 @@ export default function MantenimientoPreventivoCalendar({ onStartMantenimiento, 
                     </td>
                   </tr>
                 )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-700">Atendidos</h3>
+            <span className="text-xs text-slate-500 font-semibold">{atendidos.length} registro{atendidos.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-slate-600">
+                <tr>
+                  <th className="text-left px-4 py-3 font-semibold">Fecha</th>
+                  <th className="text-left px-4 py-3 font-semibold">Empresa</th>
+                  <th className="text-left px-4 py-3 font-semibold">Sede</th>
+                  <th className="text-left px-4 py-3 font-semibold">Estado</th>
+                  <th className="text-right px-4 py-3 font-semibold">Accion</th>
+                </tr>
+              </thead>
+              <tbody>
+                {atendidos.map((item) => (
+                  <tr key={item.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/60">
+                    <td className="px-4 py-3 text-slate-700 font-semibold">{item.fechaProgramada || '-'}</td>
+                    <td className="px-4 py-3 text-slate-700">{item.empresaNombre}</td>
+                    <td className="px-4 py-3 text-slate-700">{item.sedeNombre}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${estadoStyles[item.estado].chip}`}>
+                          <span className={`w-2 h-2 rounded-full ${estadoStyles[item.estado].dot}`} />
+                          {estadoStyles[item.estado].label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="inline-flex gap-2 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => onStartMantenimiento?.({
+                              mantenimientoId: item.id,
+                              empresaId: item.empresaId,
+                              empresaNombre: item.empresaNombre,
+                              sedeId: item.sedeId,
+                              sedeNombre: item.sedeNombre,
+                              fecha: item.fechaProgramada,
+                              tecnicos: [],
+                            })}
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition"
+                          >
+                            Ver detalles
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleViewPdf(item)}
+                            className="px-3 py-1.5 rounded-lg bg-white text-slate-700 text-xs font-semibold border border-slate-200 hover:bg-slate-50 transition flex items-center gap-2"
+                          >
+                            {loadingPdfId === item.id ? (
+                              <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v4m0 8v4m8-8h-4M4 12H0"/></svg>
+                            ) : null}
+                            Ver PDF
+                          </button>
+                        </div>
+                      </td>
+                  </tr>
+                ))}
+                  {atendidos.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                        No hay mantenimientos atendidos para los filtros seleccionados.
+                      </td>
+                    </tr>
+                  )}
               </tbody>
             </table>
           </div>

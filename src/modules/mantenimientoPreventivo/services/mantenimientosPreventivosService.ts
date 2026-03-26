@@ -22,7 +22,7 @@ export type MantenimientoPreventivoRecord = {
   sedeNombre: string;
   fechaCreacion: string;
   fechaProgramada: string;
-  estado: 'PENDIENTE' | 'PROGRAMADO' | 'EN_PROCESO' | 'EJECUTADO' | 'ATRASADO';
+  estado: 'PENDIENTE' | 'PROGRAMADO' | 'EN_PROCESO' | 'EJECUTADO' | 'FINALIZADO' | 'ATRASADO';
 };
 
 type AxiosErrorLike = {
@@ -90,7 +90,13 @@ function uniqueNumericIds(ids: string[]): number[] {
 
 function normalizeEstado(value: unknown): MantenimientoPreventivoRecord['estado'] {
   const estado = String(value || 'PENDIENTE').toUpperCase();
-  if (estado === 'PROGRAMADO' || estado === 'EJECUTADO' || estado === 'ATRASADO' || estado === 'EN_PROCESO') return estado as MantenimientoPreventivoRecord['estado'];
+  if (
+    estado === 'PROGRAMADO' ||
+    estado === 'EJECUTADO' ||
+    estado === 'FINALIZADO' ||
+    estado === 'ATRASADO' ||
+    estado === 'EN_PROCESO'
+  ) return estado as MantenimientoPreventivoRecord['estado'];
   return 'PENDIENTE';
 }
 

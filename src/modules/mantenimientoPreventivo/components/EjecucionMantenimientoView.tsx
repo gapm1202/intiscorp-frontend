@@ -5,7 +5,7 @@ import RegisterAssetModal from '@/modules/inventario/components/RegisterAssetMod
 import { getAreasByEmpresa } from '@/modules/inventario/services/areasService';
 import { getCategorias, type Category } from '@/modules/inventario/services/categoriasService';
 import { getInventarioBySede } from '@/modules/inventario/services/inventarioService';
-import { getActivoExecution, saveActivoExecution, finalizarMantenimiento } from '../services/mantenimientosPreventivosService';
+import { getActivoExecution, saveActivoExecution, finalizarMantenimiento, getMantenimientoPreventivoById } from '../services/mantenimientosPreventivosService';
 import { htmlToPdfBase64 } from '@/modules/visitas/services/pdfService';
 import { generateMantenimientoReportHtml, type ActivoReportData } from '../utils/mantenimientoReportTemplate';
 import { listPreguntas, type ChecklistQuestion } from '@/modules/inventario/services/checklistService';
@@ -758,6 +758,28 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
             // don't block UI on prefetch errors
             console.warn('No se pudo precargar estado de ejecuciones:', e);
           }
+          // Also fetch maintenance header to know if it's already finalized
+          try {
+            const full = await getMantenimientoPreventivoById(context.mantenimientoId as string);
+            if (full && mounted) {
+              const backendEstado = String((full as any).estado ?? (full as any).status ?? '').toUpperCase();
+              setEstadoMantenimiento(backendEstado || 'EN_PROCESO');
+
+              // Debug: log backend header state for troubleshooting visibility of finalize button
+              try {
+                // eslint-disable-next-line no-console
+                console.debug('[EjecucionMantenimiento] loaded maintenance header', { mantenimientoId: context.mantenimientoId, backendEstado });
+              } catch (e) {}
+
+              // If backend already finalized or sent for client signature, mark as finished to hide finalization UI
+              const finishedSet = new Set(['FINALIZADO', 'PENDIENTE_FIRMA', 'EJECUTADO']);
+              if (finishedSet.has(backendEstado)) {
+                setFinalizadoExito(true);
+              }
+            }
+          } catch (err) {
+            // ignore; not critical
+          }
         }
 
         const parsedAreas = toArray<Record<string, unknown>>(areasResp) as AreaItem[];
@@ -891,6 +913,22 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
             [asset.id]: existing.pdf?.url || '',
           }));
         }
+        // Additionally, check maintenance-level state to hide finalization if already finished
+        try {
+          const full = await getMantenimientoPreventivoById(context.mantenimientoId as string);
+          if (full) {
+            const backendEstado = String((full as any).estado ?? (full as any).status ?? '').toUpperCase();
+            const finishedSet = new Set(['FINALIZADO', 'PENDIENTE_FIRMA', 'EJECUTADO']);
+            if (finishedSet.has(backendEstado)) setFinalizadoExito(true);
+            setEstadoMantenimiento(backendEstado || 'EN_PROCESO');
+              try {
+                // eslint-disable-next-line no-console
+                console.debug('[EjecucionMantenimiento] modal fetched maintenance header', { mantenimientoId: context.mantenimientoId, backendEstado, willSetFinalizado: finishedSet.has(backendEstado) });
+              } catch (e) {}
+          }
+        } catch (e) {
+          // ignore
+        }
       } catch (error: unknown) {
         const err = error as { message?: string };
         setErrorMessage(err.message || 'No se pudo consultar la ejecución actual del activo.');
@@ -970,6 +1008,21 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
       }));
     }
   };
+
+  const isMaintenanceFinalized = (() => {
+    if (finalizadoExito) return true;
+    if (String(estadoMantenimiento || '').toUpperCase() === 'FINALIZADO') return true;
+    if (totalActivos > 0 && completados === totalActivos && completados > 0) {
+      // if every asset is completed and at least one PDF exists, assume finalized
+      if (Object.values(pdfUrlByAsset).some((u) => typeof u === 'string' && u.trim())) return true;
+    }
+    return false;
+  })();
+
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[EjecucionMantenimiento] finalized check', { isMaintenanceFinalized, finalizadoExito, estadoMantenimiento, totalActivos, completados, pdfUrls: Object.keys(pdfUrlByAsset) });
+  } catch (e) {}
 
   const openFinalizeModal = async () => {
     setShowFinalizeModal(true);
@@ -1596,16 +1649,18 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
           </button>
         )}
 
-        {/* Botón Finalizar Mantenimiento */}
-        <button
-          type="button"
-          onClick={openFinalizeModal}
-          disabled={totalActivos === 0 || completados === 0 || finalizadoExito}
-          className="px-5 py-2.5 rounded-xl bg-[#ff8a65] text-white text-sm font-bold disabled:opacity-60 disabled:cursor-not-allowed hover:bg-[#ff7043] transition shadow-sm"
-          title={finalizadoExito ? 'Mantenimiento ya finalizado' : completados === 0 ? 'Completa al menos un activo' : 'Abrir formulario de finalización'}
-        >
-          {finalizadoExito ? `Mantenimiento ${estadoMantenimiento === 'FINALIZADO' ? 'Finalizado' : 'Pendiente de Firma'}` : 'Finalizar Mantenimiento'}
-        </button>
+        {/* Botón Finalizar Mantenimiento (oculto si ya finalizado) */}
+        {!finalizadoExito && !(completados === totalActivos && totalActivos > 0) && (
+          <button
+            type="button"
+            onClick={openFinalizeModal}
+            disabled={totalActivos === 0 || completados === 0}
+            className="px-5 py-2.5 rounded-xl bg-[#ff8a65] text-white text-sm font-bold disabled:opacity-60 disabled:cursor-not-allowed hover:bg-[#ff7043] transition shadow-sm"
+            title={completados === 0 ? 'Completa al menos un activo' : 'Abrir formulario de finalización'}
+          >
+            Finalizar Mantenimiento
+          </button>
+        )}
       </div>
 
       {/* Error global */}
@@ -1700,7 +1755,7 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                     {activeDraft.observaciones ? (
                       <div>
                         <FieldLabel>Observaciones</FieldLabel>
-                        <p className="text-sm text-[#0f2744] bg-[#f4f8fd] rounded-xl p-3.5 border border-[#daeaf8] whitespace-pre-wrap min-h-[48px]">
+                        <p className="text-sm text-[#0f2744] bg-[#f4f8fd] rounded-xl p-3.5 border border-[#daeaf8] whitespace-pre-wrap min-h-12">
                           {activeDraft.observaciones}
                         </p>
                       </div>
@@ -2128,7 +2183,7 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                 )}
 
                 {/* Botón Finalizar Mantenimiento — navega al modal principal */}
-                {statusByAsset[activeAsset?.id || ''] === 'COMPLETADO' && !finalizadoExito && (
+                {statusByAsset[activeAsset?.id || ''] === 'COMPLETADO' && !isMaintenanceFinalized && !(completados === totalActivos && totalActivos > 0) && (
                   <button
                     type="button"
                     onClick={() => { setShowExecutionModal(false); openFinalizeModal(); }}
@@ -2136,6 +2191,12 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                   >
                     Finalizar Mantenimiento
                   </button>
+                )}
+
+                {isMaintenanceFinalized && (
+                  <div className="px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-semibold">
+                    Mantenimiento preventivo finalizado.
+                  </div>
                 )}
 
                 {pdfUrlByAsset[activeAsset?.id || ''] && (
