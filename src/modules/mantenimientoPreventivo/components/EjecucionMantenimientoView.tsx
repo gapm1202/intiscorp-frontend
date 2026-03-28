@@ -345,17 +345,29 @@ function buildEmptyDraft(): MantenimientoDraft {
 }
 
 function normalizeChecklistValue(value: unknown): ChecklistValue {
-  const normalized = String(value ?? '')
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'boolean') return value ? 'SI' : 'NO';
+  if (typeof value === 'number') return value === 1 ? 'SI' : value === 0 ? 'NO' : String(value);
+
+  const normalized = String(value)
     .trim()
-    .toUpperCase();
-  if (normalized === 'SI' || normalized === 'S' || normalized === 'TRUE') return 'SI';
-  if (normalized === 'NO' || normalized === 'N' || normalized === 'FALSE') return 'NO';
-  return null;
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '');
+
+  if (normalized === 'SI' || normalized === 'S' || normalized === 'TRUE' || normalized === '1' || normalized === 'YES' || normalized === 'Y') return 'SI';
+  if (normalized === 'NO' || normalized === 'N' || normalized === 'FALSE' || normalized === '0') return 'NO';
+  return normalized || null;
 }
 
 function buildDraftFromExecutionData(raw: unknown): MantenimientoDraft | null {
   if (!raw || typeof raw !== 'object') return null;
   const source = raw as Record<string, unknown>;
+
+  try {
+    // eslint-disable-next-line no-console
+    console.log('[EjecucionMantenimiento] buildDraftFromExecutionData source', source);
+  } catch (e) {}
 
   const base = buildEmptyDraft();
 
@@ -382,10 +394,18 @@ function buildDraftFromExecutionData(raw: unknown): MantenimientoDraft | null {
       : 'NO';
 
   const checklistRaw = Array.isArray(source.checklist) ? source.checklist : [];
+  try {
+    // eslint-disable-next-line no-console
+    console.log('[EjecucionMantenimiento] checklistRaw length', Array.isArray(checklistRaw) ? checklistRaw.length : 0, checklistRaw);
+  } catch (e) {}
   const checklistMap = new Map<string, ChecklistRow>();
   const checklistOrder: string[] = [];
 
   checklistRaw.forEach((row) => {
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[EjecucionMantenimiento] mapping checklist row', row);
+    } catch (e) {}
     if (!row || typeof row !== 'object') return;
     const item = row as Record<string, unknown>;
     const key = getStringField(item, ['key', 'itemKey', 'item_key']);
@@ -397,10 +417,15 @@ function buildDraftFromExecutionData(raw: unknown): MantenimientoDraft | null {
     const rawVal = item.estado ?? item.value;
     let normalizedValue: ChecklistValue = null;
     if (typeof rawVal === 'string') {
-      const up = rawVal.trim().toUpperCase();
-      if (up === 'SI' || up === 'S' || up === 'TRUE') normalizedValue = 'SI';
-      else if (up === 'NO' || up === 'N' || up === 'FALSE') normalizedValue = 'NO';
+      const up = rawVal.trim().toUpperCase().normalize('NFD').replace(/[ -\u036f]/g, '');
+      if (up === 'SI' || up === 'S' || up === 'TRUE' || up === '1' || up === 'YES' || up === 'Y') normalizedValue = 'SI';
+      else if (up === 'NO' || up === 'N' || up === 'FALSE' || up === '0') normalizedValue = 'NO';
       else normalizedValue = String(rawVal);
+    } else if (typeof rawVal === 'boolean') {
+      normalizedValue = rawVal ? 'SI' : 'NO';
+    } else if (typeof rawVal === 'number') {
+      // treat 1/0 or other numeric encodings
+      normalizedValue = rawVal === 1 ? 'SI' : rawVal === 0 ? 'NO' : String(rawVal);
     }
 
     if (!checklistMap.has(key)) {
@@ -431,7 +456,10 @@ function buildDraftFromExecutionData(raw: unknown): MantenimientoDraft | null {
     Boolean(evidenciaDespues) ||
     checklist.some((item) => item.value !== null || Boolean(item.comentario));
 
-  if (!hasMeaningfulData) return null;
+  // If there's no meaningful data at all and no checklist items, then treat as empty.
+  // However, if the backend returned a checklist (even if other fields are empty),
+  // keep the draft so 'Ver detalle' shows the checklist answers.
+  if (!hasMeaningfulData && checklist.length === 0) return null;
 
   return {
     ...base,
@@ -862,6 +890,11 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
     if (context.mantenimientoId) {
       try {
         const existing = await getActivoExecution(context.mantenimientoId, asset.id);
+        // Debug: log backend execution payload to help troubleshoot missing answers
+        try {
+          // eslint-disable-next-line no-console
+          console.log('[EjecucionMantenimiento] backend execution payload - existing object for asset', asset.id, existing);
+        } catch (e) {}
 
         if (!existing?.ejecucionId) {
           // Si no existe ejecución en backend, eliminar cualquier snapshot local obsoleto.
@@ -973,17 +1006,25 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
 
       // Mapear preguntas al draft
       if (preguntas && preguntas.length > 0) {
-        // Solo usar preguntas del backend, no mezclar con draft anterior ni CHECKLIST_BASE
+        // Construir mapa con checklist existente (si lo hay) para preservar respuestas y comentarios
         setDraftByAsset((prev) => {
-          const newChecklist: ChecklistRow[] = preguntas.map((q) => ({
-            key: q.id ? String(q.id) : q.pregunta.slice(0, 24).replace(/\s+/g, '_'),
-            label: q.pregunta,
-            value: q.tipo === 'si_no' ? null : '',
-            comentario: '',
-            tipo: q.tipo,
-            opciones: Array.isArray(q.opciones) ? q.opciones : [],
-          }));
           const currentDraft = prev[asset.id] || loadedDraft || (canUseCachedDraft ? cachedDraft : null) || buildEmptyDraft();
+          const existingMap = new Map<string, ChecklistRow>();
+          (currentDraft.checklist || []).forEach((r) => existingMap.set(String(r.key), r));
+
+          const newChecklist: ChecklistRow[] = preguntas.map((q) => {
+            const key = q.id ? String(q.id) : q.pregunta.slice(0, 24).replace(/\s+/g, '_');
+            const existing = existingMap.get(key) || existingMap.get(String(q.pregunta)) || null;
+            return {
+              key,
+              label: q.pregunta,
+              value: existing?.value ?? (q.tipo === 'si_no' ? null : ''),
+              comentario: existing?.comentario ?? '',
+              tipo: q.tipo,
+              opciones: Array.isArray(q.opciones) ? q.opciones : [],
+            } as ChecklistRow;
+          });
+
           return {
             ...prev,
             [asset.id]: { ...currentDraft, checklist: newChecklist },
@@ -1810,8 +1851,9 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                   <div className="space-y-2">
                     {activeDraft.checklist.map((item, idx) => {
                       const tipo = (item.tipo ?? 'si_no').toLowerCase();
-                      const isPositive = tipo === 'si_no' ? item.value === 'SI' : Boolean(item.value && String(item.value).trim());
-                      const isNegative = tipo === 'si_no' ? item.value === 'NO' : false;
+                      const resolved = normalizeChecklistValue(item.value);
+                      const isPositive = tipo === 'si_no' ? resolved === 'SI' : Boolean(item.value && String(item.value).trim());
+                      const isNegative = tipo === 'si_no' ? resolved === 'NO' : false;
                       return (
                         <div
                           key={item.key}
@@ -1824,10 +1866,10 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                             </div>
                             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${isPositive ? 'bg-[#e6f7f0] text-[#0d5c39] border-[#7dd3af]' : isNegative ? 'bg-[#fff5f5] text-[#b91c1c] border-[#f9a8a8]' : 'bg-[#f0f4fa] text-[#94afc8] border-[#daeaf8]'}`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${isPositive ? 'bg-[#22c47a]' : isNegative ? 'bg-red-500' : 'bg-[#c8ddf0]'}`} />
-                              {tipo === 'si_no' ? (item.value ?? 'Sin responder') : (String(item.value) || 'Sin responder')}
+                              {tipo === 'si_no' ? (resolved ?? (item.value == null ? 'Sin responder' : String(item.value))) : (item.value == null ? 'Sin responder' : String(item.value))}
                             </span>
                           </div>
-                          {tipo === 'si_no' && item.value === 'NO' && item.comentario && (
+                          {tipo === 'si_no' && resolved === 'NO' && item.comentario && (
                             <p className="mt-2 text-sm text-[#7a0000] bg-[#fff5f5] rounded-lg p-2.5 border border-[#f9a8a8]">
                               {item.comentario}
                             </p>
@@ -1987,8 +2029,9 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                 <div className="space-y-2">
                   {activeDraft.checklist.map((item, idx) => {
                     const tipo = (item.tipo ?? 'si_no').toLowerCase();
-                    const isPositive = tipo === 'si_no' ? item.value === 'SI' : Boolean(item.value && String(item.value).trim());
-                    const isNegative = tipo === 'si_no' ? item.value === 'NO' : false;
+                    const resolved = normalizeChecklistValue(item.value);
+                    const isPositive = tipo === 'si_no' ? resolved === 'SI' : Boolean(item.value && String(item.value).trim());
+                    const isNegative = tipo === 'si_no' ? resolved === 'NO' : false;
                     return (
                       <div
                         key={item.key}
@@ -2010,10 +2053,10 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                                 >
                                   <input
                                     type="checkbox"
-                                    checked={item.value === opt}
+                                    checked={normalizeChecklistValue(item.value) === opt}
                                     onChange={() =>
                                       updateChecklist(item.key, {
-                                        value: item.value === opt ? null : opt,
+                                        value: normalizeChecklistValue(item.value) === opt ? null : opt,
                                         ...(opt === 'SI' ? { comentario: '' } : {}),
                                       })
                                     }
@@ -2052,7 +2095,7 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                           </div>
                         </div>
 
-                        {tipo === 'si_no' && item.value === 'NO' && (
+                        {tipo === 'si_no' && normalizeChecklistValue(item.value) === 'NO' && (
                           <div className="mt-3">
                             <FieldLabel required>Comentario obligatorio</FieldLabel>
                             <textarea
