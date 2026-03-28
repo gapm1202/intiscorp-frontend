@@ -1011,11 +1011,9 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
 
   const isMaintenanceFinalized = (() => {
     if (finalizadoExito) return true;
-    if (String(estadoMantenimiento || '').toUpperCase() === 'FINALIZADO') return true;
-    if (totalActivos > 0 && completados === totalActivos && completados > 0) {
-      // if every asset is completed and at least one PDF exists, assume finalized
-      if (Object.values(pdfUrlByAsset).some((u) => typeof u === 'string' && u.trim())) return true;
-    }
+    const estadoNorm = String(estadoMantenimiento || '').toUpperCase();
+    const finishedSet = new Set(['FINALIZADO', 'PENDIENTE_FIRMA', 'EJECUTADO']);
+    if (finishedSet.has(estadoNorm)) return true;
     return false;
   })();
 
@@ -1515,6 +1513,18 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
             </div>
           ))}
         </div>
+
+          {/* Debug banner (solo si se añade ?debugMantenimiento=1 en la URL) */}
+          {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debugMantenimiento') === '1' && (
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-2 m-4 rounded-lg text-sm font-semibold">
+              <div className="flex flex-wrap gap-4">
+                <div>estado: <span className="font-bold">{String(estadoMantenimiento)}</span></div>
+                <div>finalizadoExito: <span className="font-bold">{String(finalizadoExito)}</span></div>
+                <div>totalActivos: <span className="font-bold">{totalActivos}</span></div>
+                <div>completados: <span className="font-bold">{completados}</span></div>
+              </div>
+            </div>
+          )}
       </div>
 
       {/* ── PROGRESO ─────────────────────────────────────────── */}
@@ -1649,14 +1659,13 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
           </button>
         )}
 
-        {/* Botón Finalizar Mantenimiento (oculto si ya finalizado) */}
-        {!finalizadoExito && !(completados === totalActivos && totalActivos > 0) && (
+        {/* Botón Finalizar Mantenimiento (mostrar si hay al menos un activo completado y no está finalizado) */}
+        {!finalizadoExito && completados > 0 && (
           <button
             type="button"
             onClick={openFinalizeModal}
-            disabled={totalActivos === 0 || completados === 0}
-            className="px-5 py-2.5 rounded-xl bg-[#ff8a65] text-white text-sm font-bold disabled:opacity-60 disabled:cursor-not-allowed hover:bg-[#ff7043] transition shadow-sm"
-            title={completados === 0 ? 'Completa al menos un activo' : 'Abrir formulario de finalización'}
+            className="px-5 py-2.5 rounded-xl bg-[#ff8a65] text-white text-sm font-bold hover:bg-[#ff7043] transition shadow-sm"
+            title="Abrir formulario de finalización"
           >
             Finalizar Mantenimiento
           </button>
@@ -2183,7 +2192,7 @@ export default function EjecucionMantenimientoView({ context, onBack }: Props) {
                 )}
 
                 {/* Botón Finalizar Mantenimiento — navega al modal principal */}
-                {statusByAsset[activeAsset?.id || ''] === 'COMPLETADO' && !isMaintenanceFinalized && !(completados === totalActivos && totalActivos > 0) && (
+                {completados > 0 && !isMaintenanceFinalized && !(completados === totalActivos && totalActivos > 0) && (
                   <button
                     type="button"
                     onClick={() => { setShowExecutionModal(false); openFinalizeModal(); }}
