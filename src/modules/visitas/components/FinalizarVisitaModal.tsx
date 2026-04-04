@@ -468,12 +468,15 @@ export default function FinalizarVisitaModal({
       .filter((id) => Number.isInteger(id) && id > 0);
 
     const ticketsAsociados: TicketAsociadoData[] = [];
+    let ticketRowNumber = 1;
     if (selectedTicketIds.length > 0) {
       const details = await Promise.all(
         selectedTicketIds.map((id) => getTicketById(id).catch(() => null)),
       );
-      details.forEach((t, i) => {
+      details.forEach((t) => {
         if (!t) return;
+        const activosDetalle = Array.isArray((t as any).activos) ? (t as any).activos : [];
+
         const rawImgs = ((t as any).imagenes_cierre || (t as any).cierre_imagenes || []) as Array<any>;
         const imagenesUrls = rawImgs
           .map((img: any) => {
@@ -485,12 +488,44 @@ export default function FinalizarVisitaModal({
           })
           .filter(Boolean)
           .slice(0, 4) as string[];
+
+        if (activosDetalle.length > 0) {
+          activosDetalle.forEach((activo: any) => {
+            const codigoActivo = String(
+              activo?.activo_codigo || activo?.codigo || activo?.assetId || activo?.code || '',
+            ).trim();
+            const usuarioAsignado = String(
+              activo?.usuario_nombre || (t as any).usuario_nombre || '',
+            ).trim();
+
+            ticketsAsociados.push({
+              numero: ticketRowNumber++,
+              codigo: String((t as any).codigo_ticket || `#${(t as any).id || '—'}`),
+              // If activo exists but codigo is null/empty, mark as data issue instead of masking as '-'.
+              codigoActivo: codigoActivo || 'ACTIVO-SIN-CODIGO',
+              usuarioAsignado: usuarioAsignado || '—',
+              sede: String((t as any).sede_nombre || activo?.sede_nombre || '—'),
+              fecha: (t as any).fecha_creacion ? new Date((t as any).fecha_creacion).toLocaleDateString('es-ES') : '—',
+              diagnostico: String((t as any).descripcion || (t as any).diagnostico || ''),
+              solucion: String((t as any).resolucion || '—'),
+              recomendacion: String((t as any).recomendaciones || (t as any).recomendacion || '—'),
+              imagenesUrls,
+            });
+          });
+          return;
+        }
+
+        // Exceptional case: ticket without activos linked.
         ticketsAsociados.push({
-          numero: i + 1,
+          numero: ticketRowNumber++,
           codigo: String((t as any).codigo_ticket || `#${(t as any).id || '—'}`),
-          diagnostico: String((t as any).diagnostico || ''),
-          solucion: String((t as any).resolucion || ''),
-          recomendacion: String((t as any).recomendacion || ''),
+          codigoActivo: '—',
+          usuarioAsignado: String((t as any).usuario_nombre || '—'),
+          sede: String((t as any).sede_nombre || '—'),
+          fecha: (t as any).fecha_creacion ? new Date((t as any).fecha_creacion).toLocaleDateString('es-ES') : '—',
+          diagnostico: String((t as any).descripcion || (t as any).diagnostico || ''),
+          solucion: String((t as any).resolucion || '—'),
+          recomendacion: String((t as any).recomendaciones || (t as any).recomendacion || '—'),
           imagenesUrls,
         });
       });

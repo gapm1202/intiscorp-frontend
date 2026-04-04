@@ -6,6 +6,10 @@
 export interface TicketAsociadoData {
   numero: number;
   codigo: string;
+  codigoActivo: string;
+  usuarioAsignado: string;
+  sede: string;
+  fecha: string;
   diagnostico: string;
   solucion: string;
   recomendacion: string;
@@ -139,9 +143,50 @@ const signatureBlock = (
     </div>
   </div>`;
 
-// ── CSS — refined corporate report ───────────────────────────────────────────
+// ── Ticket table helpers ─────────────────────────────────────────────────────
+
+const ticketTableRow = (t: TicketAsociadoData): string => `
+  <tr>
+    <td>${esc(t.fecha)}</td>
+    <td class="nowrap">${esc(t.codigo)}</td>
+    <td class="nowrap">${esc(t.codigoActivo)}</td>
+    <td>${esc(t.usuarioAsignado)}</td>
+    <td>${esc(t.sede)}</td>
+    <td class="wrap-cell">${esc(t.diagnostico || 'No especificado.')}</td>
+    <td class="wrap-cell">${esc(t.solucion || 'No especificado.')}</td>
+    <td class="wrap-cell">${esc(t.recomendacion || 'No especificado.')}</td>
+  </tr>`;
+
+const ticketTable = (tickets: TicketAsociadoData[]): string => {
+  if (!tickets.length) return `<p class="no-data">No hay tickets asociados.</p>`;
+  return `
+  <table class="ticket-table">
+    <thead>
+      <tr>
+        <th style="width:8%">Fecha</th>
+        <th style="width:10%">Cód. Ticket</th>
+        <th style="width:10%">Cód. Activo</th>
+        <th style="width:12%">Usuario Asignado</th>
+        <th style="width:10%">Sede</th>
+        <th style="width:17%">Diagnóstico</th>
+        <th style="width:17%">Resolución</th>
+        <th style="width:16%">Recomendaciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${tickets.map(ticketTableRow).join('')}
+    </tbody>
+  </table>`;
+};
+
+// ── CSS — landscape corporate report ─────────────────────────────────────────
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@page {
+  size: A4 landscape;
+  margin: 0;
+}
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -149,18 +194,23 @@ body {
   font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
   background: #ffffff;
   color: #0f172a;
-  font-size: 12.5px;
-  line-height: 1.6;
+  font-size: 11px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -webkit-print-color-adjust: exact;
 }
 
 /* ── Page ── */
 .page {
-  width: 210mm;
-  min-height: 297mm;
-  padding: 10mm 12mm 14mm;
+  width: 297mm;
+  min-height: 210mm;
+  padding: 8mm 10mm 12mm;
   position: relative;
+}
+
+.table-pages {
+  width: 297mm;
+  padding: 8mm 10mm 12mm;
 }
 
 .page-break { break-before: page; }
@@ -170,14 +220,14 @@ body {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 18px;
-  padding-bottom: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
   border-bottom: 2px solid #0f4c8a;
 }
 
 .header-logo {
-  width: 50px;
-  height: 50px;
+  width: 44px;
+  height: 44px;
   object-fit: contain;
 }
 
@@ -186,7 +236,7 @@ body {
 }
 
 .header-title {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 800;
   color: #0f2d54;
   letter-spacing: 1px;
@@ -194,44 +244,44 @@ body {
 }
 
 .header-subtitle {
-  font-size: 10px;
+  font-size: 9px;
   color: #64748b;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .section {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 /* ── Section Title ── */
 .section-title {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: #0f4c8a;
   text-transform: uppercase;
   letter-spacing: 1px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   border-left: 4px solid #0f4c8a;
   padding-left: 8px;
 }
 
-/* ── Info Grid ── */
+/* ── Info Grid (3 cols for landscape) ── */
 .info-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   overflow: hidden;
 }
 
 .info-cell {
-  padding: 10px 12px;
+  padding: 7px 10px;
   border-bottom: 1px solid #e2e8f0;
   border-right: 1px solid #e2e8f0;
   background: #ffffff;
 }
 
-.info-cell:nth-child(even) {
+.info-cell:nth-child(3n) {
   border-right: none;
 }
 
@@ -240,48 +290,48 @@ body {
 }
 
 .info-label {
-  font-size: 9px;
+  font-size: 8px;
   color: #64748b;
   font-weight: 600;
   text-transform: uppercase;
-  margin-bottom: 3px;
+  margin-bottom: 2px;
 }
 
 .info-value {
-  font-size: 13px;
+  font-size: 11.5px;
   font-weight: 600;
   color: #0f172a;
 }
 
 /* ── Text Blocks ── */
 .field-block {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .field-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   color: #0f4c8a;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
   text-transform: uppercase;
 }
 
 .field-content {
-  font-size: 12.5px;
+  font-size: 11px;
   background: #f1f5f9;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-left: 4px solid #0f4c8a;
   border-radius: 4px;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 /* ── Badge ── */
 .badge {
   display: inline-block;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 5px;
   font-weight: 700;
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .badge-yes {
@@ -294,27 +344,57 @@ body {
   color: #991b1b;
 }
 
-/* ── Ticket Header ── */
-.ticket-header {
+/* ── Ticket Table ── */
+.ticket-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5px;
+  line-height: 1.4;
+}
+
+.ticket-table thead {
+  display: table-header-group;
+}
+
+.ticket-table th {
   background: linear-gradient(135deg, #0f4c8a, #1e3a8a);
-  padding: 12px 16px;
-  border-radius: 6px;
-  margin-bottom: 14px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.ticket-number-label {
-  font-size: 10px;
-  color: #cbd5f5;
-  font-weight: 700;
-}
-
-.ticket-code {
-  font-size: 14px;
   color: #ffffff;
   font-weight: 700;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 5px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.ticket-table td {
+  padding: 5px 5px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.ticket-table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.ticket-table .nowrap {
+  white-space: nowrap;
+}
+
+.ticket-table .wrap-cell {
+  word-break: break-word;
+  hyphens: auto;
+  min-width: 60px;
+}
+
+.no-data {
+  text-align: center;
+  color: #64748b;
+  font-style: italic;
+  padding: 20px;
 }
 
 /* ── Images ── */
@@ -360,7 +440,7 @@ body {
 .signature-image {
   max-height: 60px;
   object-fit: contain;
-  margin-bottom: -8px; /* 🔥 clave para pegarlo a la línea */
+  margin-bottom: -8px;
 }
 
 .signature-line {
@@ -384,15 +464,15 @@ body {
 /* ── Footer ── */
 .footer {
   position: absolute;
-  bottom: 10mm;
-  left: 12mm;
-  right: 12mm;
-  font-size: 9px;
+  bottom: 8mm;
+  left: 10mm;
+  right: 10mm;
+  font-size: 8px;
   color: #64748b;
   display: flex;
   justify-content: space-between;
   border-top: 1px solid #e2e8f0;
-  padding-top: 6px;
+  padding-top: 4px;
 }
 `;
 
@@ -400,11 +480,6 @@ body {
 
 export function generateVisitaReportHtml(data: VisitaReportData): string {
   const esProgramada = /programada/i.test(data.tipoVisita);
-  const totalPages = esProgramada
-    ? (data.ticketsAsociados.length > 0
-        ? 1 + data.ticketsAsociados.length   // overview + tickets (signatures on last ticket)
-        : 2)                                  // overview + signatures-only page
-    : 2 + data.ticketsAsociados.length;       // overview + tickets + cierre
 
   // ── PAGE 1: overview ──────────────────────────────────────────────────────
 
@@ -435,7 +510,7 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
       <div class="info-grid">
         ${infoRow('N° de Ticket', data.ticketCodigo || '—')}
         ${infoRow('Activo Asociado', data.activoNombre || '—')}
-        ${infoRow('Usuario Asignado', data.usuarioTicket || '—', true)}
+        ${infoRow('Usuario Asignado', data.usuarioTicket || '—')}
       </div>
     </div>`
         : ''
@@ -459,62 +534,28 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
     <div class="footer">
       <span class="footer-brand">IntisCorp</span>
       <span>Generado el ${esc(data.fechaGeneracion)}</span>
-      <span>Pág. 1 / ${totalPages}</span>
     </div>
   </div>`;
 
-  // ── Additional pages: associated tickets ──────────────────────────────────
+  // ── TICKET TABLE SECTION (auto-flowing, may span multiple pages) ──────────
 
-  const ticketPages = data.ticketsAsociados
-    .map(
-      (t, idx) => {
-        const isLastTicket = idx === data.ticketsAsociados.length - 1;
-        const signaturesOnThisPage = esProgramada && isLastTicket;
-        const pageNum = idx + 2;
-        // For programada, the last ticket page IS the final page (totalPages already accounts for no cierre page)
-        const effectiveTotalPages = signaturesOnThisPage ? pageNum : totalPages;
-        return `
-  <div class="page page-break">
+  const ticketSection = data.ticketsAsociados.length > 0 ? `
+  <div class="table-pages page-break">
     ${pageHeader(data.logoDataUri)}
 
-    <div class="ticket-header">
-      <div class="ticket-number-label">TICKET ${t.numero}</div>
-      <div class="ticket-code">${esc(t.codigo)}</div>
-    </div>
-
     <div class="section">
-      ${sectionTitle('Detalle del Ticket')}
-      ${fieldBlock('Diagnóstico', t.diagnostico)}
-      ${fieldBlock('Resolución', t.solucion)}
-      ${fieldBlock('Recomendación', t.recomendacion)}
+      ${sectionTitle('Tickets Asociados')}
+      ${ticketTable(data.ticketsAsociados)}
     </div>
+  </div>` : '';
 
-    ${t.imagenesUrls.length > 0 ? `
-    <div class="section">
-      ${sectionTitle('Evidencia Fotográfica')}
-      ${imagesGrid(t.imagenesUrls, 'Ticket')}
-    </div>` : ''}
-
-    ${signaturesOnThisPage ? `
-    <div class="section">
-      ${sectionTitle('Firmas de Conformidad')}
-      ${signatureBlock(data.firmaTecnicoDataUri, data.tecnicoFirmaNombre || data.tecnicoEncargado, data.firmaClienteDataUri, data.clienteNombre)}
-    </div>` : ''}
-
-    <div class="footer">
-      <span class="footer-brand">IntisCorp</span>
-      <span>Generado el ${esc(data.fechaGeneracion)}</span>
-      <span>Pág. ${pageNum} / ${effectiveTotalPages}</span>
-    </div>
-  </div>`;
-      },
-    )
-    .join('');
+  // ── CIERRE PAGE (with signatures) ─────────────────────────────────────────
 
   const cierrePage = `
   <div class="page page-break">
     ${pageHeader(data.logoDataUri)}
 
+    ${!esProgramada ? `
     <div class="section">
       ${sectionTitle('Cierre de Visita')}
       ${fieldBlock('Diagnóstico', data.diagnostico)}
@@ -526,7 +567,7 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
     <div class="section">
       ${sectionTitle('Evidencia Fotográfica del Cierre')}
       ${imagesGrid(data.cierreImagenes, 'Cierre')}
-    </div>` : ''}
+    </div>` : ''}` : ''}
 
     <div class="section">
       ${sectionTitle('Firmas de Conformidad')}
@@ -536,37 +577,8 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
     <div class="footer">
       <span class="footer-brand">IntisCorp</span>
       <span>Generado el ${esc(data.fechaGeneracion)}</span>
-      <span>Pág. ${totalPages} / ${totalPages}</span>
     </div>
   </div>`;
-
-  // For PROGRAMADA with tickets: signatures are on the last ticket page, no cierre page.
-  // For PROGRAMADA without tickets: we still need a signatures-only page.
-  // For POR_TICKET / other: always render the full cierre page.
-  const renderCierrePage = esProgramada
-    ? (data.ticketsAsociados.length === 0)  // only if no tickets to attach signatures to
-    : true;
-
-  // When PROGRAMADA has no tickets, render a slim page with just signatures (no diagnóstico etc.)
-  const cierrePageProgramadaOnly = `
-  <div class="page page-break">
-    ${pageHeader(data.logoDataUri)}
-
-    <div class="section">
-      ${sectionTitle('Firmas de Conformidad')}
-      ${signatureBlock(data.firmaTecnicoDataUri, data.tecnicoFirmaNombre || data.tecnicoEncargado, data.firmaClienteDataUri, data.clienteNombre)}
-    </div>
-
-    <div class="footer">
-      <span class="footer-brand">IntisCorp</span>
-      <span>Generado el ${esc(data.fechaGeneracion)}</span>
-      <span>Pág. 2 / 2</span>
-    </div>
-  </div>`;
-
-  const finalCierrePage = esProgramada
-    ? (renderCierrePage ? cierrePageProgramadaOnly : '')
-    : cierrePage;
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -578,8 +590,8 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
 </head>
 <body>
   ${page1}
-  ${ticketPages}
-  ${finalCierrePage}
+  ${ticketSection}
+  ${cierrePage}
 </body>
 </html>`;
 }
