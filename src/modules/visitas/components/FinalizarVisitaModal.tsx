@@ -4,6 +4,8 @@ import { finalizarVisita, enviarResumenVisitaCorreo } from '../services/visitasS
 import { htmlToPdfBase64 } from '../services/pdfService';
 import { generateVisitaReportHtml } from '../utils/visitaReportTemplate';
 import type { TicketAsociadoData } from '../utils/visitaReportTemplate';
+import { COLUMNAS_PDF_TICKET } from '../utils/visitaReportTemplate';
+import type { ColumnaPdfTicket } from '../utils/visitaReportTemplate';
 import { getTicketById, getTickets, cambiarEstadoConImagenes } from '@/modules/tickets/services/ticketsService';
 import { getUsuariosByEmpresa } from '@/modules/usuarios/services/usuariosService';
 import type { Usuario } from '@/modules/usuarios/services/usuariosService';
@@ -56,6 +58,10 @@ export default function FinalizarVisitaModal({
   const scrollBodyRef = useRef<HTMLDivElement | null>(null);
   const lastScrollTopRef = useRef(0);
   const [cargandoTicketsResueltos, setCargandoTicketsResueltos] = useState(false);
+  const [columnasPdf, setColumnasPdf] = useState<ColumnaPdfTicket[]>([
+    'fecha', 'codigoTicket', 'codigoActivo', 'usuarioAsignado',
+    'sede', 'areaActivo', 'diagnostico', 'resolucion', 'recomendaciones',
+  ]);
   const selectorRef = useRef<HTMLDivElement>(null);
   const firmaCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const firmaDibujandoRef = useRef(false);
@@ -505,6 +511,7 @@ export default function FinalizarVisitaModal({
               codigoActivo: codigoActivo || 'ACTIVO-SIN-CODIGO',
               usuarioAsignado: usuarioAsignado || '—',
               sede: String((t as any).sede_nombre || activo?.sede_nombre || '—'),
+              areaActivo: String(activo?.area || activo?.area_nombre || activo?.ubicacion || (t as any).area || '—'),
               fecha: (t as any).fecha_creacion ? new Date((t as any).fecha_creacion).toLocaleDateString('es-ES') : '—',
               diagnostico: String((t as any).descripcion || (t as any).diagnostico || ''),
               solucion: String((t as any).resolucion || '—'),
@@ -522,6 +529,7 @@ export default function FinalizarVisitaModal({
           codigoActivo: '—',
           usuarioAsignado: String((t as any).usuario_nombre || '—'),
           sede: String((t as any).sede_nombre || '—'),
+          areaActivo: String((t as any).area || '—'),
           fecha: (t as any).fecha_creacion ? new Date((t as any).fecha_creacion).toLocaleDateString('es-ES') : '—',
           diagnostico: String((t as any).descripcion || (t as any).diagnostico || ''),
           solucion: String((t as any).resolucion || '—'),
@@ -560,6 +568,7 @@ export default function FinalizarVisitaModal({
       recomendacion: recomendacion.trim(),
       cierreImagenes,
       ticketsAsociados,
+      columnasSeleccionadas: cuentaComoVisita ? columnasPdf : undefined,
       tecnicoFirmaNombre,
       firmaTecnicoDataUri,
       logoDataUri,
@@ -695,6 +704,7 @@ export default function FinalizarVisitaModal({
     if (!esProgramada && (!diagnostico.trim() || !resolucion.trim() || !recomendacion.trim())) { onError('Completa Diagnóstico, Resolución y Recomendación para finalizar la visita'); return; }
     if (cuentaComoVisita === null) { onError('Debes indicar si cuenta como visita contractual'); return; }
     if (!esProgramada && hayChangioComponente === null) { onError('Debes indicar si se realizó cambio de componente'); return; }
+    if (destinatariosSeleccionados.length === 0) { onError('Debes seleccionar al menos un destinatario para la notificación por correo'); return; }
 
     const firmaSeleccionada = getFirmaSeleccionadaDataUri() || await generarFirmaAutomaticaDataUri(tecnicoFirmaNombre);
     if (!firmaSeleccionada) {
@@ -1122,7 +1132,7 @@ export default function FinalizarVisitaModal({
                     </div>
                   )}
 
-                  {cuentaComoVisita === true && (
+                  {cuentaComoVisita === true && (<>
                     <div className="rounded-2xl overflow-hidden" style={{ border: '1.5px solid #BBF7D0' }}>
                       <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: '#DCFCE7' }}>
                         <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#166534' }}>Tickets Resueltos del Día</span>
@@ -1173,7 +1183,41 @@ export default function FinalizarVisitaModal({
                         })}
                       </div>
                     </div>
-                  )}
+
+                    {/* ── Columnas del PDF ── */}
+                    <div className="rounded-2xl overflow-hidden" style={{ border: '1.5px solid #BBF7D0' }}>
+                      <div className="px-4 py-2.5" style={{ background: '#DCFCE7' }}>
+                        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#166534' }}>Columnas del reporte PDF</span>
+                      </div>
+                      <div className="p-3" style={{ background: '#F0FDF4' }}>
+                        <div className="grid grid-cols-3 gap-2">
+                          {COLUMNAS_PDF_TICKET.map((col) => {
+                            const checked = columnasPdf.includes(col.key);
+                            const disabled = !!col.obligatoria;
+                            return (
+                              <label key={col.key} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${disabled ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:bg-white'}`}
+                                style={checked ? { background: '#fff', border: '1.5px solid #86EFAC', color: '#166534' } : { background: 'transparent', border: '1.5px solid transparent', color: '#4ADE80' }}>
+                                <input
+                                  type="checkbox"
+                                  className="accent-green-600 w-3.5 h-3.5"
+                                  checked={checked}
+                                  disabled={disabled}
+                                  onChange={() => {
+                                    setColumnasPdf(prev =>
+                                      prev.includes(col.key)
+                                        ? prev.filter(c => c !== col.key)
+                                        : [...prev, col.key]
+                                    );
+                                  }}
+                                />
+                                {col.label}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </>)}
                 </div>
               </SectionCard>
 
@@ -1448,7 +1492,7 @@ export default function FinalizarVisitaModal({
                 </button>
                 <button
                   type="submit"
-                  disabled={loading || cuentaComoVisita === null || (!esProgramada && hayChangioComponente === null)}
+                  disabled={loading || cuentaComoVisita === null || (!esProgramada && hayChangioComponente === null) || destinatariosSeleccionados.length === 0}
                   className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: 'linear-gradient(135deg, #0A2456, #1563C8)', boxShadow: '0 4px 14px rgba(21,99,200,0.35)' }}
                   onMouseEnter={e => { if (!loading && cuentaComoVisita !== null && hayChangioComponente !== null) (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(21,99,200,0.5)'; }}

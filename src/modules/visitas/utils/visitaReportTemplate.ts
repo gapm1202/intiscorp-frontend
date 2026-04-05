@@ -3,12 +3,36 @@
 //  Generates a self-contained HTML string for A4 PDF rendering via Puppeteer.
 // ─────────────────────────────────────────────────────────────────────────────
 
+export type ColumnaPdfTicket =
+  | 'fecha'
+  | 'codigoTicket'
+  | 'codigoActivo'
+  | 'usuarioAsignado'
+  | 'sede'
+  | 'areaActivo'
+  | 'diagnostico'
+  | 'resolucion'
+  | 'recomendaciones';
+
+export const COLUMNAS_PDF_TICKET: { key: ColumnaPdfTicket; label: string; obligatoria?: boolean }[] = [
+  { key: 'fecha',           label: 'Fecha',            obligatoria: true },
+  { key: 'codigoTicket',    label: 'Código Ticket' },
+  { key: 'codigoActivo',    label: 'Código de Activo' },
+  { key: 'usuarioAsignado', label: 'Usuario Asignado' },
+  { key: 'sede',            label: 'Sede' },
+  { key: 'areaActivo',      label: 'Área del Activo' },
+  { key: 'diagnostico',     label: 'Diagnóstico' },
+  { key: 'resolucion',      label: 'Resolución' },
+  { key: 'recomendaciones', label: 'Recomendaciones' },
+];
+
 export interface TicketAsociadoData {
   numero: number;
   codigo: string;
   codigoActivo: string;
   usuarioAsignado: string;
   sede: string;
+  areaActivo: string;
   fecha: string;
   diagnostico: string;
   solucion: string;
@@ -46,6 +70,8 @@ export interface VisitaReportData {
   /** Nombre del cliente que firmó */
   clienteNombre?: string;
   ticketsAsociados: TicketAsociadoData[];
+  /** Columnas seleccionadas para la tabla del PDF */
+  columnasSeleccionadas?: ColumnaPdfTicket[];
   /** data: URI of the logo, embedded so no external fetch needed */
   logoDataUri?: string;
   fechaGeneracion: string;
@@ -143,39 +169,40 @@ const signatureBlock = (
     </div>
   </div>`;
 
-// ── Ticket table helpers ─────────────────────────────────────────────────────
+// ── Ticket table helpers (dynamic columns) ──────────────────────────────────
 
-const ticketTableRow = (t: TicketAsociadoData): string => `
-  <tr>
-    <td>${esc(t.fecha)}</td>
-    <td class="nowrap">${esc(t.codigo)}</td>
-    <td class="nowrap">${esc(t.codigoActivo)}</td>
-    <td>${esc(t.usuarioAsignado)}</td>
-    <td>${esc(t.sede)}</td>
-    <td class="wrap-cell">${esc(t.diagnostico || 'No especificado.')}</td>
-    <td class="wrap-cell">${esc(t.solucion || 'No especificado.')}</td>
-    <td class="wrap-cell">${esc(t.recomendacion || 'No especificado.')}</td>
-  </tr>`;
+const COL_CONFIG: Record<ColumnaPdfTicket, { header: string; cssClass: string; getValue: (t: TicketAsociadoData) => string }> = {
+  fecha:           { header: 'Fecha',           cssClass: '',          getValue: (t) => t.fecha },
+  codigoTicket:    { header: 'Cód. Ticket',     cssClass: 'nowrap',    getValue: (t) => t.codigo },
+  codigoActivo:    { header: 'Cód. Activo',     cssClass: 'nowrap',    getValue: (t) => t.codigoActivo },
+  usuarioAsignado: { header: 'Usuario Asignado', cssClass: '',         getValue: (t) => t.usuarioAsignado },
+  sede:            { header: 'Sede',             cssClass: '',         getValue: (t) => t.sede },
+  areaActivo:      { header: 'Área del Activo',  cssClass: '',         getValue: (t) => t.areaActivo },
+  diagnostico:     { header: 'Diagnóstico',      cssClass: 'wrap-cell', getValue: (t) => t.diagnostico || 'No especificado.' },
+  resolucion:      { header: 'Resolución',       cssClass: 'wrap-cell', getValue: (t) => t.solucion || 'No especificado.' },
+  recomendaciones: { header: 'Recomendaciones',  cssClass: 'wrap-cell', getValue: (t) => t.recomendacion || 'No especificado.' },
+};
 
-const ticketTable = (tickets: TicketAsociadoData[]): string => {
+const DEFAULT_COLUMNS: ColumnaPdfTicket[] = [
+  'fecha', 'codigoTicket', 'codigoActivo', 'usuarioAsignado',
+  'sede', 'diagnostico', 'resolucion', 'recomendaciones',
+];
+
+const ticketTable = (tickets: TicketAsociadoData[], cols: ColumnaPdfTicket[]): string => {
   if (!tickets.length) return `<p class="no-data">No hay tickets asociados.</p>`;
+  const colWidth = Math.floor(100 / cols.length);
+  const headers = cols.map((c) => `<th style="width:${colWidth}%">${esc(COL_CONFIG[c].header)}</th>`).join('');
+  const rows = tickets.map((t) => {
+    const cells = cols.map((c) => {
+      const cfg = COL_CONFIG[c];
+      return `<td class="${cfg.cssClass}">${esc(cfg.getValue(t))}</td>`;
+    }).join('');
+    return `<tr>${cells}</tr>`;
+  }).join('');
   return `
   <table class="ticket-table">
-    <thead>
-      <tr>
-        <th style="width:8%">Fecha</th>
-        <th style="width:10%">Cód. Ticket</th>
-        <th style="width:10%">Cód. Activo</th>
-        <th style="width:12%">Usuario Asignado</th>
-        <th style="width:10%">Sede</th>
-        <th style="width:17%">Diagnóstico</th>
-        <th style="width:17%">Resolución</th>
-        <th style="width:16%">Recomendaciones</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${tickets.map(ticketTableRow).join('')}
-    </tbody>
+    <thead><tr>${headers}</tr></thead>
+    <tbody>${rows}</tbody>
   </table>`;
 };
 
@@ -185,7 +212,7 @@ const CSS = `
 
 @page {
   size: A4 landscape;
-  margin: 0;
+  margin: 7mm 10mm 9mm;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -194,40 +221,30 @@ body {
   font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
   background: #ffffff;
   color: #0f172a;
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 10px;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   -webkit-print-color-adjust: exact;
 }
 
-/* ── Page ── */
-.page {
-  width: 297mm;
-  min-height: 210mm;
-  padding: 8mm 10mm 12mm;
-  position: relative;
+/* ── Single-flow wrapper — no forced page breaks ── */
+.wrapper {
+  width: 277mm;
 }
-
-.table-pages {
-  width: 297mm;
-  padding: 8mm 10mm 12mm;
-}
-
-.page-break { break-before: page; }
 
 /* ── Header ── */
 .header {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 14px;
-  padding-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding-bottom: 7px;
   border-bottom: 2px solid #0f4c8a;
 }
 
 .header-logo {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
 }
 
@@ -236,7 +253,7 @@ body {
 }
 
 .header-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 800;
   color: #0f2d54;
   letter-spacing: 1px;
@@ -244,44 +261,44 @@ body {
 }
 
 .header-subtitle {
-  font-size: 9px;
+  font-size: 8px;
   color: #64748b;
   margin-top: 1px;
 }
 
 .section {
-  margin-bottom: 12px;
+  margin-bottom: 9px;
 }
 
 /* ── Section Title ── */
 .section-title {
-  font-size: 10px;
+  font-size: 8.5px;
   font-weight: 700;
   color: #0f4c8a;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 6px;
-  border-left: 4px solid #0f4c8a;
-  padding-left: 8px;
+  letter-spacing: 0.8px;
+  margin-bottom: 5px;
+  border-left: 3px solid #0f4c8a;
+  padding-left: 6px;
 }
 
-/* ── Info Grid (3 cols for landscape) ── */
+/* ── Info Grid (4 cols for landscape compactness) ── */
 .info-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border-radius: 5px;
   overflow: hidden;
 }
 
 .info-cell {
-  padding: 7px 10px;
+  padding: 5px 8px;
   border-bottom: 1px solid #e2e8f0;
   border-right: 1px solid #e2e8f0;
   background: #ffffff;
 }
 
-.info-cell:nth-child(3n) {
+.info-cell:nth-child(4n) {
   border-right: none;
 }
 
@@ -290,48 +307,48 @@ body {
 }
 
 .info-label {
-  font-size: 8px;
+  font-size: 7px;
   color: #64748b;
   font-weight: 600;
   text-transform: uppercase;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .info-value {
-  font-size: 11.5px;
+  font-size: 10px;
   font-weight: 600;
   color: #0f172a;
 }
 
 /* ── Text Blocks ── */
 .field-block {
-  margin-bottom: 10px;
+  margin-bottom: 7px;
 }
 
 .field-label {
-  font-size: 9px;
+  font-size: 7.5px;
   font-weight: 700;
   color: #0f4c8a;
-  margin-bottom: 3px;
+  margin-bottom: 2px;
   text-transform: uppercase;
 }
 
 .field-content {
-  font-size: 11px;
+  font-size: 9.5px;
   background: #f1f5f9;
-  padding: 8px 10px;
-  border-left: 4px solid #0f4c8a;
-  border-radius: 4px;
-  line-height: 1.5;
+  padding: 5px 8px;
+  border-left: 3px solid #0f4c8a;
+  border-radius: 3px;
+  line-height: 1.45;
 }
 
 /* ── Badge ── */
 .badge {
   display: inline-block;
-  padding: 3px 8px;
-  border-radius: 5px;
+  padding: 2px 7px;
+  border-radius: 4px;
   font-weight: 700;
-  font-size: 9px;
+  font-size: 8px;
 }
 
 .badge-yes {
@@ -348,8 +365,8 @@ body {
 .ticket-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 8.5px;
-  line-height: 1.4;
+  font-size: 7.5px;
+  line-height: 1.35;
 }
 
 .ticket-table thead {
@@ -360,16 +377,16 @@ body {
   background: linear-gradient(135deg, #0f4c8a, #1e3a8a);
   color: #ffffff;
   font-weight: 700;
-  font-size: 8px;
+  font-size: 7px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 6px 5px;
+  letter-spacing: 0.4px;
+  padding: 4px 4px;
   text-align: left;
   white-space: nowrap;
 }
 
 .ticket-table td {
-  padding: 5px 5px;
+  padding: 3px 4px;
   border-bottom: 1px solid #e2e8f0;
   vertical-align: top;
   word-wrap: break-word;
@@ -387,14 +404,13 @@ body {
 .ticket-table .wrap-cell {
   word-break: break-word;
   hyphens: auto;
-  min-width: 60px;
 }
 
 .no-data {
   text-align: center;
   color: #64748b;
   font-style: italic;
-  padding: 20px;
+  padding: 10px;
 }
 
 /* ── Images ── */
@@ -416,17 +432,22 @@ body {
   object-fit: cover;
 }
 
-/* ── Signatures ── */
+/* ── Signatures — keep together, avoid splitting across pages ── */
+.signatures-section {
+  break-inside: avoid;
+  margin-top: 10px;
+}
+
 .signatures-row {
   display: flex;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border-radius: 5px;
   overflow: hidden;
 }
 
 .signature-col {
   flex: 1;
-  padding: 14px;
+  padding: 10px 14px;
 }
 
 .signature-box {
@@ -434,45 +455,42 @@ body {
   flex-direction: column;
   justify-content: flex-end;
   align-items: center;
-  min-height: 110px;
+  min-height: 80px;
 }
 
 .signature-image {
-  max-height: 60px;
+  max-height: 50px;
   object-fit: contain;
-  margin-bottom: -8px;
+  margin-bottom: -6px;
 }
 
 .signature-line {
   width: 100%;
   border-top: 1px solid #64748b;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
 
 .signature-caption {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   text-align: center;
 }
 
 .signature-role {
-  font-size: 9px;
+  font-size: 8px;
   color: #64748b;
   text-align: center;
 }
 
 /* ── Footer ── */
 .footer {
-  position: absolute;
-  bottom: 8mm;
-  left: 10mm;
-  right: 10mm;
-  font-size: 8px;
-  color: #64748b;
+  margin-top: 8px;
+  padding-top: 4px;
+  font-size: 7.5px;
+  color: #94a3b8;
   display: flex;
   justify-content: space-between;
   border-top: 1px solid #e2e8f0;
-  padding-top: 4px;
 }
 `;
 
@@ -480,82 +498,11 @@ body {
 
 export function generateVisitaReportHtml(data: VisitaReportData): string {
   const esProgramada = /programada/i.test(data.tipoVisita);
+  const cols = data.columnasSeleccionadas && data.columnasSeleccionadas.length > 0
+    ? data.columnasSeleccionadas
+    : DEFAULT_COLUMNS;
 
-  // ── PAGE 1: overview ──────────────────────────────────────────────────────
-
-  const page1 = `
-  <div class="page">
-    ${pageHeader(data.logoDataUri)}
-
-    <!-- INFORMACIÓN GENERAL -->
-    <div class="section">
-      ${sectionTitle('Información General')}
-      <div class="info-grid">
-        ${infoRow('Empresa', data.empresaNombre)}
-        ${infoRow('Sede', data.sedeNombre)}
-        ${infoRow('Tipo de Visita', data.tipoVisita)}
-        ${infoRow('Fecha Programada', data.fechaVisita)}
-        ${data.horaProgramada ? infoRow('Hora Programada', data.horaProgramada) : ''}
-        ${infoRow('Técnico Encargado', data.tecnicoEncargado)}
-        ${infoRow('Total de Técnicos', String(data.totalTecnicos))}
-        ${data.otrosTecnicos ? infoRow('Técnicos de Apoyo', data.otrosTecnicos, true) : ''}
-      </div>
-    </div>
-
-    ${
-      data.tieneTicket
-        ? `
-    <div class="section">
-      ${sectionTitle('Información del Ticket')}
-      <div class="info-grid">
-        ${infoRow('N° de Ticket', data.ticketCodigo || '—')}
-        ${infoRow('Activo Asociado', data.activoNombre || '—')}
-        ${infoRow('Usuario Asignado', data.usuarioTicket || '—')}
-      </div>
-    </div>`
-        : ''
-    }
-
-    <!-- RESULTADO -->
-    <div class="section">
-      ${sectionTitle('Resultado de la Visita')}
-      <div class="info-grid">
-        <div class="info-cell">
-          <div class="info-label">Visita Contractual</div>
-          <div class="info-value">${badge(data.cuentaComoVisita)}</div>
-        </div>
-        <div class="info-cell">
-          <div class="info-label">Cambio de Componente</div>
-          <div class="info-value">${badge(data.huboCambioComponente)}</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="footer">
-      <span class="footer-brand">IntisCorp</span>
-      <span>Generado el ${esc(data.fechaGeneracion)}</span>
-    </div>
-  </div>`;
-
-  // ── TICKET TABLE SECTION (auto-flowing, may span multiple pages) ──────────
-
-  const ticketSection = data.ticketsAsociados.length > 0 ? `
-  <div class="table-pages page-break">
-    ${pageHeader(data.logoDataUri)}
-
-    <div class="section">
-      ${sectionTitle('Tickets Asociados')}
-      ${ticketTable(data.ticketsAsociados)}
-    </div>
-  </div>` : '';
-
-  // ── CIERRE PAGE (with signatures) ─────────────────────────────────────────
-
-  const cierrePage = `
-  <div class="page page-break">
-    ${pageHeader(data.logoDataUri)}
-
-    ${!esProgramada ? `
+  const cierreFields = !esProgramada ? `
     <div class="section">
       ${sectionTitle('Cierre de Visita')}
       ${fieldBlock('Diagnóstico', data.diagnostico)}
@@ -567,18 +514,7 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
     <div class="section">
       ${sectionTitle('Evidencia Fotográfica del Cierre')}
       ${imagesGrid(data.cierreImagenes, 'Cierre')}
-    </div>` : ''}` : ''}
-
-    <div class="section">
-      ${sectionTitle('Firmas de Conformidad')}
-      ${signatureBlock(data.firmaTecnicoDataUri, data.tecnicoFirmaNombre || data.tecnicoEncargado, data.firmaClienteDataUri, data.clienteNombre)}
-    </div>
-
-    <div class="footer">
-      <span class="footer-brand">IntisCorp</span>
-      <span>Generado el ${esc(data.fechaGeneracion)}</span>
-    </div>
-  </div>`;
+    </div>` : ''}` : '';
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -589,9 +525,57 @@ export function generateVisitaReportHtml(data: VisitaReportData): string {
   <style>${CSS}</style>
 </head>
 <body>
-  ${page1}
-  ${ticketSection}
-  ${cierrePage}
+<div class="wrapper">
+
+  ${pageHeader(data.logoDataUri)}
+
+  <!-- INFORMACIÓN GENERAL -->
+  <div class="section">
+    ${sectionTitle('Información General')}
+    <div class="info-grid">
+      ${infoRow('Empresa', data.empresaNombre)}
+      ${infoRow('Sede', data.sedeNombre)}
+      ${infoRow('Tipo de Visita', data.tipoVisita)}
+      ${infoRow('Fecha Programada', data.fechaVisita)}
+      ${data.horaProgramada ? infoRow('Hora Programada', data.horaProgramada) : ''}
+      ${infoRow('Técnico Encargado', data.tecnicoEncargado)}
+      ${infoRow('Total de Técnicos', String(data.totalTecnicos))}
+      ${data.otrosTecnicos ? infoRow('Técnicos de Apoyo', data.otrosTecnicos, true) : ''}
+      ${infoRow('Visita Contractual', data.cuentaComoVisita ? '✓ SÍ' : '✗ NO')}
+      ${infoRow('Cambio de Componente', data.huboCambioComponente ? '✓ SÍ' : '✗ NO')}
+    </div>
+  </div>
+
+  ${data.tieneTicket ? `
+  <div class="section">
+    ${sectionTitle('Información del Ticket')}
+    <div class="info-grid">
+      ${infoRow('N° de Ticket', data.ticketCodigo || '—')}
+      ${infoRow('Activo Asociado', data.activoNombre || '—')}
+      ${infoRow('Usuario Asignado', data.usuarioTicket || '—')}
+    </div>
+  </div>` : ''}
+
+  ${data.ticketsAsociados.length > 0 ? `
+  <div class="section">
+    ${sectionTitle('Tickets Asociados')}
+    ${ticketTable(data.ticketsAsociados, cols)}
+  </div>` : ''}
+
+  ${cierreFields}
+
+  <!-- FIRMAS — se mantienen juntas, fluyen al final -->  
+  <div class="signatures-section">
+    ${sectionTitle('Firmas de Conformidad')}
+    ${signatureBlock(data.firmaTecnicoDataUri, data.tecnicoFirmaNombre || data.tecnicoEncargado, data.firmaClienteDataUri, data.clienteNombre)}
+  </div>
+
+  <div class="footer">
+    <span>IntisCorp · Sistema de Gestión de Visitas</span>
+    <span>Generado el ${esc(data.fechaGeneracion)}</span>
+  </div>
+
+</div>
 </body>
 </html>`;
 }
