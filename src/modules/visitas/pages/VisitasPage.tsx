@@ -95,6 +95,7 @@ const estadoBadgeClasses: Record<EstadoVisita, string> = {
   PENDIENTE_PROGRAMACION: 'bg-slate-100 text-slate-700 border-slate-200',
   PROGRAMADA:             'bg-blue-50  text-blue-700  border-blue-200',
   EN_PROCESO:             'bg-amber-50 text-amber-700 border-amber-200',
+  ESPERA_FIRMA:           'bg-orange-50 text-orange-700 border-orange-200',
   FINALIZADA:             'bg-emerald-50 text-emerald-700 border-emerald-200',
   CANCELADA:              'bg-red-50   text-red-700   border-red-200',
 };
@@ -154,6 +155,7 @@ export default function VisitasPage() {
       PENDIENTE_PROGRAMACION: 0,
       PROGRAMADA: 0,
       EN_PROCESO: 0,
+      ESPERA_FIRMA: 0,
       FINALIZADA: 0,
       CANCELADA: 0,
     } as Record<EstadoVisita, number>;
@@ -264,6 +266,10 @@ export default function VisitasPage() {
       const visitasRaw = response.data || response || [];
       const visitasNormalizadas = Array.isArray(visitasRaw)
         ? visitasRaw.map((visita: any) => {
+            const estadoRaw = String(visita?.estado || visita?.estado_visita || '').toUpperCase().trim();
+            const estadoNormalizado = estadoRaw === 'EN_CURSO'
+              ? 'EN_PROCESO'
+              : (estadoRaw || 'PENDIENTE_PROGRAMACION');
             const tecnicosRaw = visita.tecnicosAsignados || visita.tecnicos_asignados || visita.tecnicos || [];
             const tecnicosAsignados = Array.isArray(tecnicosRaw)
               ? tecnicosRaw.map((t: any) => ({
@@ -278,7 +284,7 @@ export default function VisitasPage() {
               fechaProgramada: visita?.fechaProgramada || visita?.fecha_programada || visita?.fecha || '',
               horaProgramada: visita?.horaProgramada || visita?.hora_programada || undefined,
               tipoVisita: visita?.tipoVisita || visita?.tipo_visita || visita?.tipo || '',
-              estado: visita?.estado || visita?.estado_visita || 'PENDIENTE_PROGRAMACION',
+              estado: estadoNormalizado,
               tecnicosAsignadosCount: visita?.tecnicosAsignadosCount ?? visita?.tecnicos_asignados_count ?? tecnicosAsignados.length,
               encargadoNombre: visita?.encargadoNombre || visita?.encargado_nombre || undefined,
               encargadoId: visita?.encargadoId || visita?.encargado_id || undefined,
@@ -466,6 +472,7 @@ export default function VisitasPage() {
     PENDIENTE_PROGRAMACION: 'bg-slate-100 text-slate-800',
     PROGRAMADA:             'bg-blue-100 text-blue-800',
     EN_PROCESO:             'bg-amber-100 text-amber-800',
+    ESPERA_FIRMA:           'bg-orange-100 text-orange-800',
     FINALIZADA:             'bg-emerald-100 text-emerald-800',
     CANCELADA:              'bg-red-100 text-red-800',
   };
@@ -580,6 +587,7 @@ export default function VisitasPage() {
                 <option value="PENDIENTE_PROGRAMACION">Pendiente Programación</option>
                 <option value="PROGRAMADA">Programada</option>
                 <option value="EN_PROCESO">En Proceso</option>
+                <option value="ESPERA_FIRMA">Espera de Firma</option>
                 <option value="FINALIZADA">Finalizada</option>
                 <option value="CANCELADA">Cancelada</option>
               </StyledSelect>
@@ -661,7 +669,7 @@ export default function VisitasPage() {
               <div className="border-t border-slate-100" />
 
               {/* Fila 2: otros estados */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <StatCard
                   label="Pendiente Programación"
                   value={resumenEstados.PENDIENTE_PROGRAMACION}
@@ -675,6 +683,13 @@ export default function VisitasPage() {
                   accent="border-l-sky-500"
                   textColor="text-sky-900"
                   bgColor="bg-sky-50"
+                />
+                <StatCard
+                  label="Espera de Firma"
+                  value={resumenEstados.ESPERA_FIRMA}
+                  accent="border-l-orange-500"
+                  textColor="text-orange-900"
+                  bgColor="bg-orange-50"
                 />
                 <StatCard
                   label="Canceladas"

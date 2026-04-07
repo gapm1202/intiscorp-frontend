@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { Visita, EstadoVisita } from '../types';
+import { obtenerReportePdfVisita } from '../services/visitasService';
 import { useNavigate } from 'react-router-dom';
 
 interface VisitasCalendarViewProps {
@@ -30,6 +31,21 @@ export default function VisitasCalendarView({
 
   const [currentMonth, setCurrentMonth] = useState(() => parseMonthToDate(mes));
   const [visitaSeleccionada, setVisitaSeleccionada] = useState<Visita | null>(null);
+  const [loadingPdfId, setLoadingPdfId] = useState<string | null>(null);
+
+  const handleVerReporte = async (visita: Visita) => {
+    const visitaId = String(visita._id);
+    setLoadingPdfId(visitaId);
+    try {
+      const pdfUrl = await obtenerReportePdfVisita(visitaId);
+      window.open(pdfUrl, '_blank');
+    } catch (error) {
+      console.error('Error obteniendo reporte PDF:', error);
+      alert(error instanceof Error ? error.message : 'No se pudo obtener el reporte PDF');
+    } finally {
+      setLoadingPdfId(null);
+    }
+  };
 
   useEffect(() => {
     setCurrentMonth(parseMonthToDate(mes));
@@ -88,6 +104,7 @@ export default function VisitasCalendarView({
       PENDIENTE_PROGRAMACION: '⏳',
       PROGRAMADA: '📅',
       EN_PROCESO: '🔵',
+      ESPERA_FIRMA: '✍️',
       FINALIZADA: '✅',
       CANCELADA: '❌',
     };
@@ -110,6 +127,7 @@ export default function VisitasCalendarView({
     const map: Record<EstadoVisita, string> = {
       PROGRAMADA: 'bg-blue-600',
       EN_PROCESO: 'bg-amber-500',
+      ESPERA_FIRMA: 'bg-orange-500',
       FINALIZADA: 'bg-emerald-600',
       CANCELADA: 'bg-red-500',
       PENDIENTE_PROGRAMACION: 'bg-slate-400',
@@ -265,6 +283,7 @@ export default function VisitasCalendarView({
             { color: 'bg-slate-400', label: 'Pendiente' },
             { color: 'bg-blue-500', label: 'Programada' },
             { color: 'bg-amber-500', label: 'En Curso' },
+            { color: 'bg-orange-500', label: 'Espera de Firma' },
             { color: 'bg-emerald-500', label: 'Finalizada' },
             { color: 'bg-red-500', label: 'Cancelada' },
           ].map(({ color, label }) => (
@@ -393,6 +412,24 @@ export default function VisitasCalendarView({
                   title="Las visitas POR_TICKET deben finalizarse desde el ticket con el botón Culminar ticket"
                 >
                   Ir al ticket
+                </button>
+              )}
+              {visitaSeleccionada.estado === 'FINALIZADA' && (
+                <button
+                  onClick={() => handleVerReporte(visitaSeleccionada)}
+                  disabled={loadingPdfId === visitaSeleccionada._id}
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition-colors shadow-sm disabled:opacity-50"
+                  title="Ver reporte PDF con firma de conformidad"
+                >
+                  {loadingPdfId === visitaSeleccionada._id ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                  Ver
                 </button>
               )}
               {(visitaSeleccionada.estado === 'PROGRAMADA' || visitaSeleccionada.estado === 'PENDIENTE_PROGRAMACION') && (

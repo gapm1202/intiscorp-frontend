@@ -1,4 +1,4 @@
-export type EstadoVisita = "PENDIENTE_PROGRAMACION" | "PROGRAMADA" | "EN_PROCESO" | "FINALIZADA" | "CANCELADA";
+export type EstadoVisita = "PENDIENTE_PROGRAMACION" | "PROGRAMADA" | "EN_PROCESO" | "ESPERA_FIRMA" | "FINALIZADA" | "CANCELADA";
 
 export type TipoVisita = "PROGRAMADA" | "POR_TICKET" | "PREVENTIVO";
 
@@ -45,6 +45,7 @@ export interface ResumenContractualVisitas {
   pendienteProgramacion: number;
   programadas: number;
   enCurso: number;
+  esperaFirma: number;
   finalizadas: number;
   canceladas: number;
   total: number;

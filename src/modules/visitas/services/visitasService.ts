@@ -423,3 +423,51 @@ export async function validarLimiteContractual(empresaId: string, mes: string): 
 
   return await res.json();
 }
+
+// GET obtener reporte PDF de visita finalizada (con firma de conformidad)
+export async function obtenerReportePdfVisita(visitaId: string): Promise<string> {
+  const url = `${API_BASE}/api/visitas/${visitaId}/reporte-pdf`;
+  const token = getToken();
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    const json = safeParseJson(text);
+    throw new Error(
+      typeof json?.message === 'string'
+        ? json.message
+        : `Error obteniendo reporte PDF: ${res.status}`,
+    );
+  }
+
+  const contentType = res.headers.get('Content-Type') || '';
+
+  // Si devuelve PDF directo como blob
+  if (contentType.includes('application/pdf')) {
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  }
+
+  // Si devuelve JSON con pdfBase64 o pdfUrl
+  const json = await res.json();
+  if (json.pdfUrl) {
+    return json.pdfUrl;
+  }
+  if (json.pdfBase64) {
+    const byteChars = atob(json.pdfBase64);
+    const byteNumbers = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) {
+      byteNumbers[i] = byteChars.charCodeAt(i);
+    }
+    const blob = new Blob([byteNumbers], { type: 'application/pdf' });
+    return URL.createObjectURL(blob);
+  }
+
+  throw new Error('El servidor no devolvió un PDF válido');
+}

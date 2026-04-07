@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Visita, EstadoVisita } from '../types';
-import { actualizarVisita, cancelarVisita } from '../services/visitasService';
+import { actualizarVisita, cancelarVisita, obtenerReportePdfVisita } from '../services/visitasService';
 import ConfirmModal from '../../../components/ui/ConfirmModal';
 
 interface VisitasTableViewProps {
@@ -21,6 +21,7 @@ export default function VisitasTableView({
 }: VisitasTableViewProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [loadingPdfId, setLoadingPdfId] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({
     key: 'fechaProgramada',
     direction: 'desc',
@@ -100,6 +101,20 @@ export default function VisitasTableView({
       } finally {
         setLoading(false);
       }
+    }
+  };
+
+  const handleVerReporte = async (visita: Visita) => {
+    const visitaId = String(visita._id);
+    setLoadingPdfId(visitaId);
+    try {
+      const pdfUrl = await obtenerReportePdfVisita(visitaId);
+      window.open(pdfUrl, '_blank');
+    } catch (error) {
+      console.error('Error obteniendo reporte PDF:', error);
+      alert(error instanceof Error ? error.message : 'No se pudo obtener el reporte PDF');
+    } finally {
+      setLoadingPdfId(null);
     }
   };
 
@@ -294,7 +309,7 @@ export default function VisitasTableView({
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-3 py-1 rounded-md text-xs font-bold border ${estadoColor[visita.estado]}`}>
                       <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70 mr-1.5" />
-                      {visita.estado}
+                      {visita.estado === 'ESPERA_FIRMA' ? 'ESPERA DE FIRMA' : visita.estado}
                     </span>
                   </td>
 
@@ -377,6 +392,18 @@ export default function VisitasTableView({
                         </div>
                       )}
 
+                      {visita.estado === 'ESPERA_FIRMA' && (
+                        <span
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-orange-50 text-orange-700 text-xs font-medium border border-orange-200"
+                          title="Esperando la firma de conformidad del cliente"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                          Esperando firma
+                        </span>
+                      )}
+
                       {(visita.estado === 'PROGRAMADA' || visita.estado === 'PENDIENTE_PROGRAMACION') && (
                         <button
                           onClick={() => onEditarVisita(visita)}
@@ -403,7 +430,26 @@ export default function VisitasTableView({
                         </button>
                       )}
 
-                      {!puedeCambiarEstado && (
+                      {visita.estado === 'FINALIZADA' && (
+                        <button
+                          onClick={() => handleVerReporte(visita)}
+                          disabled={loadingPdfId === visita._id}
+                          title="Ver reporte PDF con firma de conformidad"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-sm"
+                        >
+                          {loadingPdfId === visita._id ? (
+                            <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : (
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          )}
+                          Ver
+                        </button>
+                      )}
+
+                      {!puedeCambiarEstado && visita.estado !== 'FINALIZADA' && (
                         <span className="inline-flex items-center justify-center w-7 h-7 rounded-md text-slate-300 cursor-not-allowed" title="No se puede modificar este estado">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3H4v2h16V7h-2.5z" />
