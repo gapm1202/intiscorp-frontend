@@ -159,9 +159,12 @@ const signatureBlock = (
     <div class="signature-divider"></div>
     <div class="signature-col">
       <div class="signature-box">
+        <!-- FIRMA_CLIENTE_PLACEHOLDER -->
+        <div data-firma="cliente">
         ${firmaClienteDataUri
           ? `<img class="signature-image" src="${firmaClienteDataUri}" alt="Firma del cliente" />`
           : `<div class="signature-blank"></div>`}
+        </div>
         <div class="signature-line"></div>
         <div class="signature-caption">${esc(clienteNombre || 'Cliente')}</div>
         <div class="signature-role">Firma de Conformidad</div>

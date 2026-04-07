@@ -238,6 +238,7 @@ export async function finalizarVisita(visitaId: string, payload: FinalizarVisita
 
 export interface EnviarResumenVisitaCorreoPayload {
   destinatarios: string[];
+  html: string;
   pdfBase64: string;
   pdfFileName: string;
   resumen: {

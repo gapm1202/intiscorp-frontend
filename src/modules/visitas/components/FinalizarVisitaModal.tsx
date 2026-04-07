@@ -455,6 +455,8 @@ export default function FinalizarVisitaModal({
   // ─────────────────────────────────────────────────────────────────
   //  PDF GENERATION — HTML → Puppeteer (pdf-server.cjs)
   // ─────────────────────────────────────────────────────────────────
+  const ultimoHtmlGenerado = { current: '' };
+
   const generarResumenVisitaPdfBase64 = async (): Promise<string> => {
     // ── Logo as data URI ────────────────────────────────────────────
     let logoDataUri: string | undefined;
@@ -578,6 +580,7 @@ export default function FinalizarVisitaModal({
     };
 
     const html = generateVisitaReportHtml(reportData);
+    ultimoHtmlGenerado.current = html;
 
     const visitaPayload = {
       // IDs
@@ -765,6 +768,7 @@ export default function FinalizarVisitaModal({
           const pdfBase64 = await generarResumenVisitaPdfBase64();
           await enviarResumenVisitaCorreo(String(visitaId), {
             destinatarios: destinatariosSeleccionados,
+            html: ultimoHtmlGenerado.current,
             pdfBase64,
             pdfFileName: `resumen-visita-${visita._id}.pdf`,
             resumen: {
