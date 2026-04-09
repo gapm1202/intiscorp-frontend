@@ -169,6 +169,23 @@ export default function VisitasPage() {
     return base;
   }, [visitas]);
 
+  // Cálculo del total mensual esperado según frecuencia
+  const frecuencia = resumen?.visitaFrecuencia ?? contratoActivo?.visitaFrecuencia ?? '';
+  const cantidadVisitasContractuales = resumen?.cantidadVisitas ?? contratoActivo?.cantidadVisitas ?? 0;
+  const totalMensualEsperado = useMemo(() => {
+    if (!frecuencia || !cantidadVisitasContractuales) return 0;
+    const freq = frecuencia.toLowerCase();
+    if (freq.includes('semanal')) return cantidadVisitasContractuales * 5; // Ejemplo: semanal con 3 = 15 mensual
+    if (freq.includes('mensual')) return cantidadVisitasContractuales;
+    if (freq.includes('quincenal')) return cantidadVisitasContractuales * 2;
+    if (freq.includes('diario')) return cantidadVisitasContractuales * 30;
+    // Default: asumir mensual
+    return cantidadVisitasContractuales;
+  }, [frecuencia, cantidadVisitasContractuales]);
+
+  // Pendiente Programación = total mensual esperado - visitas finalizadas
+  const pendienteProgramacionCalculado = Math.max(0, totalMensualEsperado - resumenEstados.FINALIZADA);
+
   // Cargar empresas al iniciar
   useEffect(() => {
     const cargarEmpresas = async () => {
@@ -514,6 +531,13 @@ export default function VisitasPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-5">
+        {!filtros.empresaId && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <p className="text-amber-800 text-sm font-medium">
+              Selecciona una empresa para activar el botón Nueva Visita
+            </p>
+          </div>
+        )}
 
         {/* ── Panel de Filtros ── */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
@@ -672,7 +696,7 @@ export default function VisitasPage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <StatCard
                   label="Pendiente Programación"
-                  value={resumenEstados.PENDIENTE_PROGRAMACION}
+                  value={pendienteProgramacionCalculado}
                   accent="border-l-slate-400"
                   textColor="text-slate-800"
                   bgColor="bg-slate-50"
