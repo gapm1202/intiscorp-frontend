@@ -47,6 +47,9 @@ export default function FinalizarVisitaModal({
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [cargandoUsuarios, setCargandoUsuarios] = useState(false);
   const [destinatariosSeleccionados, setDestinatariosSeleccionados] = useState<string[]>([]);
+  const [usuarioAsignadoActivo, setUsuarioAsignadoActivo] = useState<string>('');
+  const [usuarioNoAsistio, setUsuarioNoAsistio] = useState(false);
+  const [motivoCambioUsuario, setMotivoCambioUsuario] = useState<string>('');
   const [mostrarSelectorUsuarios, setMostrarSelectorUsuarios] = useState(false);
   const [busquedaUsuario, setBusquedaUsuario] = useState('');
   const [ticketsResueltosDia, setTicketsResueltosDia] = useState<Ticket[]>([]);
@@ -436,9 +439,13 @@ export default function FinalizarVisitaModal({
   };
 
   const toggleDestinatario = (correo: string) => {
-    setDestinatariosSeleccionados((prev) =>
-      prev.includes(correo) ? prev.filter((c) => c !== correo) : [...prev, correo]
-    );
+    setDestinatariosSeleccionados((prev) => {
+      if (prev.includes(correo)) {
+        return prev.filter((c) => c !== correo);
+      }
+      // Solo permitir un destinatario, reemplazar el anterior
+      return [correo];
+    });
   };
 
   // ─────────────────────────────────────────────────────────────────
@@ -691,6 +698,12 @@ export default function FinalizarVisitaModal({
           setActivo(activoEnriquecido);
           const nombreUsuario = (activoDelTicket as unknown as Record<string, unknown>).usuario_nombre as string || (ticket as unknown as Record<string, unknown>).usuario_nombre as string || '';
           if (nombreUsuario) setUsuarioNombreTicket(nombreUsuario);
+          
+          // Extraer correo del usuario asignado al activo
+          const correoUsuarioActivo = (activoDelTicket as unknown as Record<string, unknown>).correo_usuario as string || (activoDelTicket as unknown as Record<string, unknown>).usuario_correo as string || '';
+          if (correoUsuarioActivo) {
+            setUsuarioAsignadoActivo(correoUsuarioActivo);
+          }
         }
       } catch (error) {
         console.error('Error cargando activo:', error);
@@ -701,13 +714,64 @@ export default function FinalizarVisitaModal({
     cargarActivo();
   }, [visita]);
 
+  // Seleccionar automáticamente al usuario asignado al activo cuando sea POR_TICKET
+  useEffect(() => {
+    const esPorTicket = visita.tipoVisita === 'POR_TICKET';
+    if (esPorTicket && usuarioAsignadoActivo && !usuarioNoAsistio) {
+      if (!destinatariosSeleccionados.includes(usuarioAsignadoActivo)) {
+        setDestinatariosSeleccionados([usuarioAsignadoActivo]);
+      }
+    }
+  }, [usuarioAsignadoActivo, usuarioNoAsistio, visita.tipoVisita]);
+
+  const handleNoAsistio = () => {
+    if (!usuarioNoAsistio) {
+      // Marcando "No asistió" - desmarcar usuario asignado y limpiar
+      setDestinatariosSeleccionados([]);
+      setMotivoCambioUsuario('');
+      setUsuarioNoAsistio(true);
+    } else {
+      // Desmarcando "No asistió" - volver al usuario asignado
+      setDestinatariosSeleccionados(usuarioAsignadoActivo ? [usuarioAsignadoActivo] : []);
+      setMotivoCambioUsuario('');
+      setUsuarioNoAsistio(false);
+    }
+  };
+
+  const handleDestinatarioClick = (correo: string) => {
+    const esPorTicket = visita.tipoVisita === 'POR_TICKET' || Boolean(visita.ticketId);
+    
+    if (esPorTicket && usuarioNoAsistio) {
+      // Si "No asistió" está activo, solo permitir seleccionar usuarios distintos al asignado
+      if (correo === usuarioAsignadoActivo) {
+        return; // Bloqueado
+      }
+      toggleDestinatario(correo);
+    } else if (esPorTicket && !usuarioNoAsistio) {
+      // Si "No asistió" NO está activo, no permitir cambios
+      return;
+    } else if (!esPorTicket) {
+      toggleDestinatario(correo);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!esProgramada && (!diagnostico.trim() || !resolucion.trim() || !recomendacion.trim())) { onError('Completa Diagnóstico, Resolución y Recomendación para finalizar la visita'); return; }
     if (cuentaComoVisita === null) { onError('Debes indicar si cuenta como visita contractual'); return; }
     if (!esProgramada && hayChangioComponente === null) { onError('Debes indicar si se realizó cambio de componente'); return; }
-    if (destinatariosSeleccionados.length === 0) { onError('Debes seleccionar al menos un destinatario para la notificación por correo'); return; }
+    if (destinatariosSeleccionados.length === 0) { onError('Debes seleccionar un destinatario para la notificación por correo'); return; }
+    
+    // Validar motivo de cambio de usuario para visitas POR_TICKET
+    const esPorTicket = visita.tipoVisita === 'POR_TICKET' || Boolean(visita.ticketId);
+    if (esPorTicket && usuarioNoAsistio && destinatariosSeleccionados.length > 0) {
+      const destinatarioEs = destinatariosSeleccionados[0];
+      if (destinatarioEs !== usuarioAsignadoActivo && !motivoCambioUsuario.trim()) {
+        onError('Debes explicar el motivo por el cual se notifica a un usuario diferente al asignado al activo');
+        return;
+      }
+    }
 
     const firmaSeleccionada = getFirmaSeleccionadaDataUri() || await generarFirmaAutomaticaDataUri(tecnicoFirmaNombre);
     if (!firmaSeleccionada) {
@@ -758,6 +822,7 @@ export default function FinalizarVisitaModal({
         ...(kbEntryId ? { kb_entry_id: kbEntryId } : {}),
         ...(destinatariosSeleccionados.length > 0 && { destinatariosCorreo: destinatariosSeleccionados }),
         ...(cuentaComoVisita && ticketsResueltosSeleccionados.length > 0 && { ticketsResueltosAsociados: ticketsResueltosSeleccionados }),
+        ...(usuarioNoAsistio && motivoCambioUsuario.trim() && { motivoCambioUsuarioNotificacion: motivoCambioUsuario.trim() }),
       };
 
       const response = await finalizarVisita(String(visitaId), payload, cierreImages.length > 0 ? cierreImages : undefined);
@@ -1321,6 +1386,44 @@ export default function FinalizarVisitaModal({
               {/* ── 4. Notificación por correo ── */}
               <SectionCard title="Notificación por Correo" icon={<MailIcon />} accent="#0369A1">
                 <div className="p-5 space-y-3" ref={selectorRef}>
+                  
+                  {/* Botón "No asistió" para visitas POR_TICKET */}
+                  {(visita.tipoVisita === 'POR_TICKET' || visita.ticketId) && (
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: '#F8F4FF', border: '1.5px solid #E9D5FF' }}>
+                      <button
+                        type="button"
+                        onClick={handleNoAsistio}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all"
+                        style={usuarioNoAsistio
+                          ? { background: '#DC2626', color: 'white', border: '1.5px solid #DC2626' }
+                          : { background: 'white', color: '#DC2626', border: '1.5px solid #FECACA' }}
+                        onMouseEnter={e => {
+                          if (usuarioNoAsistio) {
+                            (e.currentTarget as HTMLElement).style.background = '#B91C1C';
+                          } else {
+                            (e.currentTarget as HTMLElement).style.background = '#FFE4E4';
+                          }
+                        }}
+                        onMouseLeave={e => {
+                          if (usuarioNoAsistio) {
+                            (e.currentTarget as HTMLElement).style.background = '#DC2626';
+                          } else {
+                            (e.currentTarget as HTMLElement).style.background = 'white';
+                          }
+                        }}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4v2m0 4v2m0 4v2M9 5l-2-2M5 9l-2 2m12-12l2-2m4 2l2 2" />
+                        </svg>
+                        {usuarioNoAsistio ? 'Usuario cambió' : 'No asistió'}
+                      </button>
+                      <p className="text-xs font-medium" style={{ color: '#7C3AED' }}>
+                        {usuarioNoAsistio 
+                          ? 'El usuario asignado al activo no asistió. Puedes seleccionar otro usuario para notificar.' 
+                          : 'Indica si el usuario asignado al activo no asistió a la visita.'}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Chips de destinatarios */}
                   {destinatariosSeleccionados.length > 0 && (
@@ -1364,8 +1467,8 @@ export default function FinalizarVisitaModal({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                       {destinatariosSeleccionados.length > 0
-                        ? `${destinatariosSeleccionados.length} destinatario${destinatariosSeleccionados.length !== 1 ? 's' : ''} seleccionado${destinatariosSeleccionados.length !== 1 ? 's' : ''}`
-                        : 'Seleccionar destinatarios...'}
+                        ? `1 destinatario seleccionado`
+                        : 'Seleccionar destinatario...'}
                     </span>
                     <svg className={`w-4 h-4 transition-transform ${mostrarSelectorUsuarios ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -1411,27 +1514,35 @@ export default function FinalizarVisitaModal({
                             const correo = u.correoPrincipal || u.correo;
                             const uid = String(u.id || u._id);
                             const checked = destinatariosSeleccionados.includes(correo);
+                            const esUsuarioAsignado = correo === usuarioAsignadoActivo;
+                            const esPorTicket = visita.tipoVisita === 'POR_TICKET' || Boolean(visita.ticketId);
+                            const bloqueado = esPorTicket && usuarioNoAsistio && esUsuarioAsignado;
+                            
                             return (
                               <div key={uid}
                                 role="checkbox"
                                 aria-checked={checked}
-                                tabIndex={0}
-                                onClick={() => toggleDestinatario(correo)}
+                                tabIndex={bloqueado ? -1 : 0}
+                                onClick={() => !bloqueado && handleDestinatarioClick(correo)}
                                 onKeyDown={(e) => {
-                                  if (e.key === ' ' || e.key === 'Enter') {
+                                  if (!bloqueado && (e.key === ' ' || e.key === 'Enter')) {
                                     e.preventDefault();
-                                    toggleDestinatario(correo);
+                                    handleDestinatarioClick(correo);
                                   }
                                 }}
-                                className="flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors"
-                                style={{ background: checked ? '#EFF6FF' : 'white' }}
-                                onMouseEnter={e => { if (!checked) (e.currentTarget as HTMLElement).style.background = '#F8FBFF'; }}
-                                onMouseLeave={e => { if (!checked) (e.currentTarget as HTMLElement).style.background = 'white'; }}
+                                className="flex items-center gap-3 px-4 py-2.5 transition-colors"
+                                style={{
+                                  background: checked ? '#EFF6FF' : 'white',
+                                  cursor: bloqueado ? 'not-allowed' : 'pointer',
+                                  opacity: bloqueado ? 0.5 : 1
+                                }}
+                                onMouseEnter={e => { if (!checked && !bloqueado) (e.currentTarget as HTMLElement).style.background = '#F8FBFF'; }}
+                                onMouseLeave={e => { if (!checked && !bloqueado) (e.currentTarget as HTMLElement).style.background = 'white'; }}
                               >
                                 <div className="w-4 h-4 rounded flex items-center justify-center shrink-0 transition-all"
                                   style={checked
                                     ? { background: '#1563C8', border: '2px solid #1563C8' }
-                                    : { background: 'white', border: '2px solid #CBD5E1' }}>
+                                    : { background: 'white', border: `2px solid ${bloqueado ? '#E5E7EB' : '#CBD5E1'}` }}>
                                   {checked && (
                                     <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
                                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -1442,6 +1553,11 @@ export default function FinalizarVisitaModal({
                                   <p className="text-sm font-bold truncate text-slate-800">{u.nombreCompleto}</p>
                                   <p className="text-xs truncate text-slate-400">{correo}</p>
                                 </div>
+                                {bloqueado && (
+                                  <svg className="w-4 h-4 shrink-0 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                                  </svg>
+                                )}
                                 </div>
                             );
                           });
@@ -1449,7 +1565,7 @@ export default function FinalizarVisitaModal({
                       </div>
                       <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: '#F0F9FF', borderTop: '1px solid #DBEAFE' }}>
                         <span className="text-xs font-bold" style={{ color: '#1563C8' }}>
-                          {destinatariosSeleccionados.length} seleccionado{destinatariosSeleccionados.length !== 1 ? 's' : ''}
+                          {destinatariosSeleccionados.length ? '1 seleccionado' : 'Ninguno'}
                         </span>
                         <button type="button" onClick={() => setMostrarSelectorUsuarios(false)}
                           className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
@@ -1458,6 +1574,39 @@ export default function FinalizarVisitaModal({
                           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                         >Cerrar</button>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Campo de motivo si se seleccionó un usuario diferente al asignado */}
+                  {(visita.tipoVisita === 'POR_TICKET' || visita.ticketId) && 
+                   usuarioNoAsistio && 
+                   destinatariosSeleccionados.length > 0 && 
+                   destinatariosSeleccionados[0] !== usuarioAsignadoActivo && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-red-600 flex items-center gap-1">
+                        <span>*</span> Motivo de cambio de usuario a notificar
+                      </label>
+                      <textarea
+                        value={motivoCambioUsuario}
+                        onChange={(e) => setMotivoCambioUsuario(e.target.value)}
+                        placeholder="Explica por qué se notifica a un usuario diferente al asignado al activo (ej: el usuario no asistió, se le contactó pero no respondió, etc.)"
+                        className="w-full px-4 py-3 text-sm rounded-xl outline-none transition-all resize-none"
+                        style={{
+                          border: motivoCambioUsuario.trim() ? '1.5px solid #10B981' : '1.5px solid #FCA5A5',
+                          background: motivoCambioUsuario.trim() ? '#F0FDF4' : '#FEF2F2',
+                          color: '#1F2937'
+                        }}
+                        onFocus={e => {
+                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(220,38,38,0.10)';
+                          e.currentTarget.style.borderColor = '#DC2626';
+                        }}
+                        onBlur={e => {
+                          e.currentTarget.style.boxShadow = 'none';
+                          e.currentTarget.style.borderColor = motivoCambioUsuario.trim() ? '#10B981' : '#FCA5A5';
+                        }}
+                        rows={3}
+                      />
+                      <p className="text-xs font-medium text-slate-500">Este campo es obligatorio.</p>
                     </div>
                   )}
                 </div>
