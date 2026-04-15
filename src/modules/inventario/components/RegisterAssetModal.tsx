@@ -248,8 +248,28 @@ const RegisterAssetModal = ({
         setSerie(String(asset['serie'] ?? ''));
         setAssetId(String(asset['assetId'] ?? asset['codigo'] ?? ''));
         // Set selected group id when editing an asset (may be stored as grupo_id, grupoId, groupId or grupo)
-        const grp = asset['grupo_id'] ?? asset['grupoId'] ?? asset['groupId'] ?? asset['grupo'] ?? asset['group'] ?? '';
-        setSelectedGroupId(grp ? String(grp) : '');
+        const grpRaw = asset['grupo_id'] ?? asset['grupoId'] ?? asset['groupId'] ?? asset['grupo'] ?? asset['group'] ?? '';
+        // grpRaw may be a populated object { _id, nombre, ... } OR a plain string id/name
+        let grpValue = '';
+        if (grpRaw && typeof grpRaw === 'object') {
+          grpValue = String((grpRaw as any)._id ?? (grpRaw as any).id ?? (grpRaw as any).uuid ?? '');
+        } else if (grpRaw) {
+          grpValue = String(grpRaw);
+        }
+        // Resolve: the value may be an _id, id, nombre or codigo — find the matching group
+        // and use its canonical id (same one used as <option value>)
+        if (grpValue && Array.isArray(groups) && groups.length > 0) {
+          const match = groups.find(
+            g => String((g as any).id ?? '') === grpValue
+              || String((g as any)._id ?? '') === grpValue
+              || String((g as any).nombre ?? '') === grpValue
+              || String((g as any).codigo ?? '') === grpValue
+          );
+          if (match) {
+            grpValue = String((match as any).id ?? (match as any)._id ?? grpValue);
+          }
+        }
+        setSelectedGroupId(grpValue);
         // Also set selectedSedeId from editingAsset in case sedeId prop was not provided
         const assetSedeId = String(asset['sede_id'] ?? asset['sedeId'] ?? '');
         if (assetSedeId && !sedeId) setSelectedSedeId(assetSedeId);
@@ -409,6 +429,32 @@ const RegisterAssetModal = ({
       });
   // Depend only on modal open and editing asset id (not whole object); hasInitRef prevents re-runs
   }, [isOpen, editingAsset ? (editingAsset['activo_id'] ?? editingAsset['_id'] ?? editingAsset['id'] ?? editingAsset['assetId'] ?? editingAsset['codigo'] ?? null) : null]);
+
+  // When groups load (async), re-resolve selectedGroupId so the <select> matches an <option>
+  useEffect(() => {
+    if (!isOpen || !editingAsset || !Array.isArray(groups) || groups.length === 0) return;
+    // If selectedGroupId already matches an option, nothing to do
+    if (selectedGroupId && groups.some(g => String((g as any).id ?? (g as any)._id ?? '') === selectedGroupId)) return;
+    // Re-extract from editingAsset and resolve
+    const asset = editingAsset as Record<string, unknown>;
+    const grpRaw = asset['grupo_id'] ?? asset['grupoId'] ?? asset['groupId'] ?? asset['grupo'] ?? asset['group'] ?? '';
+    let grpValue = '';
+    if (grpRaw && typeof grpRaw === 'object') {
+      grpValue = String((grpRaw as any)._id ?? (grpRaw as any).id ?? (grpRaw as any).uuid ?? '');
+    } else if (grpRaw) {
+      grpValue = String(grpRaw);
+    }
+    if (!grpValue) return;
+    const match = groups.find(
+      g => String((g as any).id ?? '') === grpValue
+        || String((g as any)._id ?? '') === grpValue
+        || String((g as any).nombre ?? '') === grpValue
+        || String((g as any).codigo ?? '') === grpValue
+    );
+    if (match) {
+      setSelectedGroupId(String((match as any).id ?? (match as any)._id ?? grpValue));
+    }
+  }, [isOpen, editingAsset, groups, selectedGroupId]);
 
   // When marcasList loads, if we're editing and fabricante is an id, try to map it to the marca name
   useEffect(() => {
