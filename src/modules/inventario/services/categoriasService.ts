@@ -150,8 +150,24 @@ export const updateCategoria = async (id: string, categoria: Partial<Category>):
     
     return data;
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { message?: string } } };
-    // Manejar errores del backend
+    const err = error as { response?: { status?: number; data?: { message?: string } } };
+
+    // Algunos backends solo aceptan PATCH para actualización parcial
+    if (err.response?.status === 404 || err.response?.status === 405) {
+      try {
+        const patchResponse = await axiosClient.patch(`/api/categorias/${id}`, categoria);
+        const patchData = patchResponse.data;
+        if (patchData && typeof patchData === 'object' && 'data' in patchData) {
+          return (patchData as { data: Category }).data;
+        }
+        return patchData;
+      } catch (patchError: unknown) {
+        const patchErr = patchError as { response?: { data?: { message?: string } } };
+        const patchErrorMsg = patchErr.response?.data?.message || 'Error al actualizar la categoría';
+        throw new Error(patchErrorMsg);
+      }
+    }
+
     const errorMsg = err.response?.data?.message || 'Error al actualizar la categoría';
     throw new Error(errorMsg);
   }

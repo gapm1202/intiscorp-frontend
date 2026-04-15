@@ -138,12 +138,14 @@ const TiposActivosPage = () => {
       if (editingCategoryId) {
         const updatePayload: any = { nombre: cat, ...(categoryGroupId ? { grupo_id: categoryGroupId } : {}) };
         const updated = await updateCategoria(editingCategoryId, updatePayload);
-        setCategorias(prev => prev.map(c => c.id === editingCategoryId ? updated : c));
+        setCategorias(prev => prev.map(c => String(c.id ?? '') === String(editingCategoryId) ? updated : c));
+        await fetchCategorias();
         setSuccessMessage('Categoría actualizada exitosamente'); setShowSuccessToast(true); setTimeout(() => setShowSuccessToast(false), 3000);
       } else {
         const payload: any = { nombre: cat, ...(categoryGroupId ? { grupo_id: categoryGroupId } : {}) };
         const created = await createCategoria(payload);
         setCategorias(prev => [created, ...prev]);
+        await fetchCategorias();
         setSuccessMessage('Categoría creada exitosamente'); setShowSuccessToast(true); setTimeout(() => setShowSuccessToast(false), 3000);
         try {
           if ((location as any)?.state?.autoOpenNew) {
