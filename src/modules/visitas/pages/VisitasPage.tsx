@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { Visita, FiltrosVisitas, EstadoVisita, ResumenContractualVisitas } from '../types';
 import { 
   getVisitas, 
@@ -100,8 +101,86 @@ const estadoBadgeClasses: Record<EstadoVisita, string> = {
   CANCELADA:              'bg-red-50   text-red-700   border-red-200',
 };
 
+type PeriodoVisita = 'dia' | 'semana' | 'quincena' | 'mes';
+
+interface MetaPeriodoVisita {
+  tipo: PeriodoVisita;
+  etiqueta: string;
+  inicio: Date;
+  fin: Date;
+}
+
+const parseLocalDate = (dateValue?: string) => {
+  if (!dateValue) return null;
+
+  const normalizedValue = dateValue.trim();
+  if (!normalizedValue) return null;
+
+  const datePart = normalizedValue.includes('T')
+    ? normalizedValue.split('T')[0]
+    : normalizedValue;
+
+  const segments = datePart.split('-').map(Number);
+  if (segments.length !== 3 || segments.some(Number.isNaN)) {
+    const fallbackDate = new Date(normalizedValue);
+    return Number.isNaN(fallbackDate.getTime()) ? null : fallbackDate;
+  }
+
+  const [year, month, day] = segments;
+  return new Date(year, month - 1, day);
+};
+
+const normalizeFrequency = (frequency?: string) => String(frequency || '').trim().toLowerCase();
+
+const getPeriodoActual = (frequency?: string): MetaPeriodoVisita => {
+  const now = new Date();
+  const normalizedFrequency = normalizeFrequency(frequency);
+
+  if (normalizedFrequency.includes('diar')) {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return { tipo: 'dia', etiqueta: 'del dia', inicio: start, fin: end };
+  }
+
+  if (normalizedFrequency.includes('quinc')) {
+    const isFirstHalf = now.getDate() <= 15;
+    const start = new Date(now.getFullYear(), now.getMonth(), isFirstHalf ? 1 : 16);
+    const end = isFirstHalf
+      ? new Date(now.getFullYear(), now.getMonth(), 16)
+      : new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return { tipo: 'quincena', etiqueta: 'de la quincena', inicio: start, fin: end };
+  }
+
+  if (normalizedFrequency.includes('seman')) {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const day = start.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    start.setDate(start.getDate() + diffToMonday);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+
+    return { tipo: 'semana', etiqueta: 'de la semana', inicio: start, fin: end };
+  }
+
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return { tipo: 'mes', etiqueta: 'del mes', inicio: start, fin: end };
+};
+
+const isVisitaContractualRegistrada = (visita: Visita) => {
+  if (visita.estado === 'CANCELADA') return false;
+  if (visita.estado === 'FINALIZADA' && visita.cuentaComoVisitaContractual === false) return false;
+  return true;
+};
+
 export default function VisitasPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [visitas, setVisitas] = useState<Visita[]>([]);
+  const [visitasPeriodoActual, setVisitasPeriodoActual] = useState<Visita[]>([]);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<Toast_Props>({ visible: false, message: '', type: 'info' });
 
@@ -139,6 +218,16 @@ export default function VisitasPage() {
   
   // Contrato activo de la empresa seleccionada
   const [contratoActivo, setContratoActivo] = useState<any>(null);
+
+  useEffect(() => {
+    const empresaIdFromQuery = searchParams.get('empresaId');
+    if (!empresaIdFromQuery) return;
+
+    setFiltros((prev) => {
+      if (prev.empresaId === empresaIdFromQuery) return prev;
+      return { ...prev, empresaId: empresaIdFromQuery };
+    });
+  }, [searchParams]);
 
   const empresaSeleccionada = useMemo(() => {
     if (!filtros.empresaId) return null;
@@ -185,6 +274,43 @@ export default function VisitasPage() {
 
   // Pendiente Programación = total mensual esperado - visitas finalizadas
   const pendienteProgramacionCalculado = Math.max(0, totalMensualEsperado - resumenEstados.FINALIZADA);
+
+  const periodoActual = useMemo(
+    () => getPeriodoActual(resumen?.visitaFrecuencia ?? contratoActivo?.visitaFrecuencia),
+    [resumen?.visitaFrecuencia, contratoActivo?.visitaFrecuencia],
+  );
+
+  const visitasRegistradasPeriodoActual = useMemo(() => {
+    return visitasPeriodoActual.filter((visita) => {
+      if (!isVisitaContractualRegistrada(visita)) return false;
+
+      const fechaVisita = parseLocalDate(visita.fechaProgramada);
+      if (!fechaVisita) return false;
+
+      return fechaVisita >= periodoActual.inicio && fechaVisita < periodoActual.fin;
+    }).length;
+  }, [periodoActual.fin, periodoActual.inicio, visitasPeriodoActual]);
+
+  const visitasFaltantesPeriodoActual = useMemo(() => {
+    const requeridas = Number(cantidadVisitasContractuales) || 0;
+    if (!requeridas) return 0;
+    return Math.max(0, requeridas - visitasRegistradasPeriodoActual);
+  }, [cantidadVisitasContractuales, visitasRegistradasPeriodoActual]);
+
+  const alertaVisitasPeriodicas = useMemo(() => {
+    if (!empresaSeleccionada || !cantidadVisitasContractuales || visitasFaltantesPeriodoActual <= 0) {
+      return null;
+    }
+
+    const empresaNombre = empresaSeleccionada?.nombre || empresaSeleccionada?.razonSocial || 'seleccionada';
+    const etiquetaPeriodo = periodoActual.etiqueta;
+
+    if (visitasRegistradasPeriodoActual === 0) {
+      return `Empresa ${empresaNombre} aún no generas las ${cantidadVisitasContractuales} visitas ${etiquetaPeriodo}`;
+    }
+
+    return `Empresa ${empresaNombre} falta generar ${visitasFaltantesPeriodoActual} visita${visitasFaltantesPeriodoActual === 1 ? '' : 's'} ${etiquetaPeriodo}`;
+  }, [cantidadVisitasContractuales, empresaSeleccionada, periodoActual.etiqueta, visitasFaltantesPeriodoActual, visitasRegistradasPeriodoActual]);
 
   // Cargar empresas al iniciar
   useEffect(() => {
@@ -272,6 +398,52 @@ export default function VisitasPage() {
     cargarVisitas();
   }, [filtros, mesAño]);
 
+  useEffect(() => {
+    if (!filtros.empresaId) {
+      setVisitasPeriodoActual([]);
+      return;
+    }
+
+    cargarVisitasPeriodoActual(String(filtros.empresaId));
+  }, [filtros.empresaId]);
+
+  const normalizarVisitas = (visitasRaw: any[]): Visita[] => {
+    return Array.isArray(visitasRaw)
+      ? visitasRaw.map((visita: any) => {
+          const estadoRaw = String(visita?.estado || visita?.estado_visita || '').toUpperCase().trim();
+          const estadoNormalizado = estadoRaw === 'EN_CURSO'
+            ? 'EN_PROCESO'
+            : (estadoRaw || 'PENDIENTE_PROGRAMACION');
+          const tecnicosRaw = visita.tecnicosAsignados || visita.tecnicos_asignados || visita.tecnicos || [];
+          const tecnicosAsignados = Array.isArray(tecnicosRaw)
+            ? tecnicosRaw.map((t: any) => ({
+                tecnicoId: String(t?.tecnicoId ?? t?.tecnico_id ?? t?.id ?? ''),
+                tecnicoNombre: t?.tecnicoNombre || t?.tecnico_nombre || t?.nombre_completo || t?.nombre || 'Desconocido',
+                esEncargado: Boolean(t?.esEncargado ?? t?.es_encargado ?? t?.encargado ?? t?.responsable),
+              }))
+            : [];
+
+          return {
+            ...visita,
+            _id: String(visita?._id ?? visita?.id ?? ''),
+            fechaProgramada: visita?.fechaProgramada || visita?.fecha_programada || visita?.fecha || '',
+            horaProgramada: visita?.horaProgramada || visita?.hora_programada || undefined,
+            tipoVisita: visita?.tipoVisita || visita?.tipo_visita || visita?.tipo || '',
+            estado: estadoNormalizado,
+            cuentaComoVisitaContractual:
+              visita?.cuentaComoVisitaContractual ??
+              visita?.cuenta_como_visita ??
+              visita?.cuentaComoVisita ??
+              visita?.registroClausura?.cuentaComoVisita,
+            tecnicosAsignadosCount: visita?.tecnicosAsignadosCount ?? visita?.tecnicos_asignados_count ?? tecnicosAsignados.length,
+            encargadoNombre: visita?.encargadoNombre || visita?.encargado_nombre || undefined,
+            encargadoId: visita?.encargadoId || visita?.encargado_id || undefined,
+            tecnicosAsignados,
+          } as Visita;
+        })
+      : [];
+  };
+
   const cargarVisitas = async () => {
     setLoading(true);
     try {
@@ -281,34 +453,7 @@ export default function VisitasPage() {
         limite: 100,
       });
       const visitasRaw = response.data || response || [];
-      const visitasNormalizadas = Array.isArray(visitasRaw)
-        ? visitasRaw.map((visita: any) => {
-            const estadoRaw = String(visita?.estado || visita?.estado_visita || '').toUpperCase().trim();
-            const estadoNormalizado = estadoRaw === 'EN_CURSO'
-              ? 'EN_PROCESO'
-              : (estadoRaw || 'PENDIENTE_PROGRAMACION');
-            const tecnicosRaw = visita.tecnicosAsignados || visita.tecnicos_asignados || visita.tecnicos || [];
-            const tecnicosAsignados = Array.isArray(tecnicosRaw)
-              ? tecnicosRaw.map((t: any) => ({
-                  tecnicoId: String(t?.tecnicoId ?? t?.tecnico_id ?? t?.id ?? ''),
-                  tecnicoNombre: t?.tecnicoNombre || t?.tecnico_nombre || t?.nombre_completo || t?.nombre || 'Desconocido',
-                  esEncargado: Boolean(t?.esEncargado ?? t?.es_encargado ?? t?.encargado ?? t?.responsable),
-                }))
-              : [];
-            return {
-              ...visita,
-              _id: String(visita?._id ?? visita?.id ?? ''),
-              fechaProgramada: visita?.fechaProgramada || visita?.fecha_programada || visita?.fecha || '',
-              horaProgramada: visita?.horaProgramada || visita?.hora_programada || undefined,
-              tipoVisita: visita?.tipoVisita || visita?.tipo_visita || visita?.tipo || '',
-              estado: estadoNormalizado,
-              tecnicosAsignadosCount: visita?.tecnicosAsignadosCount ?? visita?.tecnicos_asignados_count ?? tecnicosAsignados.length,
-              encargadoNombre: visita?.encargadoNombre || visita?.encargado_nombre || undefined,
-              encargadoId: visita?.encargadoId || visita?.encargado_id || undefined,
-              tecnicosAsignados,
-            } as Visita;
-          })
-        : [];
+      const visitasNormalizadas = normalizarVisitas(visitasRaw);
       setVisitas(visitasNormalizadas);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -321,6 +466,20 @@ export default function VisitasPage() {
       mostrarToast('Error al cargar visitas', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cargarVisitasPeriodoActual = async (empresaId: string) => {
+    try {
+      const response = await getVisitas({
+        empresaId,
+        limite: 500,
+      });
+      const visitasRaw = response.data || response || [];
+      setVisitasPeriodoActual(normalizarVisitas(visitasRaw));
+    } catch (error) {
+      console.error('Error loading visitas del periodo actual:', error);
+      setVisitasPeriodoActual([]);
     }
   };
 
@@ -354,6 +513,9 @@ export default function VisitasPage() {
     setEditingVisita(null);
     mostrarToast('Visita actualizada exitosamente', 'success');
     cargarVisitas();
+    if (filtros.empresaId) {
+      cargarVisitasPeriodoActual(String(filtros.empresaId));
+    }
   };
 
   const handleFinalizarVisita = (visita: Visita) => {
@@ -466,6 +628,9 @@ export default function VisitasPage() {
     setShowNewVisitaModal(false);
     mostrarToast('Visita creada exitosamente', 'success');
     cargarVisitas();
+    if (filtros.empresaId) {
+      cargarVisitasPeriodoActual(String(filtros.empresaId));
+    }
   };
 
   const handleVisitaFinalizada = async () => {
@@ -473,6 +638,14 @@ export default function VisitasPage() {
     setVisitaSeleccionada(null);
     mostrarToast('Visita finalizada exitosamente', 'success');
     cargarVisitas();
+    if (filtros.empresaId) {
+      cargarVisitasPeriodoActual(String(filtros.empresaId));
+    }
+  };
+
+  const handleIrAGestionVisitas = () => {
+    const empresaId = filtros.empresaId;
+    navigate(empresaId ? `/admin/visitas?empresaId=${empresaId}` : '/admin/visitas');
   };
 
   const handleFiltroChange = (key: keyof FiltrosVisitas, value: string) => {
@@ -505,7 +678,7 @@ export default function VisitasPage() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       {/* ── Franja superior azul oscuro ── */}
-      <div className="bg-gradient-to-r from-blue-900 via-blue-800 to-blue-700 px-8 py-6">
+      <div className="bg-linear-to-r from-blue-900 via-blue-800 to-blue-700 px-8 py-6">
         <div className="max-w-7xl mx-auto flex items-end justify-between gap-4">
           <div>
             <p className="text-blue-300 text-xs font-semibold uppercase tracking-widest mb-1">
@@ -657,6 +830,30 @@ export default function VisitasPage() {
             </div>
 
             <div className="p-6 space-y-4">
+              {alertaVisitasPeriodicas && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold uppercase tracking-wider text-amber-700">
+                      Alerta contractual activa
+                    </p>
+                    <p className="text-sm font-medium text-amber-950">
+                      {alertaVisitasPeriodicas}
+                    </p>
+                    <p className="text-xs text-amber-800">
+                      Registradas en el periodo actual: {visitasRegistradasPeriodoActual} de {cantidadVisitasContractuales}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleIrAGestionVisitas}
+                    className="inline-flex items-center justify-center rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700"
+                  >
+                    Ir a Gestión de Visitas
+                  </button>
+                </div>
+              )}
+
               {/* Fila 1: datos del contrato + estados principales */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <StatCard

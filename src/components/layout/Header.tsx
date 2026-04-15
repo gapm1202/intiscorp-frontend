@@ -2,6 +2,7 @@ import { useAuth } from "@/context/authHelpers";
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { getContratosProximosAVencer } from '@/modules/empresas/services/contratosService';
+import { getContractualVisitNotifications, type ContractualVisitNotification } from '@/modules/visitas/services/contractualNotificationsService';
 import { useNavigate } from 'react-router-dom';
 
 interface HeaderProps {
@@ -21,25 +22,31 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
   const navigate = useNavigate();
   const notificationRef = useRef<HTMLDivElement>(null);
   const [contratosProximos, setContratosProximos] = useState<ContratoProximoVencer[]>([]);
+  const [visitasContractualesPendientes, setVisitasContractualesPendientes] = useState<ContractualVisitNotification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
-    const cargarContratosProximos = async () => {
+    const cargarNotificaciones = async () => {
       try {
-        const contratos = await getContratosProximosAVencer(30);
+        const [contratos, visitasPendientes] = await Promise.all([
+          getContratosProximosAVencer(30),
+          getContractualVisitNotifications(),
+        ]);
         const contratosNormalizados = (contratos || []).map(c => ({
           ...c,
           diasRestantes: typeof c.diasRestantes === 'string' ? parseInt(c.diasRestantes, 10) : c.diasRestantes
         }));
         setContratosProximos(contratosNormalizados);
+        setVisitasContractualesPendientes(visitasPendientes);
       } catch (error) {
-        console.error('Error al cargar contratos próximos a vencer:', error);
+        console.error('Error al cargar notificaciones del header:', error);
         setContratosProximos([]);
+        setVisitasContractualesPendientes([]);
       }
     };
 
-    cargarContratosProximos();
-    const interval = setInterval(cargarContratosProximos, 5 * 60 * 1000);
+    cargarNotificaciones();
+    const interval = setInterval(cargarNotificaciones, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -47,6 +54,11 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
     setShowNotifications(false);
     navigate(`/admin/empresas/${empresaId}`);
     sessionStorage.setItem(`empresaTab_${empresaId}`, 'contrato');
+  };
+
+  const handleIrAGestionVisitas = (empresaId: string) => {
+    setShowNotifications(false);
+    navigate(`/admin/visitas?empresaId=${empresaId}`);
   };
 
   useEffect(() => {
@@ -78,6 +90,8 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
     return { bg: '#fefce8', icon: '#eab308', badge: '#ca8a04', text: '#a16207' };
   };
 
+  const totalNotifications = contratosProximos.length + visitasContractualesPendientes.length;
+
   return (
     <>
       <style>{`
@@ -99,6 +113,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
         .hdr-dd-logout:hover { background: #fef2f2 !important; color: #dc2626 !important; }
         .hdr-profile-wrap:hover .hdr-dropdown { opacity: 1 !important; visibility: visible !important; }
         .hdr-revisar-btn:hover { background: #0284c7 !important; }
+        .hdr-visitas-btn:hover { background: #d97706 !important; }
       `}</style>
 
       <header style={{
@@ -169,7 +184,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
                 <svg style={{ width: 18, height: 18, display: 'block' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
-                {contratosProximos.length > 0 && (
+                {totalNotifications > 0 && (
                   <span style={{
                     position: 'absolute', top: 4, right: 4,
                     minWidth: 16, height: 16, padding: '0 4px',
@@ -179,7 +194,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
                     border: '1.5px solid #fff',
                     animation: 'pulse-dot 2s infinite',
                   }}>
-                    {contratosProximos.length}
+                    {totalNotifications}
                   </span>
                 )}
               </button>
@@ -206,23 +221,23 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#0c4a6e' }}>Notificaciones</div>
                       <div style={{ fontSize: 11, color: '#64b5d9', marginTop: 2 }}>
-                        {contratosProximos.length} contrato(s) por vencer
+                        {totalNotifications} alerta(s) activas
                       </div>
                     </div>
-                    {contratosProximos.length > 0 && (
+                    {totalNotifications > 0 && (
                       <div style={{
                         padding: '3px 10px', borderRadius: 20,
                         background: '#ef4444', color: '#fff',
                         fontSize: 11, fontWeight: 700,
                       }}>
-                        {contratosProximos.length}
+                        {totalNotifications}
                       </div>
                     )}
                   </div>
 
                   {/* Panel body */}
                   <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-                    {contratosProximos.length === 0 ? (
+                    {totalNotifications === 0 ? (
                       <div style={{ padding: '32px 16px', textAlign: 'center' }}>
                         <div style={{
                           width: 44, height: 44, borderRadius: '50%',
@@ -236,66 +251,151 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
                         <p style={{ fontSize: 12, color: '#93c5d9', margin: 0 }}>Todo al día</p>
                       </div>
                     ) : (
-                      contratosProximos.map((contrato, index) => {
-                        const colors = urgencyColor(contrato.diasRestantes);
-                        return (
-                          <div key={index} className="hdr-notif-row" style={{
-                            padding: '12px 16px',
-                            borderBottom: '1px solid #f0f9ff',
-                            transition: 'background 0.12s',
-                            cursor: 'default',
-                          }}>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                              <div style={{
-                                width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-                                background: colors.bg,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              }}>
-                                <svg style={{ width: 16, height: 16, color: colors.icon }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 12, fontWeight: 600, color: '#0c4a6e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {contrato.empresaNombre}
-                                </div>
-                                <div style={{ fontSize: 11, color: colors.text, marginTop: 2, fontWeight: 500 }}>
-                                  {contrato.diasRestantes === 0
-                                    ? 'Vence hoy'
-                                    : contrato.diasRestantes === 1
-                                    ? 'Vence mañana'
-                                    : `Vence en ${contrato.diasRestantes} días`}
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                                  {!contrato.renovacionAutomatica && (
-                                    <span style={{
-                                      padding: '2px 7px', borderRadius: 20,
-                                      background: '#fef2f2', color: '#dc2626',
-                                      fontSize: 10, fontWeight: 600,
-                                      border: '1px solid #fecaca',
-                                    }}>
-                                      Sin renovación
-                                    </span>
-                                  )}
-                                  <button
-                                    className="hdr-revisar-btn"
-                                    onClick={() => handleRevisarContrato(contrato.empresaId)}
-                                    style={{
-                                      padding: '3px 10px', borderRadius: 6,
-                                      background: '#0ea5e9', color: '#fff',
-                                      border: 'none', cursor: 'pointer',
-                                      fontSize: 10, fontWeight: 600,
-                                      transition: 'background 0.15s',
-                                    }}
-                                  >
-                                    Revisar
-                                  </button>
-                                </div>
-                              </div>
+                      <>
+                        {visitasContractualesPendientes.length > 0 && (
+                          <div style={{ borderBottom: contratosProximos.length > 0 ? '1px solid #e0f2fe' : 'none' }}>
+                            <div style={{
+                              padding: '10px 16px 8px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              letterSpacing: '0.04em',
+                              textTransform: 'uppercase',
+                              color: '#b45309',
+                              background: '#fffbeb',
+                            }}>
+                              Visitas contractuales pendientes
                             </div>
+                            {visitasContractualesPendientes.map((notificacion, index) => (
+                              <div key={`${notificacion.empresaId}-${index}`} className="hdr-notif-row" style={{
+                                padding: '12px 16px',
+                                borderBottom: '1px solid #fef3c7',
+                                transition: 'background 0.12s',
+                                cursor: 'default',
+                                background: '#fffdf7',
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                                  <div style={{
+                                    width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                                    background: '#fff7ed',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  }}>
+                                    <svg style={{ width: 16, height: 16, color: '#ea580c' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 8v4m0 4h.01M10.29 3.86l-7.5 13A1 1 0 003.65 18h16.7a1 1 0 00.86-1.5l-7.5-13a1 1 0 00-1.72 0z" />
+                                    </svg>
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#9a3412', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {notificacion.empresaNombre}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#b45309', marginTop: 2, fontWeight: 500, lineHeight: 1.35 }}>
+                                      {notificacion.mensaje}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                                      <span style={{
+                                        padding: '2px 7px', borderRadius: 20,
+                                        background: '#ffedd5', color: '#c2410c',
+                                        fontSize: 10, fontWeight: 600,
+                                        border: '1px solid #fdba74',
+                                      }}>
+                                        {notificacion.visitasRegistradas}/{notificacion.cantidadVisitas}
+                                      </span>
+                                      <button
+                                        className="hdr-visitas-btn"
+                                        onClick={() => handleIrAGestionVisitas(notificacion.empresaId)}
+                                        style={{
+                                          padding: '3px 10px', borderRadius: 6,
+                                          background: '#f59e0b', color: '#fff',
+                                          border: 'none', cursor: 'pointer',
+                                          fontSize: 10, fontWeight: 600,
+                                          transition: 'background 0.15s',
+                                        }}
+                                      >
+                                        Ir a Gestión
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        );
-                      })
+                        )}
+
+                        {contratosProximos.length > 0 && (
+                          <div>
+                            <div style={{
+                              padding: '10px 16px 8px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              letterSpacing: '0.04em',
+                              textTransform: 'uppercase',
+                              color: '#0c4a6e',
+                              background: '#f8fbff',
+                            }}>
+                              Contratos por vencer
+                            </div>
+                            {contratosProximos.map((contrato, index) => {
+                              const colors = urgencyColor(contrato.diasRestantes);
+                              return (
+                                <div key={index} className="hdr-notif-row" style={{
+                                  padding: '12px 16px',
+                                  borderBottom: '1px solid #f0f9ff',
+                                  transition: 'background 0.12s',
+                                  cursor: 'default',
+                                }}>
+                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                                    <div style={{
+                                      width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                                      background: colors.bg,
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    }}>
+                                      <svg style={{ width: 16, height: 16, color: colors.icon }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      </svg>
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ fontSize: 12, fontWeight: 600, color: '#0c4a6e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {contrato.empresaNombre}
+                                      </div>
+                                      <div style={{ fontSize: 11, color: colors.text, marginTop: 2, fontWeight: 500 }}>
+                                        {contrato.diasRestantes === 0
+                                          ? 'Vence hoy'
+                                          : contrato.diasRestantes === 1
+                                          ? 'Vence mañana'
+                                          : `Vence en ${contrato.diasRestantes} días`}
+                                      </div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                                        {!contrato.renovacionAutomatica && (
+                                          <span style={{
+                                            padding: '2px 7px', borderRadius: 20,
+                                            background: '#fef2f2', color: '#dc2626',
+                                            fontSize: 10, fontWeight: 600,
+                                            border: '1px solid #fecaca',
+                                          }}>
+                                            Sin renovación
+                                          </span>
+                                        )}
+                                        <button
+                                          className="hdr-revisar-btn"
+                                          onClick={() => handleRevisarContrato(contrato.empresaId)}
+                                          style={{
+                                            padding: '3px 10px', borderRadius: 6,
+                                            background: '#0ea5e9', color: '#fff',
+                                            border: 'none', cursor: 'pointer',
+                                            fontSize: 10, fontWeight: 600,
+                                            transition: 'background 0.15s',
+                                          }}
+                                        >
+                                          Revisar
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
