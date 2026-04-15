@@ -145,3 +145,82 @@ export async function getContractualVisitNotifications(): Promise<ContractualVis
     })
     .filter((item): item is ContractualVisitNotification => Boolean(item));
 }
+
+// ─── Visitas próximas (PROGRAMADA dentro de los próximos N días) ───────────
+
+export interface UpcomingVisitNotification {
+  visitaId: string;
+  empresaId: string;
+  empresaNombre: string;
+  sedeNombre?: string;
+  fechaProgramada: string;
+  diasRestantes: number;
+  mensaje: string;
+}
+
+function calcDiasRestantes(fechaProgramada: string): number {
+  const dateStr = String(fechaProgramada).substring(0, 10); // "YYYY-MM-DD"
+  const [year, month, day] = dateStr.split('-').map(Number);
+  if (!year || !month || !day) return NaN;
+
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const visitMidnight = new Date(year, month - 1, day);
+
+  const diffMs = visitMidnight.getTime() - todayMidnight.getTime();
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
+export async function getUpcomingVisitNotifications(diasAnticipacion = 3): Promise<UpcomingVisitNotification[]> {
+  const token = getToken();
+  const params = new URLSearchParams();
+  params.append('estado', 'PROGRAMADA');
+  params.append('limite', '500');
+
+  const url = `${API_BASE}/api/visitas?${params.toString()}`;
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Error fetching upcoming visits: ${res.status} - ${text}`);
+  }
+
+  const data = await res.json();
+  const visitas: any[] = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+
+  return visitas
+    .filter(v => {
+      if (!v?.fechaProgramada) return false;
+      const dias = calcDiasRestantes(String(v.fechaProgramada));
+      return !Number.isNaN(dias) && dias >= 0 && dias <= diasAnticipacion;
+    })
+    .map(v => {
+      const diasRestantes = calcDiasRestantes(String(v.fechaProgramada));
+      const empresaNombre = String(v?.empresaNombre || 'Empresa');
+
+      const mensaje =
+        diasRestantes === 0
+          ? `Hoy es la visita en la empresa ${empresaNombre}`
+          : diasRestantes === 1
+          ? `Falta 1 día para la visita en la empresa ${empresaNombre}`
+          : `Faltan ${diasRestantes} días para la visita en la empresa ${empresaNombre}`;
+
+      return {
+        visitaId: String(v?._id || ''),
+        empresaId: String(v?.empresaId || ''),
+        empresaNombre,
+        sedeNombre: v?.sedeNombre ? String(v.sedeNombre) : undefined,
+        fechaProgramada: String(v.fechaProgramada),
+        diasRestantes,
+        mensaje,
+      } as UpcomingVisitNotification;
+    })
+    .sort((a, b) => a.diasRestantes - b.diasRestantes);
+}

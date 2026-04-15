@@ -2,7 +2,7 @@ import { useAuth } from "@/context/authHelpers";
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { getContratosProximosAVencer } from '@/modules/empresas/services/contratosService';
-import { getContractualVisitNotifications, type ContractualVisitNotification } from '@/modules/visitas/services/contractualNotificationsService';
+import { getContractualVisitNotifications, type ContractualVisitNotification, getUpcomingVisitNotifications, type UpcomingVisitNotification } from '@/modules/visitas/services/contractualNotificationsService';
 import { useNavigate } from 'react-router-dom';
 
 interface HeaderProps {
@@ -23,14 +23,16 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
   const notificationRef = useRef<HTMLDivElement>(null);
   const [contratosProximos, setContratosProximos] = useState<ContratoProximoVencer[]>([]);
   const [visitasContractualesPendientes, setVisitasContractualesPendientes] = useState<ContractualVisitNotification[]>([]);
+  const [visitasProximas, setVisitasProximas] = useState<UpcomingVisitNotification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     const cargarNotificaciones = async () => {
       try {
-        const [contratos, visitasPendientes] = await Promise.all([
+        const [contratos, visitasPendientes, proximas] = await Promise.all([
           getContratosProximosAVencer(30),
           getContractualVisitNotifications(),
+          getUpcomingVisitNotifications(3),
         ]);
         const contratosNormalizados = (contratos || []).map(c => ({
           ...c,
@@ -38,10 +40,12 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
         }));
         setContratosProximos(contratosNormalizados);
         setVisitasContractualesPendientes(visitasPendientes);
+        setVisitasProximas(proximas || []);
       } catch (error) {
         console.error('Error al cargar notificaciones del header:', error);
         setContratosProximos([]);
         setVisitasContractualesPendientes([]);
+        setVisitasProximas([]);
       }
     };
 
@@ -90,7 +94,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
     return { bg: '#fefce8', icon: '#eab308', badge: '#ca8a04', text: '#a16207' };
   };
 
-  const totalNotifications = contratosProximos.length + visitasContractualesPendientes.length;
+  const totalNotifications = contratosProximos.length + visitasContractualesPendientes.length + visitasProximas.length;
 
   return (
     <>
@@ -114,6 +118,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
         .hdr-profile-wrap:hover .hdr-dropdown { opacity: 1 !important; visibility: visible !important; }
         .hdr-revisar-btn:hover { background: #0284c7 !important; }
         .hdr-visitas-btn:hover { background: #d97706 !important; }
+        .hdr-proximas-btn:hover { background: #059669 !important; }
       `}</style>
 
       <header style={{
@@ -252,6 +257,79 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
                       </div>
                     ) : (
                       <>
+                        {visitasProximas.length > 0 && (
+                          <div style={{ borderBottom: (visitasContractualesPendientes.length > 0 || contratosProximos.length > 0) ? '1px solid #d1fae5' : 'none' }}>
+                            <div style={{
+                              padding: '10px 16px 8px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              letterSpacing: '0.04em',
+                              textTransform: 'uppercase',
+                              color: '#065f46',
+                              background: '#ecfdf5',
+                            }}>
+                              Visitas programadas próximas
+                            </div>
+                            {visitasProximas.map((visita, index) => (
+                              <div key={`proxima-${visita.visitaId || index}`} className="hdr-notif-row" style={{
+                                padding: '12px 16px',
+                                borderBottom: '1px solid #d1fae5',
+                                transition: 'background 0.12s',
+                                cursor: 'default',
+                                background: '#f0fdf4',
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                                  <div style={{
+                                    width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                                    background: '#d1fae5',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  }}>
+                                    <svg style={{ width: 16, height: 16, color: '#059669' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#064e3b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {visita.empresaNombre}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#047857', marginTop: 2, fontWeight: 500, lineHeight: 1.35 }}>
+                                      {visita.mensaje}
+                                    </div>
+                                    {visita.sedeNombre && (
+                                      <div style={{ fontSize: 10, color: '#6ee7b7', marginTop: 1 }}>
+                                        {visita.sedeNombre}
+                                      </div>
+                                    )}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                                      <span style={{
+                                        padding: '2px 7px', borderRadius: 20,
+                                        background: visita.diasRestantes === 0 ? '#fef2f2' : '#d1fae5',
+                                        color: visita.diasRestantes === 0 ? '#dc2626' : '#065f46',
+                                        fontSize: 10, fontWeight: 600,
+                                        border: `1px solid ${visita.diasRestantes === 0 ? '#fecaca' : '#6ee7b7'}`,
+                                      }}>
+                                        {visita.diasRestantes === 0 ? 'Hoy' : visita.diasRestantes === 1 ? 'Mañana' : `En ${visita.diasRestantes} días`}
+                                      </span>
+                                      <button
+                                        className="hdr-proximas-btn"
+                                        onClick={() => handleIrAGestionVisitas(visita.empresaId)}
+                                        style={{
+                                          padding: '3px 10px', borderRadius: 6,
+                                          background: '#10b981', color: '#fff',
+                                          border: 'none', cursor: 'pointer',
+                                          fontSize: 10, fontWeight: 600,
+                                          transition: 'background 0.15s',
+                                        }}
+                                      >
+                                        Ver visita
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         {visitasContractualesPendientes.length > 0 && (
                           <div style={{ borderBottom: contratosProximos.length > 0 ? '1px solid #e0f2fe' : 'none' }}>
                             <div style={{
