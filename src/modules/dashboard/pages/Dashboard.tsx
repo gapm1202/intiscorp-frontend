@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Charts from "../components/Charts";
 import { getDashboardStats, type DashboardStats } from "../services/dashboardService";
-import { Package, Building2, FileText, TrendingUp, Activity, BarChart3, PieChart as PieChartIcon } from "lucide-react";
+import { getContratosProximosAVencer } from "@/modules/empresas/services/contratosService";
+import {
+  getContractualVisitNotifications,
+  getUpcomingVisitNotifications,
+  type ContractualVisitNotification,
+  type UpcomingVisitNotification,
+} from "@/modules/visitas/services/contractualNotificationsService";
+import { Package, Building2, FileText, TrendingUp, Activity, BarChart3, PieChart as PieChartIcon, Bell, Calendar, AlertTriangle, Clock } from "lucide-react";
 
 const GlobalStyles = () => (
   <style>{`
@@ -208,6 +216,61 @@ const GlobalStyles = () => (
     }
     .db-asset-date { font-size: 10px; color: #9ca3af; }
 
+    /* ── Pendientes ── */
+    .db-pendientes { margin-bottom: 20px; }
+    .db-pend-list { display: flex; flex-direction: column; gap: 8px; }
+    .db-pend-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 1px solid #eaecf5;
+      background: #fff;
+      transition: box-shadow 0.15s, transform 0.15s;
+      cursor: default;
+    }
+    .db-pend-item:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.06); transform: translateY(-1px); }
+    .db-pend-icon {
+      width: 36px; height: 36px;
+      border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .db-pend-body { flex: 1; min-width: 0; }
+    .db-pend-empresa {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 12px; font-weight: 700; color: #0f1120;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .db-pend-msg { font-size: 11px; color: #6b7280; margin-top: 2px; line-height: 1.4; }
+    .db-pend-badge {
+      font-size: 10px; font-weight: 600;
+      padding: 3px 10px; border-radius: 20px;
+      white-space: nowrap;
+    }
+    .db-pend-action {
+      padding: 4px 12px; border-radius: 8px;
+      border: none; cursor: pointer;
+      font-size: 10px; font-weight: 600; color: #fff;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .db-pend-action:hover { transform: scale(1.04); }
+    .db-pend-empty {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 32px 0; gap: 8px;
+    }
+    .db-pend-empty-icon {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: #f0fdf4;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .db-pend-tabs {
+      display: flex; gap: 4px; margin-bottom: 14px;
+    }
+    .db-pend-tab {
+      padding: 5px 14px; border-radius: 20px; border: none;
+      font-size: 11px; font-weight: 600; cursor: pointer;
+      transition: all 0.15s;
+    }
+
     .db-empty { font-size: 12px; color: #9ca3af; text-align:center; padding: 28px 0; width:100%; }
     .db-loading { display:flex; flex-direction:column; align-items:center; justify-content:center; height:60vh; gap:14px; }
     .db-spinner {
@@ -220,9 +283,23 @@ const GlobalStyles = () => (
   `}</style>
 );
 
+interface ContratoProximoVencer {
+  empresaId: string;
+  empresaNombre: string;
+  fechaFin: string;
+  diasRestantes: number;
+  renovacionAutomatica: boolean;
+}
+
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const [contratosProximos, setContratosProximos] = useState<ContratoProximoVencer[]>([]);
+  const [visitasPendientes, setVisitasPendientes] = useState<ContractualVisitNotification[]>([]);
+  const [visitasProximas, setVisitasProximas] = useState<UpcomingVisitNotification[]>([]);
+  const [pendTab, setPendTab] = useState<'all' | 'proximas' | 'contractuales' | 'contratos'>('all');
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -238,6 +315,46 @@ const Dashboard = () => {
     };
     fetchStats();
   }, []);
+
+  useEffect(() => {
+    const cargarPendientes = async () => {
+      try {
+        const [contratos, contractuales, proximas] = await Promise.all([
+          getContratosProximosAVencer(30),
+          getContractualVisitNotifications(),
+          getUpcomingVisitNotifications(3),
+        ]);
+        setContratosProximos((contratos || []).map(c => ({
+          ...c,
+          diasRestantes: typeof c.diasRestantes === 'string' ? parseInt(c.diasRestantes as any, 10) : c.diasRestantes,
+        })));
+        setVisitasPendientes(contractuales || []);
+        setVisitasProximas(proximas || []);
+      } catch (err) {
+        console.error('Error cargando pendientes:', err);
+      }
+    };
+    cargarPendientes();
+  }, []);
+
+  const totalPendientes = contratosProximos.length + visitasPendientes.length + visitasProximas.length;
+
+  const filteredItems = useMemo(() => {
+    type PendItem = { type: 'proxima'; data: UpcomingVisitNotification }
+      | { type: 'contractual'; data: ContractualVisitNotification }
+      | { type: 'contrato'; data: ContratoProximoVencer };
+    const items: PendItem[] = [];
+    if (pendTab === 'all' || pendTab === 'proximas') {
+      visitasProximas.forEach(v => items.push({ type: 'proxima', data: v }));
+    }
+    if (pendTab === 'all' || pendTab === 'contractuales') {
+      visitasPendientes.forEach(v => items.push({ type: 'contractual', data: v }));
+    }
+    if (pendTab === 'all' || pendTab === 'contratos') {
+      contratosProximos.forEach(c => items.push({ type: 'contrato', data: c }));
+    }
+    return items;
+  }, [pendTab, visitasProximas, visitasPendientes, contratosProximos]);
 
   const months = useMemo(() => {
     const names = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -322,6 +439,133 @@ const Dashboard = () => {
           <div className="db-kpi-value">{stats?.recentAssets.length ?? 0}</div>
           <div className="db-kpi-meta"><TrendingUp size={11} color="#f59e0b" /> Últimos registros</div>
         </div>
+      </div>
+
+      {/* ─── PENDIENTES ─── */}
+      <div className="db-panel db-pendientes">
+        <div className="db-panel-hd">
+          <div className="db-panel-hd-left">
+            <div className="db-ph-icon" style={{ background: '#fef2f2' }}>
+              <Bell size={14} color="#ef4444" />
+            </div>
+            <div>
+              <div className="db-ph-title">Pendientes</div>
+              <div className="db-ph-sub">Alertas y notificaciones activas</div>
+            </div>
+          </div>
+          {totalPendientes > 0 && (
+            <span className="db-badge" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca' }}>
+              {totalPendientes}
+            </span>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div className="db-pend-tabs">
+          {[
+            { key: 'all' as const, label: 'Todos', count: totalPendientes },
+            { key: 'proximas' as const, label: 'Visitas próximas', count: visitasProximas.length },
+            { key: 'contractuales' as const, label: 'Contractuales', count: visitasPendientes.length },
+            { key: 'contratos' as const, label: 'Contratos', count: contratosProximos.length },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              className="db-pend-tab"
+              onClick={() => setPendTab(tab.key)}
+              style={{
+                background: pendTab === tab.key ? '#0f1120' : '#f3f4f6',
+                color: pendTab === tab.key ? '#fff' : '#6b7280',
+              }}
+            >
+              {tab.label} ({tab.count})
+            </button>
+          ))}
+        </div>
+
+        {/* Items */}
+        {filteredItems.length === 0 ? (
+          <div className="db-pend-empty">
+            <div className="db-pend-empty-icon">
+              <svg width="22" height="22" fill="none" stroke="#10b981" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <span style={{ fontSize: 12, color: '#9ca3af' }}>Sin pendientes</span>
+          </div>
+        ) : (
+          <div className="db-pend-list" style={{ maxHeight: 340, overflowY: 'auto' }}>
+            {filteredItems.map((item, idx) => {
+              if (item.type === 'proxima') {
+                const v = item.data as UpcomingVisitNotification;
+                return (
+                  <div key={`prx-${v.visitaId || idx}`} className="db-pend-item" style={{ borderLeft: '3px solid #10b981' }}>
+                    <div className="db-pend-icon" style={{ background: '#d1fae5' }}>
+                      <Calendar size={16} color="#059669" />
+                    </div>
+                    <div className="db-pend-body">
+                      <div className="db-pend-empresa">{v.empresaNombre}</div>
+                      <div className="db-pend-msg">{v.mensaje}</div>
+                      {v.sedeNombre && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>{v.sedeNombre}</div>}
+                    </div>
+                    <span className="db-pend-badge" style={{
+                      background: v.diasRestantes === 0 ? '#fef2f2' : '#ecfdf5',
+                      color: v.diasRestantes === 0 ? '#dc2626' : '#065f46',
+                      border: `1px solid ${v.diasRestantes === 0 ? '#fecaca' : '#6ee7b7'}`,
+                    }}>
+                      {v.diasRestantes === 0 ? 'Hoy' : v.diasRestantes === 1 ? 'Mañana' : `${v.diasRestantes}d`}
+                    </span>
+                    <button className="db-pend-action" style={{ background: '#10b981' }} onClick={() => navigate(`/admin/visitas?empresaId=${v.empresaId}`)}>
+                      Ver
+                    </button>
+                  </div>
+                );
+              }
+              if (item.type === 'contractual') {
+                const v = item.data as ContractualVisitNotification;
+                return (
+                  <div key={`ctr-${v.empresaId}-${idx}`} className="db-pend-item" style={{ borderLeft: '3px solid #f59e0b' }}>
+                    <div className="db-pend-icon" style={{ background: '#fff7ed' }}>
+                      <AlertTriangle size={16} color="#ea580c" />
+                    </div>
+                    <div className="db-pend-body">
+                      <div className="db-pend-empresa">{v.empresaNombre}</div>
+                      <div className="db-pend-msg">{v.mensaje}</div>
+                    </div>
+                    <span className="db-pend-badge" style={{ background: '#ffedd5', color: '#c2410c', border: '1px solid #fdba74' }}>
+                      {v.visitasRegistradas}/{v.cantidadVisitas}
+                    </span>
+                    <button className="db-pend-action" style={{ background: '#f59e0b' }} onClick={() => navigate(`/admin/visitas?empresaId=${v.empresaId}`)}>
+                      Gestión
+                    </button>
+                  </div>
+                );
+              }
+              /* contrato */
+              const c = item.data as ContratoProximoVencer;
+              return (
+                <div key={`con-${c.empresaId}-${idx}`} className="db-pend-item" style={{ borderLeft: `3px solid ${c.diasRestantes <= 7 ? '#ef4444' : c.diasRestantes <= 15 ? '#f97316' : '#eab308'}` }}>
+                  <div className="db-pend-icon" style={{ background: c.diasRestantes <= 7 ? '#fef2f2' : c.diasRestantes <= 15 ? '#fff7ed' : '#fefce8' }}>
+                    <Clock size={16} color={c.diasRestantes <= 7 ? '#ef4444' : c.diasRestantes <= 15 ? '#f97316' : '#eab308'} />
+                  </div>
+                  <div className="db-pend-body">
+                    <div className="db-pend-empresa">{c.empresaNombre}</div>
+                    <div className="db-pend-msg">
+                      {c.diasRestantes === 0 ? 'Contrato vence hoy' : c.diasRestantes === 1 ? 'Contrato vence mañana' : `Contrato vence en ${c.diasRestantes} días`}
+                    </div>
+                  </div>
+                  <span className="db-pend-badge" style={{
+                    background: c.diasRestantes <= 7 ? '#fef2f2' : '#fefce8',
+                    color: c.diasRestantes <= 7 ? '#dc2626' : '#a16207',
+                    border: `1px solid ${c.diasRestantes <= 7 ? '#fecaca' : '#fde68a'}`,
+                  }}>
+                    {c.diasRestantes}d
+                  </span>
+                  <button className="db-pend-action" style={{ background: '#0ea5e9' }} onClick={() => { navigate(`/admin/empresas/${c.empresaId}`); sessionStorage.setItem(`empresaTab_${c.empresaId}`, 'contrato'); }}>
+                    Revisar
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Trend chart */}
