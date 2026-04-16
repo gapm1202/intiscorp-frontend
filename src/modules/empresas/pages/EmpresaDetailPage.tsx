@@ -2235,7 +2235,7 @@ return (
               onClick={() => setShowEditEmpresaModal(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-5 rounded-lg text-sm transition-colors shadow-sm flex items-center gap-2"
             >
-              ✏️ Editar empresa
+               Editar empresa
             </button>
           </div>
         </div>
