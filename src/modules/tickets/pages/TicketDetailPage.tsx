@@ -451,6 +451,28 @@ export default function TicketDetailPage() {
     return String(raw).toUpperCase().replace(/[_\s]+/g, ' ').trim();
   };
 
+  const normalizeFaseSLA = (raw?: string | null) => {
+    if (!raw) return '';
+    return String(raw).toUpperCase().replace(/[_\s]+/g, '_').trim();
+  };
+
+  const toBool = (value: unknown) => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') {
+      const v = value.trim().toLowerCase();
+      return v === '1' || v === 'true' || v === 'si' || v === 'yes';
+    }
+    return false;
+  };
+
+  const faseSlaActual = normalizeFaseSLA((ticket as any)?.fase_sla_actual ?? (ticket as any)?.faseSlaActual);
+  const aplicaSlaTicket = toBool((ticket as any)?.aplica_sla ?? (ticket as any)?.aplicaSla);
+  const hasSlaMetrics =
+    typeof ticket?.porcentaje_tiempo_respuesta === 'number' ||
+    typeof ticket?.porcentaje_tiempo_resolucion === 'number';
+  const shouldShowSLA = aplicaSlaTicket || hasSlaMetrics || ['RESPUESTA', 'RESOLUCION', 'COMPLETADO'].includes(faseSlaActual);
+
   // Construir URL completa para imágenes (backend puede devolver rutas relativas)
   const buildFullUrl = (url?: string | null) => {
     if (!url) return '';
@@ -890,7 +912,7 @@ export default function TicketDetailPage() {
             </div>
 
             <div className="flex-1 flex items-center">
-              {ticket.aplica_sla && ticket.estado === 'ABIERTO' && (
+              {shouldShowSLA && (faseSlaActual === 'RESPUESTA' || ['ESPERA', 'EN_TRIAGE', 'ABIERTO'].includes(ticket.estado)) && (
                 <div className="ml-2 w-full max-w-md">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-semibold text-sky-600">Tiempo de Respuesta</span>
@@ -906,7 +928,7 @@ export default function TicketDetailPage() {
                   </div>
                 </div>
               )}
-              {ticket.aplica_sla && ticket.estado === 'EN_PROCESO' && (
+              {shouldShowSLA && (faseSlaActual === 'RESOLUCION' || ticket.estado === 'EN_PROCESO') && (
                 <div className="ml-2 w-full max-w-md">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-semibold text-sky-600">Tiempo de Resolución</span>
@@ -922,7 +944,7 @@ export default function TicketDetailPage() {
                   </div>
                 </div>
               )}
-              {!ticket.aplica_sla && ['ESPERA', 'EN_TRIAGE'].includes(ticket.estado) && (
+              {!shouldShowSLA && ['ESPERA', 'EN_TRIAGE'].includes(ticket.estado) && (
                 <div className="ml-2">
                   <span className="text-xs text-sky-400 italic">⏳ Sin SLA — Esperando configuración</span>
                 </div>
@@ -1021,7 +1043,7 @@ export default function TicketDetailPage() {
             </button>
           )}
 
-          {ticket.aplica_sla && user && ((user.rol && user.rol.toLowerCase().includes('admin')) || (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)) && (
+          {aplicaSlaTicket && user && ((user.rol && user.rol.toLowerCase().includes('admin')) || (ticket.tecnico_asignado && ticket.tecnico_asignado.id === user.id)) && (
             <button
               onClick={() => setShowPausarSLAModal(true)}
               className="px-4 py-2 bg-white border border-sky-200 text-sky-700 rounded-lg hover:bg-sky-50 hover:border-sky-400 transition-all text-sm font-semibold"
@@ -1058,11 +1080,11 @@ export default function TicketDetailPage() {
       </div>
 
       {/* SLA Timer */}
-      {ticket.aplica_sla && (
+      {shouldShowSLA && (
         <div className="mt-6 pt-5 border-t border-sky-50">
-          {ticket.fase_sla_actual && ticket.fase_sla_actual !== 'SIN_SLA' ? (
+          {faseSlaActual && faseSlaActual !== 'SIN_SLA' ? (
             <>
-              {ticket.fase_sla_actual === 'RESPUESTA' && normalizeEstadoLocal(ticket.estado) !== 'RESUELTO' && (
+              {faseSlaActual === 'RESPUESTA' && normalizeEstadoLocal(ticket.estado) !== 'RESUELTO' && (
                 <SLATimer
                   estadoSLA={ticket.estado_sla}
                   label="Tiempo de Respuesta"
@@ -1075,7 +1097,7 @@ export default function TicketDetailPage() {
                   alertas={ticket.sla_alertas}
                 />
               )}
-              {ticket.fase_sla_actual === 'RESOLUCION' && normalizeEstadoLocal(ticket.estado) !== 'RESUELTO' && (
+              {faseSlaActual === 'RESOLUCION' && normalizeEstadoLocal(ticket.estado) !== 'RESUELTO' && (
                 <SLATimer
                   estadoSLA={ticket.estado_sla}
                   label="Tiempo de Resolución"
@@ -1089,7 +1111,7 @@ export default function TicketDetailPage() {
                 />
               )}
 
-              {ticket.fase_sla_actual === 'COMPLETADO' && (
+              {faseSlaActual === 'COMPLETADO' && (
                 <div className="space-y-3">
                   {/* Header */}
                   <div className="flex items-center gap-2 pb-2 border-b border-sky-100">

@@ -1088,18 +1088,52 @@ const EmpresaDetailPage = () => {
       : (Array.isArray(payload?.tiempos) ? payload.tiempos : []);
     const prioridadMap: Record<string, 'critica' | 'alta' | 'media' | 'baja'> = {
       CRITICA: 'critica',
+      CRITICA_: 'critica',
       ALTA: 'alta',
       MEDIA: 'media',
       BAJA: 'baja',
     };
-    return {
-      tiemposPorPrioridad: tiempos.map((t: any) => ({
-        prioridad: prioridadMap[String(t?.prioridad || '').toUpperCase()] || 'media',
+    const normalizePrioridad = (value: unknown): 'critica' | 'alta' | 'media' | 'baja' | null => {
+      const normalized = String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase()
+        .replace(/[^A-Z]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '');
+
+      return prioridadMap[normalized] || null;
+    };
+
+    const defaultTiemposPorPrioridad = {
+      critica: { prioridad: 'critica' as const, tiempoRespuesta: '1 hora', tiempoResolucion: '4 horas', escalamiento: true, tiempoEscalamiento: '1 hora' },
+      alta: { prioridad: 'alta' as const, tiempoRespuesta: '2 horas', tiempoResolucion: '8 horas', escalamiento: true, tiempoEscalamiento: '2 horas' },
+      media: { prioridad: 'media' as const, tiempoRespuesta: '4 horas', tiempoResolucion: '24 horas', escalamiento: false, tiempoEscalamiento: undefined },
+      baja: { prioridad: 'baja' as const, tiempoRespuesta: '8 horas', tiempoResolucion: '48 horas', escalamiento: false, tiempoEscalamiento: undefined },
+    };
+
+    const tiemposNormalizados = tiempos.reduce((acc: typeof defaultTiemposPorPrioridad, t: any) => {
+      const prioridad = normalizePrioridad(t?.prioridad);
+      if (!prioridad) return acc;
+
+      acc[prioridad] = {
+        prioridad,
         tiempoRespuesta: minutesToText(t?.tiempo_respuesta_minutos),
         tiempoResolucion: minutesToText(t?.tiempo_resolucion_minutos),
         escalamiento: t?.tiempo_escalamiento_minutos != null,
         tiempoEscalamiento: t?.tiempo_escalamiento_minutos != null ? minutesToText(t?.tiempo_escalamiento_minutos) : undefined,
-      })),
+      };
+
+      return acc;
+    }, { ...defaultTiemposPorPrioridad });
+
+    return {
+      tiemposPorPrioridad: [
+        tiemposNormalizados.critica,
+        tiemposNormalizados.alta,
+        tiemposNormalizados.media,
+        tiemposNormalizados.baja,
+      ],
     };
   };
 
