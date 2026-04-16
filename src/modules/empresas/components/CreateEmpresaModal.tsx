@@ -22,6 +22,155 @@ interface ContactoTecnico {
   supervisionCoordinacion: boolean;
 }
 
+const DEFAULT_CONTACTO_ADMIN: ContactoAdmin = {
+  nombre: "",
+  cargo: "",
+  telefono: "",
+  email: "",
+};
+
+const DEFAULT_CONTACTO_TECNICO: ContactoTecnico = {
+  nombre: "",
+  cargo: "",
+  telefono1: "",
+  telefono2: "",
+  email: "",
+  contactoPrincipal: false,
+  horarioDisponible: "",
+  autorizaCambiosCriticos: false,
+  nivelAutorizacion: "",
+  supervisionCoordinacion: true,
+};
+
+const getDefaultFormData = () => ({
+  nombre: "",
+  ruc: "",
+  codigoCliente: "",
+  direccionFiscal: "",
+  direccionOperativa: "",
+  ciudad: "",
+  provincia: "",
+  sector: "",
+  paginaWeb: "",
+  estadoContrato: "",
+  observacionesGenerales: "",
+  contactosAdmin: [DEFAULT_CONTACTO_ADMIN],
+  autorizacionFacturacion: false,
+  contactosTecnicos: [DEFAULT_CONTACTO_TECNICO],
+  contrasenaPortalSoporte: "",
+});
+
+type InitialEmpresaData = CreateEmpresaModalProps["initialData"] & Partial<{
+  observaciones: string;
+  adminNombre: string;
+  adminCargo: string;
+  adminTelefono: string;
+  adminEmail: string;
+  tecNombre: string;
+  tecCargo: string;
+  tecTelefono1: string;
+  tecTelefono2: string;
+  tecEmail: string;
+  horarioDisponible: string;
+  contactoPrincipal: boolean;
+  autorizaCambiosCriticos: boolean;
+  nivelAutorizacion: string;
+  supervisionCoordinacion: boolean;
+}>;
+
+const normalizeContactosAdmin = (initialData?: InitialEmpresaData) => {
+  if (Array.isArray(initialData?.contactosAdmin) && initialData.contactosAdmin.length > 0) {
+    return initialData.contactosAdmin.map((contacto) => ({
+      nombre: contacto.nombre ?? "",
+      cargo: contacto.cargo ?? "",
+      telefono: contacto.telefono ?? "",
+      email: contacto.email ?? "",
+    }));
+  }
+
+  if (
+    initialData?.adminNombre ||
+    initialData?.adminCargo ||
+    initialData?.adminTelefono ||
+    initialData?.adminEmail
+  ) {
+    return [{
+      nombre: initialData.adminNombre ?? "",
+      cargo: initialData.adminCargo ?? "",
+      telefono: initialData.adminTelefono ?? "",
+      email: initialData.adminEmail ?? "",
+    }];
+  }
+
+  return [DEFAULT_CONTACTO_ADMIN];
+};
+
+const normalizeContactosTecnicos = (initialData?: InitialEmpresaData) => {
+  if (Array.isArray(initialData?.contactosTecnicos) && initialData.contactosTecnicos.length > 0) {
+    return initialData.contactosTecnicos.map((contacto) => ({
+      nombre: contacto.nombre ?? "",
+      cargo: contacto.cargo ?? "",
+      telefono1: contacto.telefono1 ?? "",
+      telefono2: contacto.telefono2 ?? "",
+      email: contacto.email ?? "",
+      contactoPrincipal: contacto.contactoPrincipal ?? false,
+      horarioDisponible: contacto.horarioDisponible ?? "",
+      autorizaCambiosCriticos: contacto.autorizaCambiosCriticos ?? false,
+      nivelAutorizacion: contacto.nivelAutorizacion ?? "",
+      supervisionCoordinacion: contacto.supervisionCoordinacion ?? true,
+    }));
+  }
+
+  if (
+    initialData?.tecNombre ||
+    initialData?.tecCargo ||
+    initialData?.tecTelefono1 ||
+    initialData?.tecTelefono2 ||
+    initialData?.tecEmail
+  ) {
+    return [{
+      nombre: initialData.tecNombre ?? "",
+      cargo: initialData.tecCargo ?? "",
+      telefono1: initialData.tecTelefono1 ?? "",
+      telefono2: initialData.tecTelefono2 ?? "",
+      email: initialData.tecEmail ?? "",
+      contactoPrincipal: initialData.contactoPrincipal ?? false,
+      horarioDisponible: initialData.horarioDisponible ?? "",
+      autorizaCambiosCriticos: initialData.autorizaCambiosCriticos ?? false,
+      nivelAutorizacion: initialData.nivelAutorizacion ?? "",
+      supervisionCoordinacion: initialData.supervisionCoordinacion ?? true,
+    }];
+  }
+
+  return [DEFAULT_CONTACTO_TECNICO];
+};
+
+const normalizeInitialFormData = (initialData?: InitialEmpresaData) => {
+  const defaults = getDefaultFormData();
+
+  if (!initialData) {
+    return defaults;
+  }
+
+  return {
+    ...defaults,
+    nombre: initialData.nombre ?? "",
+    ruc: initialData.ruc ?? "",
+    codigoCliente: initialData.codigoCliente ?? "",
+    direccionFiscal: initialData.direccionFiscal ?? "",
+    direccionOperativa: initialData.direccionOperativa ?? "",
+    ciudad: initialData.ciudad ?? "",
+    provincia: initialData.provincia ?? "",
+    sector: initialData.sector ?? "",
+    paginaWeb: initialData.paginaWeb ?? "",
+    estadoContrato: initialData.estadoContrato ?? "",
+    observacionesGenerales: initialData.observacionesGenerales ?? initialData.observaciones ?? "",
+    contactosAdmin: normalizeContactosAdmin(initialData),
+    autorizacionFacturacion: initialData.autorizacionFacturacion ?? false,
+    contactosTecnicos: normalizeContactosTecnicos(initialData),
+  };
+};
+
 interface CreateEmpresaModalProps {
   isOpen: boolean;
   empresaId?: string | number;
@@ -130,23 +279,7 @@ const CheckRow = ({
 );
 
 const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess }: CreateEmpresaModalProps) => {
-  const [formData, setFormData] = useState({
-    nombre: "",
-    ruc: "",
-    codigoCliente: "",
-    direccionFiscal: "",
-    direccionOperativa: "",
-    ciudad: "",
-    provincia: "",
-    sector: "",
-    paginaWeb: "",
-    estadoContrato: "",
-    observacionesGenerales: "",
-    contactosAdmin: [{ nombre: "", cargo: "", telefono: "", email: "" }],
-    autorizacionFacturacion: false,
-    contactosTecnicos: [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "", supervisionCoordinacion: true }],
-    contrasenaPortalSoporte: "",
-  });
+  const [formData, setFormData] = useState(getDefaultFormData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mostrarContrasenaPortal, setMostrarContrasenaPortal] = useState(false);
@@ -161,40 +294,11 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
     if (initialData) {
       setFormData(prev => ({
         ...prev,
-        nombre: initialData.nombre ?? "",
-        ruc: initialData.ruc ?? "",
-        codigoCliente: initialData.codigoCliente ?? "",
-        direccionFiscal: initialData.direccionFiscal ?? "",
-        direccionOperativa: initialData.direccionOperativa ?? "",
-        ciudad: initialData.ciudad ?? "",
-        provincia: initialData.provincia ?? "",
-        sector: initialData.sector ?? "",
-        paginaWeb: initialData.paginaWeb ?? "",
-        estadoContrato: initialData.estadoContrato ?? "",
-        observacionesGenerales: initialData.observacionesGenerales ?? "",
-        contactosAdmin: initialData.contactosAdmin ?? [{ nombre: "", cargo: "", telefono: "", email: "" }],
-        autorizacionFacturacion: initialData.autorizacionFacturacion ?? false,
-        contactosTecnicos: initialData.contactosTecnicos ?? [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "" }],
+        ...normalizeInitialFormData(initialData),
       }));
     }
     if (!isOpen) {
-      setFormData({
-        nombre: "",
-        ruc: "",
-        codigoCliente: "",
-        direccionFiscal: "",
-        direccionOperativa: "",
-        ciudad: "",
-        provincia: "",
-        sector: "",
-        paginaWeb: "",
-        estadoContrato: "",
-        observacionesGenerales: "",
-        contactosAdmin: [{ nombre: "", cargo: "", telefono: "", email: "" }],
-        autorizacionFacturacion: false,
-        contactosTecnicos: [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "", supervisionCoordinacion: true }],
-        contrasenaPortalSoporte: "",
-      });
+      setFormData(getDefaultFormData());
       setMostrarContrasenaPortal(false);
     }
   }, [initialData, empresaId, isOpen]);
@@ -309,23 +413,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
         setCreatedInfo({ codigoCliente: codigo, usuario, contrasena });
       }
 
-      setFormData({
-        nombre: "",
-        ruc: "",
-        codigoCliente: "",
-        direccionFiscal: "",
-        direccionOperativa: "",
-        ciudad: "",
-        provincia: "",
-        sector: "",
-        paginaWeb: "",
-        estadoContrato: "",
-        observacionesGenerales: "",
-        contactosAdmin: [{ nombre: "", cargo: "", telefono: "", email: "" }],
-        autorizacionFacturacion: false,
-        contactosTecnicos: [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "", supervisionCoordinacion: true }],
-        contrasenaPortalSoporte: "",
-      });
+      setFormData(getDefaultFormData());
       // Do not close immediately: show backend-generated codigoCliente/credenciales to the user
       return;
     } catch (err: any) {
@@ -360,48 +448,6 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (initialData) {
-      setFormData(prev => ({
-        ...prev,
-        nombre: initialData.nombre ?? "",
-        ruc: initialData.ruc ?? "",
-        codigoCliente: initialData.codigoCliente ?? "",
-        direccionFiscal: initialData.direccionFiscal ?? "",
-        direccionOperativa: initialData.direccionOperativa ?? "",
-        ciudad: initialData.ciudad ?? "",
-        provincia: initialData.provincia ?? "",
-        sector: initialData.sector ?? "",
-        paginaWeb: initialData.paginaWeb ?? "",
-        estadoContrato: initialData.estadoContrato ?? "",
-        observacionesGenerales: initialData.observacionesGenerales ?? "",
-        contactosAdmin: initialData.contactosAdmin ?? [{ nombre: "", cargo: "", telefono: "", email: "" }],
-        autorizacionFacturacion: initialData.autorizacionFacturacion ?? false,
-        contactosTecnicos: initialData.contactosTecnicos ?? [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "" }],
-      }));
-    }
-    if (!isOpen) {
-      setFormData({
-        nombre: "",
-        ruc: "",
-        codigoCliente: "",
-        direccionFiscal: "",
-        direccionOperativa: "",
-        ciudad: "",
-        provincia: "",
-        sector: "",
-        paginaWeb: "",
-        estadoContrato: "",
-        observacionesGenerales: "",
-        contactosAdmin: [{ nombre: "", cargo: "", telefono: "", email: "" }],
-        autorizacionFacturacion: false,
-        contactosTecnicos: [{ nombre: "", cargo: "", telefono1: "", telefono2: "", email: "", contactoPrincipal: false, horarioDisponible: "", autorizaCambiosCriticos: false, nivelAutorizacion: "", supervisionCoordinacion: true }],
-        contrasenaPortalSoporte: "",
-      });
-      setMostrarContrasenaPortal(false);
-    }
-  }, [initialData, empresaId, isOpen]);
 
   if (!isOpen) return null;
 
@@ -525,7 +571,7 @@ const CreateEmpresaModal = ({ isOpen, empresaId, initialData, onClose, onSuccess
                 {/* Portal password - solo en creación */}
                 {!empresaId && (
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-bold text-blue-800 mb-1 flex items-center gap-2">
+                    <label className="text-sm font-bold text-blue-800 mb-1 flex items-center gap-2">
                       <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                       </svg>

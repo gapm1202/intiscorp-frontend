@@ -146,7 +146,7 @@ export async function getTicketById(id: number): Promise<Ticket> {
   }
 }
 
-// Obtener ticket por código (seguimiento público)
+// Obtener ticket por código (seguimiento público) — endpoint autenticado (legacy)
 export async function getTicketByCodigo(codigo: string): Promise<Ticket | null> {
   try {
     const response = await axiosClient.get(`/api/tickets?codigo=${encodeURIComponent(codigo)}`);
@@ -157,6 +157,13 @@ export async function getTicketByCodigo(codigo: string): Promise<Ticket | null> 
     console.error('Error al obtener ticket por código:', error);
     throw error;
   }
+}
+
+// Obtener ticket por código vía endpoint público (sin autenticación)
+// Backend returns: { ok: true, data: { ticket, mensajes, historial } }
+export async function getTicketPublicoByCodigo(codigo: string): Promise<{ ticket: Ticket; mensajes: any[]; historial: any[] }> {
+  const response = await axiosClient.get(`/api/public/tickets/${encodeURIComponent(codigo)}`);
+  return response.data.data as { ticket: Ticket; mensajes: any[]; historial: any[] };
 }
 
 export async function createTicket(ticket: Partial<Ticket>): Promise<Ticket> {

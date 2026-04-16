@@ -6,7 +6,8 @@ import { getSedesByEmpresa, toggleSedeActivo } from "@/modules/empresas/services
 import { getContratoActivo, getContratoById, createContrato, updateContratoDatos, updateContratoServicios, updateContratoPreventivo, updateContratoEconomicos, uploadContratoDocumentos, deleteContratoDocumento } from "@/modules/empresas/services/contratosService";
 import { getUsuariosAdministrativos } from "@/modules/auth/services/userService";
 import CreateSedeModal from "@/modules/empresas/components/CreateSedeModal";
-import CreateEmpresaModal from "@/modules/empresas/components/CreateEmpresaModal";
+import CreateEmpresaWizard from "@/modules/empresas/components/wizard/CreateEmpresaWizard";
+import { getUsuariosByEmpresa } from "@/modules/usuarios/services/usuariosService";
 import DeleteSedeModal from "./../components/DeleteSedeModal";
 import { AlcanceSLAForm } from "@/modules/sla/components/AlcanceSLAForm";
 import { GestionTiemposForm } from "@/modules/sla/components/GestionTiemposForm";
@@ -67,6 +68,7 @@ interface ContactoTecnico {
   horarioDisponible?: string;
   autorizaCambiosCriticos?: boolean;
   nivelAutorizacion?: string;
+  supervisionCoordinacion?: boolean;
 }
 
 interface Empresa {
@@ -100,6 +102,109 @@ interface Empresa {
   nivelAutorizacion?: string;
   [key: string]: unknown;
 }
+
+const mapEmpresaToEditWizardData = (empresa?: Empresa | null, sedes: Sede[] = [], usuarios: any[] = []) => {
+  if (!empresa) return undefined;
+
+  const findUsuarioId = (nombre?: string, email?: string) => {
+    const matched = usuarios.find((usuario) => {
+      const sameEmail = email && String(usuario.correo || "").toLowerCase() === String(email).toLowerCase();
+      const sameName = nombre && String(usuario.nombreCompleto || "").trim().toLowerCase() === String(nombre).trim().toLowerCase();
+      return sameEmail || sameName;
+    });
+
+    return String(matched?._id || matched?.id || "");
+  };
+
+  const wizardSedes = sedes.map((sede) => ({
+    _id: String(sede._id ?? sede.id ?? ""),
+    id: String(sede.id ?? sede._id ?? ""),
+    nombre: String(sede.nombre ?? ""),
+    codigoInterno: String((sede as any).codigoInterno ?? (sede as any).codigo_interno ?? ""),
+    direccion: String(sede.direccion ?? ""),
+    ciudad: String(sede.ciudad ?? ""),
+    provincia: String(sede.provincia ?? ""),
+    telefono: String(sede.telefono ?? ""),
+    email: String(sede.email ?? ""),
+    tipo: String(sede.tipo ?? "principal"),
+    horarioAtencion: String((sede as any).horarioAtencion ?? (sede as any).horario_atencion ?? ""),
+    observaciones: String((sede as any).observaciones ?? ""),
+    activo: Boolean((sede as any).activo ?? true),
+  }));
+
+  const wizardUsuarios = usuarios.map((usuario) => ({
+    _id: String(usuario._id ?? usuario.id ?? ""),
+    id: String(usuario.id ?? usuario._id ?? ""),
+    empresaId: String(usuario.empresaId ?? empresa._id ?? empresa.id ?? ""),
+    sedeId: String(usuario.sedeId ?? ""),
+    sedeNombre: String(usuario.sedeNombre ?? ""),
+    nombreCompleto: String(usuario.nombreCompleto ?? ""),
+    correo: String(usuario.correo ?? ""),
+    cargo: String(usuario.cargo ?? ""),
+    telefono: String(usuario.telefono ?? ""),
+    observaciones: String(usuario.observaciones ?? ""),
+    tipoDocumento: String((usuario as any).tipoDocumento ?? "DNI"),
+    numeroDocumento: String((usuario as any).numeroDocumento ?? ""),
+    areaId: String((usuario as any).areaId ?? ""),
+  }));
+
+  const contactosAdmin = Array.isArray(empresa.contactosAdmin) && empresa.contactosAdmin.length > 0
+    ? empresa.contactosAdmin.map((contacto, index) => ({
+        usuarioId: findUsuarioId(contacto.nombre, contacto.email) || `admin-${index}`,
+        nombreCompleto: String(contacto.nombre ?? ""),
+        autorizacionFacturacion: Boolean((contacto as any).autorizacionFacturacion ?? empresa.autorizacionFacturacion ?? (empresa as any).autorizacion_facturacion ?? false),
+      }))
+    : (empresa.adminNombre || empresa.adminEmail)
+    ? [{
+        usuarioId: findUsuarioId(empresa.adminNombre, empresa.adminEmail) || "admin-0",
+        nombreCompleto: String(empresa.adminNombre ?? ""),
+        autorizacionFacturacion: Boolean(empresa.autorizacionFacturacion ?? (empresa as any).autorizacion_facturacion ?? false),
+      }]
+    : [];
+
+  const contactosTecnicos = Array.isArray(empresa.contactosTecnicos) && empresa.contactosTecnicos.length > 0
+    ? empresa.contactosTecnicos.map((contacto, index) => ({
+        usuarioId: findUsuarioId(contacto.nombre, contacto.email) || `tecnico-${index}`,
+        nombreCompleto: String(contacto.nombre ?? ""),
+        horarioDisponible: String(contacto.horarioDisponible ?? ""),
+        contactoPrincipal: Boolean(contacto.contactoPrincipal ?? false),
+        autorizaCambiosCriticos: Boolean(contacto.autorizaCambiosCriticos ?? false),
+        supervisionCoordinacion: Boolean(contacto.supervisionCoordinacion ?? false),
+        nivelAutorizacion: String(contacto.nivelAutorizacion ?? ""),
+      }))
+    : (empresa.tecNombre || empresa.tecEmail)
+    ? [{
+        usuarioId: findUsuarioId(empresa.tecNombre, empresa.tecEmail) || "tecnico-0",
+        nombreCompleto: String(empresa.tecNombre ?? ""),
+        horarioDisponible: "",
+        contactoPrincipal: false,
+        autorizaCambiosCriticos: false,
+        supervisionCoordinacion: false,
+        nivelAutorizacion: String(empresa.nivelAutorizacion ?? ""),
+      }]
+    : [];
+
+  return {
+    general: {
+      nombre: String(empresa.nombre ?? ""),
+      ruc: String(empresa.ruc ?? (empresa as any).RUC ?? ""),
+      codigoCliente: String(empresa.codigoCliente ?? (empresa as any).codigo_cliente ?? ""),
+      direccionFiscal: String(empresa.direccionFiscal ?? (empresa as any).direccion_fiscal ?? ""),
+      direccionOperativa: String(empresa.direccionOperativa ?? (empresa as any).direccion_operativa ?? ""),
+      ciudad: String(empresa.ciudad ?? ""),
+      provincia: String(empresa.provincia ?? ""),
+      sector: String(empresa.sector ?? ""),
+      paginaWeb: String(empresa.paginaWeb ?? (empresa as any).pagina_web ?? ""),
+      observacionesGenerales: String(empresa.observacionesGenerales ?? empresa.observaciones ?? (empresa as any).observaciones_generales ?? ""),
+    },
+    sedes: wizardSedes,
+    usuarios: wizardUsuarios,
+    contactosAdmin,
+    contactosTecnicos,
+    responsablesSede: [],
+    contrasenaPortalSoporte: "",
+  };
+};
 
 interface HistorialSLAItem {
   campo: string;
@@ -178,6 +283,8 @@ const EmpresaDetailPage = () => {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
+  const [empresaUsuarios, setEmpresaUsuarios] = useState<any[]>([]);
+  const empresaEditInitialData = mapEmpresaToEditWizardData(empresa, sedes, empresaUsuarios);
 
   // Confirmación de salida sin guardar en SLA
   const [showUnsavedConfirmModal, setShowUnsavedConfirmModal] = useState(false);
@@ -710,6 +817,22 @@ const EmpresaDetailPage = () => {
 
     fetchUsuariosAdmin();
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!showEditEmpresaModal || !empresaId) return;
+
+    const fetchUsuariosEmpresa = async () => {
+      try {
+        const usuarios = await getUsuariosByEmpresa(empresaId);
+        setEmpresaUsuarios(Array.isArray(usuarios) ? usuarios : []);
+      } catch (err) {
+        console.error('Error al cargar usuarios de la empresa para edición:', err);
+        setEmpresaUsuarios([]);
+      }
+    };
+
+    fetchUsuariosEmpresa();
+  }, [empresaId, showEditEmpresaModal]);
 
   // Guardar activeTab en sessionStorage para restaurarlo después de reload
   useEffect(() => {
@@ -4502,16 +4625,22 @@ const EmpresaDetailPage = () => {
         />
 
         {/* Modal para editar/crear empresa */}
-        <CreateEmpresaModal
+        <CreateEmpresaWizard
+          key={`empresa-edit-${empresaId}-${showEditEmpresaModal ? 'open' : 'closed'}`}
           isOpen={showEditEmpresaModal}
+          mode="edit"
           empresaId={empresaId}
-          initialData={empresa ?? undefined}
+          initialData={empresaEditInitialData}
           onClose={() => setShowEditEmpresaModal(false)}
           onSuccess={async () => {
             if (empresaId) {
               try {
                 const updated = await getEmpresaById(empresaId);
                 setEmpresa(updated);
+                const sedesData = await getSedesByEmpresa(empresaId, true);
+                setSedes(Array.isArray(sedesData) ? sedesData : sedesData.data || []);
+                const usuarios = await getUsuariosByEmpresa(empresaId);
+                setEmpresaUsuarios(Array.isArray(usuarios) ? usuarios : []);
               } catch (err) {
                 console.error("Error al recargar empresa:", err);
               }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { getTicketByCodigo, getMensajes, postMensajePortal } from '../services/ticketsService';
+import { getTicketPublicoByCodigo, getMensajes, postMensajePortal } from '../services/ticketsService';
 import type { Ticket } from '../types';
 
 const STEPS = ['EN ESPERA', 'EN TRIAGE', 'ABIERTO', 'EN PROCESO', 'RESUELTO'];
@@ -25,8 +25,9 @@ export default function SeguimientoTicketPage() {
     (async () => {
       try {
         setLoading(true);
-        const t = await getTicketByCodigo(codigo);
-        setTicket(t as any);
+        const result = await getTicketPublicoByCodigo(codigo);
+        setTicket(result.ticket as any);
+        setMessages(Array.isArray(result.mensajes) ? result.mensajes : []);
       } catch (err: any) {
         console.error('Error cargando ticket por código:', err);
         setError(err?.response?.data?.message || 'No se encontró el ticket');
@@ -36,9 +37,11 @@ export default function SeguimientoTicketPage() {
     })();
   }, [codigo]);
 
-  // load messages after ticket is fetched and enable polling so messages arrive without reload
+  // Poll messages for active tickets
   useEffect(() => {
     if (!ticket) return;
+    const estadoNorm = normalizeEstado(ticket.estado as any);
+    if (estadoNorm === 'RESUELTO' || estadoNorm === 'CERRADO' || estadoNorm === 'CANCELADO') return;
     let cancelled = false;
     const fetchMsgs = async () => {
       try {
@@ -47,13 +50,8 @@ export default function SeguimientoTicketPage() {
         setMessages(Array.isArray(msgs) ? msgs : []);
       } catch (err) {
         console.error('Error cargando mensajes:', err);
-        if (!cancelled) setMessages([]);
       }
     };
-
-    fetchMsgs();
-    const estadoNorm = normalizeEstado(ticket.estado as any);
-    if (estadoNorm === 'RESUELTO' || estadoNorm === 'CERRADO' || estadoNorm === 'CANCELADO') return () => { cancelled = true; };
     const id = setInterval(fetchMsgs, 3000);
     return () => { cancelled = true; clearInterval(id); };
   }, [ticket]);

@@ -8,15 +8,19 @@ import Step5Portal from "./Step5Portal";
 import type {
   WizardData,
   EmpresaGeneralData,
+  SedeData,
   UsuarioData,
   ContactoAdminConfig,
   ContactoTecnicoConfig,
   ResponsableSedeConfig,
 } from "./wizardTypes";
-import { createEmpresa, updateEmpresa, crearWizard } from "../../services/empresasService";
+import { updateEmpresa, crearWizard } from "../../services/empresasService";
 
 interface CreateEmpresaWizardProps {
   isOpen: boolean;
+  mode?: "create" | "edit";
+  empresaId?: string;
+  initialData?: WizardData;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -50,9 +54,27 @@ const initialWizardData: WizardData = {
   contrasenaPortalSoporte: "",
 };
 
-const CreateEmpresaWizard = ({ isOpen, onClose, onSuccess }: CreateEmpresaWizardProps) => {
+const getInitialWizardData = (initialData?: WizardData): WizardData => ({
+  general: { ...initialWizardData.general, ...(initialData?.general || {}) },
+  sedes: Array.isArray(initialData?.sedes) ? initialData.sedes : [],
+  usuarios: Array.isArray(initialData?.usuarios) ? initialData.usuarios : [],
+  contactosAdmin: Array.isArray(initialData?.contactosAdmin) ? initialData.contactosAdmin : [],
+  contactosTecnicos: Array.isArray(initialData?.contactosTecnicos) ? initialData.contactosTecnicos : [],
+  responsablesSede: Array.isArray(initialData?.responsablesSede) ? initialData.responsablesSede : [],
+  contrasenaPortalSoporte: initialData?.contrasenaPortalSoporte || "",
+});
+
+const CreateEmpresaWizard = ({
+  isOpen,
+  mode = "create",
+  empresaId,
+  initialData,
+  onClose,
+  onSuccess,
+}: CreateEmpresaWizardProps) => {
+  const isEditMode = mode === "edit";
   const [currentStep, setCurrentStep] = useState(1);
-  const [wizardData, setWizardData] = useState<WizardData>({ ...initialWizardData });
+  const [wizardData, setWizardData] = useState<WizardData>(() => getInitialWizardData(initialData));
   const [loading, setLoading] = useState(false);
   const [createdInfo, setCreatedInfo] = useState<null | { codigoCliente?: string; usuario?: string; contrasena?: string }>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,10 +85,20 @@ const CreateEmpresaWizard = ({ isOpen, onClose, onSuccess }: CreateEmpresaWizard
   useEffect(() => {
     if (!isOpen) {
       setCurrentStep(1);
-      setWizardData({ ...initialWizardData });
+      setWizardData(getInitialWizardData(initialData));
       setError(null);
+      setCreatedInfo(null);
     }
-  }, [isOpen]);
+  }, [initialData, isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(1);
+      setWizardData(getInitialWizardData(initialData));
+      setError(null);
+      setCreatedInfo(null);
+    }
+  }, [initialData, isOpen]);
 
   // Step navigation
   const goNext = useCallback(() => setCurrentStep(prev => Math.min(prev + 1, 5)), []);
@@ -116,6 +148,52 @@ const CreateEmpresaWizard = ({ isOpen, onClose, onSuccess }: CreateEmpresaWizard
     setLoading(true);
     setError(null);
     try {
+      if (isEditMode) {
+        if (!empresaId) {
+          throw new Error("No se encontró el ID de la empresa para editar.");
+        }
+
+        const payload = {
+          nombre: wizardData.general.nombre,
+          ruc: wizardData.general.ruc,
+          codigoCliente: wizardData.general.codigoCliente,
+          direccionFiscal: wizardData.general.direccionFiscal,
+          direccionOperativa: wizardData.general.direccionOperativa,
+          ciudad: wizardData.general.ciudad,
+          provincia: wizardData.general.provincia,
+          sector: wizardData.general.sector,
+          paginaWeb: wizardData.general.paginaWeb,
+          observacionesGenerales: wizardData.general.observacionesGenerales,
+          contrasenaPortalSoporte: wizardData.contrasenaPortalSoporte,
+          contactosAdmin: wizardData.contactosAdmin.map((contacto) => ({
+            usuarioId: contacto.usuarioId,
+            nombre: contacto.nombreCompleto,
+            autorizacionFacturacion: contacto.autorizacionFacturacion,
+          })),
+          contactosTecnicos: wizardData.contactosTecnicos.map((contacto) => ({
+            usuarioId: contacto.usuarioId,
+            nombre: contacto.nombreCompleto,
+            horarioDisponible: contacto.horarioDisponible,
+            contactoPrincipal: contacto.contactoPrincipal,
+            autorizaCambiosCriticos: contacto.autorizaCambiosCriticos,
+            supervisionCoordinacion: contacto.supervisionCoordinacion,
+            nivelAutorizacion: contacto.nivelAutorizacion,
+          })),
+          responsablesSede: wizardData.responsablesSede.map((responsable) => ({
+            usuarioId: responsable.usuarioId,
+            sedeId: responsable.sedeId,
+            autorizaIngresoTecnico: responsable.autorizaIngresoTecnico,
+            autorizaMantenimientoFueraHorario: responsable.autorizaMantenimientoFueraHorario,
+            supervisionCoordinacion: responsable.supervisionCoordinacion,
+          })),
+        };
+
+        await updateEmpresa(empresaId, payload);
+        onSuccess();
+        onClose();
+        return;
+      }
+
       // Build payload with tempIds for sedes and usuarios
       const payload = {
         nombre: wizardData.general.nombre,
@@ -224,7 +302,7 @@ const CreateEmpresaWizard = ({ isOpen, onClose, onSuccess }: CreateEmpresaWizard
         {/* Header */}
         <div className="sticky top-0 bg-white border-b px-6 pt-6 pb-4 z-10">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-xl font-bold text-gray-900">Crear Nueva Empresa</h2>
+            <h2 className="text-xl font-bold text-gray-900">{isEditMode ? "Editar Empresa" : "Crear Nueva Empresa"}</h2>
             <button
               type="button"
               onClick={onClose}
@@ -262,6 +340,7 @@ const CreateEmpresaWizard = ({ isOpen, onClose, onSuccess }: CreateEmpresaWizard
                 data={wizardData.general}
                 onChange={setGeneral}
                 onNext={goNext}
+              loadingCodigo={false}
               />
           )}
 
@@ -309,6 +388,8 @@ const CreateEmpresaWizard = ({ isOpen, onClose, onSuccess }: CreateEmpresaWizard
               onPrev={goPrev}
               onSubmit={handleFinalSubmit}
               loading={loading}
+              submitLabel={isEditMode ? "Guardar cambios" : "Crear Empresa"}
+              loadingLabel={isEditMode ? "Guardando cambios..." : "Creando empresa..."}
             />
           )}
         </div>

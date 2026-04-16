@@ -70,14 +70,19 @@ export default function ReporteIncidenciaPage() {
 
       // Si es un activo
       if (!noEsActivo && activoDetalle) {
+        const usuarioAsignado = activoDetalle.usuariosAsignados?.[0] as any;
+        const contactoNombre = usuarioAsignado?.nombre || '';
+        const contactoEmail = usuarioAsignado?.email || usuarioAsignado?.correoPrincipal || usuarioAsignado?.correo || '';
+        const contactoTelefono = usuarioAsignado?.telefono || usuarioAsignado?.celular || '000000000';
+
         incidenciaData.asset_id = activoDetalle.codigo; // código del activo
         incidenciaData.activoAfectado = activoDetalle.codigo;
         if (activoDetalle.sedeId) {
           incidenciaData.sedeId = activoDetalle.sedeId;
         }
-        incidenciaData.contactoNombre = activoDetalle.usuariosAsignados[0]?.nombre || 'N/A';
-        incidenciaData.contactoEmail = activoDetalle.usuariosAsignados[0]?.email || '';
-        incidenciaData.contactoTelefono = activoDetalle.usuariosAsignados[0]?.telefono || '000000000';
+        incidenciaData.contactoNombre = contactoNombre || 'N/A';
+        incidenciaData.contactoEmail = contactoEmail;
+        incidenciaData.contactoTelefono = contactoTelefono;
       }
 
       // Si es un usuario
@@ -89,6 +94,12 @@ export default function ReporteIncidenciaPage() {
         incidenciaData.contactoNombre = usuarioDetalle?.nombre || incidenciaData.contactoNombre || 'N/A';
         incidenciaData.contactoEmail = usuarioDetalle?.correoPrincipal || incidenciaData.contactoEmail || '';
         incidenciaData.contactoTelefono = usuarioDetalle?.telefono || incidenciaData.contactoTelefono || '000000000';
+      }
+
+      if (!incidenciaData.contactoEmail?.trim()) {
+        setError('No se pudo determinar un correo de contacto. Busca un usuario por DNI para continuar.');
+        setLoading(false);
+        return;
       }
 
       console.log('📤 DATOS A ENVIAR AL BACKEND:', JSON.stringify(incidenciaData, null, 2));

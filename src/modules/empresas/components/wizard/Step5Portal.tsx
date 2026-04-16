@@ -7,9 +7,20 @@ interface Step5Props {
   onPrev: () => void;
   onSubmit: () => void;
   loading: boolean;
+  submitLabel?: string;
+  loadingLabel?: string;
 }
 
-const Step5Portal = ({ ruc, contrasena, onContrasenaChange, onPrev, onSubmit, loading }: Step5Props) => {
+const Step5Portal = ({
+  ruc,
+  contrasena,
+  onContrasenaChange,
+  onPrev,
+  onSubmit,
+  loading,
+  submitLabel = "Crear Empresa",
+  loadingLabel = "Creando empresa...",
+}: Step5Props) => {
   const [mostrar, setMostrar] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -146,14 +157,14 @@ const Step5Portal = ({ ruc, contrasena, onContrasenaChange, onPrev, onSubmit, lo
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              Creando empresa...
+              {loadingLabel}
             </>
           ) : (
             <>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              Crear Empresa
+              {submitLabel}
             </>
           )}
         </button>
