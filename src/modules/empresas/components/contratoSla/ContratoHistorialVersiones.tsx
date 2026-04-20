@@ -46,10 +46,9 @@ interface HistorialGroup {
 
 function buildGroups(items: HistorialItem[]): HistorialGroup[] {
   const groups: HistorialGroup[] = [];
-  const edicionByMotivo = new Map<string, HistorialItem[]>();
 
   for (const item of items) {
-    const tipo = (item.tipoAccion || 'EDICION').toUpperCase();
+    const tipo = (item.tipoAccion || '').toUpperCase();
     if (tipo === 'CREACION' || tipo === 'RENOVACION') {
       groups.push({
         tipo,
@@ -62,24 +61,8 @@ function buildGroups(items: HistorialItem[]): HistorialGroup[] {
         valorAnterior: item.valorAnterior,
         valorNuevo: item.valorNuevo,
       });
-    } else {
-      // Group EDICION by motivo (fall back to 'sin motivo')
-      const key = item.motivo || 'sin motivo';
-      if (!edicionByMotivo.has(key)) edicionByMotivo.set(key, []);
-      edicionByMotivo.get(key)!.push(item);
     }
-  }
-
-  // Append EDICION groups sorted by first item date descending
-  for (const [motivo, campos] of edicionByMotivo.entries()) {
-    groups.push({
-      tipo: 'EDICION',
-      titulo: `${campos.length} campo${campos.length > 1 ? 's' : ''} modificado${campos.length > 1 ? 's' : ''}`,
-      motivo,
-      fecha: campos[0].fecha,
-      usuario: campos[0].usuario,
-      campos,
-    });
+    // EDICION entries are intentionally ignored — only CREACION and RENOVACION are shown
   }
 
   return groups;
