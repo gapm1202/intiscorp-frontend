@@ -1,4 +1,4 @@
- import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getCatalogCategories, getTicketTypes } from "@/modules/catalogo/services/catalogoService";
 import { getServicios } from '@/modules/catalogo/services/servicioApi';
 
@@ -31,6 +31,7 @@ interface AlcanceSLAFormProps {
   estadoContrato?: string;
   contratoCompleto?: boolean;
   slaActivoOverride?: boolean;
+  hideActions?: boolean;
 }
 
 const getDefaultAlcanceData = (): AlcanceSLAData => ({
@@ -62,6 +63,7 @@ export function AlcanceSLAForm({
   estadoContrato = '',
   contratoCompleto = true,
   slaActivoOverride,
+  hideActions,
 }: AlcanceSLAFormProps) {
   // Determinar estado automático del SLA según estado del contrato
   const estadoContratoLower = (estadoContrato || '').toLowerCase().trim();
@@ -104,6 +106,18 @@ export function AlcanceSLAForm({
 
   const [formData, setFormData] = useState<AlcanceSLAData>(getInitialData());
   const slaActivoDisplay = typeof slaActivoOverride === 'boolean' ? slaActivoOverride : formData.slaActivo;
+
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+
+  // Auto-propagate changes when used inside a wizard (no buttons)
+  useEffect(() => {
+    if (hideActions && onSaveRef.current) {
+      onSaveRef.current(formData);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData, hideActions]);
+
   const [availableCategories, setAvailableCategories] = useState<Array<{ id: string; nombre: string }>>([]);
   const [availableTypes, setAvailableTypes] = useState<any[]>([]);
   const [availableServicios, setAvailableServicios] = useState<any[]>([]);
@@ -642,6 +656,7 @@ export function AlcanceSLAForm({
       </div>
 
       {/* Botones de Acción */}
+      {!hideActions && (
       <div className="flex gap-3 justify-end">
         <button
           onClick={() => setFormData(
@@ -685,6 +700,7 @@ export function AlcanceSLAForm({
           Guardar Cambios
         </button>
       </div>
+      )}
 
       {/* Info box */}
       <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">

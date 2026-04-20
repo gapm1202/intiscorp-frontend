@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export type Prioridad = 'critica' | 'alta' | 'media' | 'baja';
 
@@ -31,6 +31,7 @@ interface GestionTiemposFormProps {
   initialData?: TiemposData;
   onSave?: (data: TiemposData) => void;
   onCancel?: () => void;
+  hideActions?: boolean;
 }
 
 // Función auxiliar para parsear string a estructura interna
@@ -84,7 +85,7 @@ const etiquetas: Record<Prioridad, string> = {
   baja: 'Baja',
 };
 
-export function GestionTiemposForm({ initialData, onSave, onCancel }: GestionTiemposFormProps) {
+export function GestionTiemposForm({ initialData, onSave, onCancel, hideActions }: GestionTiemposFormProps) {
   const [rows, setRows] = useState<RowInterno[]>(() => {
     if (initialData?.tiemposPorPrioridad && initialData.tiemposPorPrioridad.length > 0) {
       return initialData.tiemposPorPrioridad.map(toRowInterno);
@@ -103,6 +104,17 @@ export function GestionTiemposForm({ initialData, onSave, onCancel }: GestionTie
   const updateRow = (index: number, updates: Partial<RowInterno>) => {
     setRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...updates } : row)));
   };
+
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+
+  // Auto-propagate changes when used inside a wizard (no buttons)
+  useEffect(() => {
+    if (hideActions && onSaveRef.current) {
+      onSaveRef.current({ tiemposPorPrioridad: rows.map(toTiempoPorPrioridad) });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, hideActions]);
 
   const handleSave = () => {
     if (onSave) {
@@ -259,26 +271,30 @@ export function GestionTiemposForm({ initialData, onSave, onCancel }: GestionTie
       </div>
 
       <div className="flex gap-3 justify-end px-8 pb-8 border-t border-slate-100">
-        <button
-          onClick={handleReset}
-          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-        >
-          Limpiar
-        </button>
-        {onCancel && (
-          <button
-            onClick={onCancel}
-            className="px-6 py-2 bg-slate-400 text-white rounded-lg hover:bg-slate-500 font-medium transition-colors"
-          >
-            Cancelar
-          </button>
+        {!hideActions && (
+          <>
+            <button
+              onClick={handleReset}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+            >
+              Limpiar
+            </button>
+            {onCancel && (
+              <button
+                onClick={onCancel}
+                className="px-6 py-2 bg-slate-400 text-white rounded-lg hover:bg-slate-500 font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+            )}
+            <button
+              onClick={handleSave}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+            >
+              Guardar Cambios
+            </button>
+          </>
         )}
-        <button
-          onClick={handleSave}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
-        >
-          Guardar Cambios
-        </button>
       </div>
     </div>
   );

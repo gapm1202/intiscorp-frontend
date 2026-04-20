@@ -28,6 +28,7 @@ export default function Step5AlcanceSla({ data, onChange, sedes = [], estadoCont
         estadoContrato={estadoContrato}
         contratoCompleto={true}
         slaActivoOverride={estadoContrato?.toLowerCase() === 'activo'}
+        hideActions={true}
         onSave={(saved) => onChange(saved as unknown as AlcanceSlaForm)}
         onCancel={() => {/* no-op en wizard */}}
       />

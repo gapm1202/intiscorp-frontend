@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type DiaSemana = 'Lunes' | 'Martes' | 'Miercoles' | 'Jueves' | 'Viernes' | 'Sabado' | 'Domingo';
 
@@ -31,6 +31,7 @@ interface GestionHorariosFormProps {
   onSave?: (data: HorariosData) => void;
   onCancel?: () => void;
   showFueraHorarioOptions?: boolean;
+  hideActions?: boolean;
 }
 
 const DIAS: DiaSemana[] = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo'];
@@ -121,7 +122,7 @@ function normalizeInitialData(data?: HorariosData | LegacyHorariosData): Horario
   return data as HorariosData;
 }
 
-export function GestionHorariosForm({ initialData, onSave, onCancel, showFueraHorarioOptions }: GestionHorariosFormProps) {
+export function GestionHorariosForm({ initialData, onSave, onCancel, showFueraHorarioOptions, hideActions }: GestionHorariosFormProps) {
   const normalized = useMemo(() => {
     const result = normalizeInitialData(initialData);
     return result || defaultData;
@@ -133,6 +134,17 @@ export function GestionHorariosForm({ initialData, onSave, onCancel, showFueraHo
   useEffect(() => {
     setFormData(normalized);
   }, [normalized]);
+
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+
+  // Auto-propagate changes when used inside a wizard (no buttons)
+  useEffect(() => {
+    if (hideActions && onSaveRef.current) {
+      onSaveRef.current(formData);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData, hideActions]);
 
   const handleSave = () => {
     if (onSave) onSave(formData);
@@ -392,26 +404,30 @@ export function GestionHorariosForm({ initialData, onSave, onCancel, showFueraHo
       </div>
 
       <div className="flex gap-3 justify-end px-8 pb-8 border-t border-slate-100">
-        <button
-          onClick={handleReset}
-          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-        >
-          Limpiar
-        </button>
-        {onCancel && (
-          <button
-            onClick={onCancel}
-            className="px-6 py-2 bg-slate-400 text-white rounded-lg hover:bg-slate-500 font-medium transition-colors"
-          >
-            Cancelar
-          </button>
+        {!hideActions && (
+          <>
+            <button
+              onClick={handleReset}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+            >
+              Limpiar
+            </button>
+            {onCancel && (
+              <button
+                onClick={onCancel}
+                className="px-6 py-2 bg-slate-400 text-white rounded-lg hover:bg-slate-500 font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+            )}
+            <button
+              onClick={handleSave}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+            >
+              Guardar Cambios
+            </button>
+          </>
         )}
-        <button
-          onClick={handleSave}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
-        >
-          Guardar Cambios
-        </button>
       </div>
     </div>
   );

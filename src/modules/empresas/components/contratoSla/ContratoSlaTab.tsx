@@ -13,6 +13,8 @@ import {
   deleteContratoDocumento,
 } from '@/modules/empresas/services/contratosService';
 import { slaService } from '@/modules/sla/services/slaService';
+import { getTicketTypes, getCatalogCategories } from '@/modules/catalogo/services/catalogoService';
+import { getServicios } from '@/modules/catalogo/services/servicioApi';
 
 // ─────────────────────────────────────────────────
 // Helper: convert minutes to human-readable string
@@ -109,8 +111,9 @@ function mapHistorial(rawHistory: any[]) {
     valorAnterior: h.valorAnterior || h.oldValue || '—',
     valorNuevo: h.valorNuevo || h.newValue || '—',
     motivo: h.motivo || h.reason,
-    fecha: new Date(h.fecha || h.timestamp).toLocaleString('es-PE'),
-    usuario: h.usuario || h.user || 'Sistema',
+    // Store raw ISO/timestamp — let component format it
+    fecha: h.fecha || h.timestamp || h.createdAt || h.created_at || '',
+    usuario: h.usuario || h.user || h.userName || h.user_name || 'Sistema',
     tipoAccion: (h.tipoAccion || h.tipo_accion || '').toUpperCase() || 'EDICION',
     contractId: h.contractId || h.contract_id || h.contratoId,
   }));
@@ -147,12 +150,26 @@ function ContratoSlaTabInner({ empresaId, sedes = [], usuariosAdmin = [] }: Inne
     setMode('loading');
     setSaveError(null);
     try {
-      // Fetch contrato + SLA data in parallel
-      const [raw, alcanceRaw, tiemposRaw] = await Promise.all([
+      // Fetch contrato + SLA data + catalogs in parallel
+      const [raw, alcanceRaw, tiemposRaw, horariosRaw, ticketTypes, catalogCategorias, catalogServicios] = await Promise.all([
         getContratoActivo(empresaId),
         slaService.getAlcance(empresaId).catch(() => null),
         slaService.getTiempos(empresaId).catch(() => null),
+        slaService.getHorarios(empresaId).catch(() => null),
+        getTicketTypes().catch(() => [] as any[]),
+        getCatalogCategories().catch(() => [] as any[]),
+        getServicios().catch(() => [] as any[]),
       ]);
+
+      // Build ID → nombre lookup maps
+      const ticketMap: Record<string, string> = {};
+      (ticketTypes || []).forEach((t: any) => { ticketMap[String(t.id)] = t.nombre || t.id; });
+      const catMap: Record<string, string> = {};
+      (catalogCategorias || []).forEach((c: any) => { catMap[String(c.id ?? c._id ?? c.nombre)] = c.nombre; });
+      const svcMap: Record<string, string> = {};
+      (catalogServicios || []).forEach((s: any) => { svcMap[String(s.id ?? s._id)] = s.nombre || String(s.id); });
+      const sedeMap: Record<string, string> = {};
+      sedes.forEach((s) => { sedeMap[s.id] = s.nombre; });
 
       if (raw) {
         const version = mapApiToContratoVersion(raw);
@@ -160,37 +177,71 @@ function ContratoSlaTabInner({ empresaId, sedes = [], usuariosAdmin = [] }: Inne
 
         // Attach SLA data fetched from separate API
         if (alcanceRaw) {
+          const resolveNames = (ids: any[], map: Record<string, string>) =>
+            (ids || []).map((id) => map[String(id)] || String(id));
+
           version.alcanceSla = {
             slaActivo: true,
             aplicaA: 'incidentes',
-            tiposTicket: alcanceRaw.tiposTicket || [],
+            tiposTicket: resolveNames(alcanceRaw.tiposTicket || [], ticketMap),
             serviciosCatalogoSLA: {
               tipo: alcanceRaw.aplica_todos_servicios ? 'todos' : 'seleccionados',
-              servicios: alcanceRaw.servicios?.map(String) ?? [],
+              servicios: resolveNames(alcanceRaw.servicios ?? [], svcMap),
             },
             activosCubiertos: {
               tipo: alcanceRaw.aplica_todas_categorias ? 'todos' : 'porCategoria',
-              categorias: alcanceRaw.categorias?.map(String) ?? [],
+              categorias: resolveNames(alcanceRaw.categorias ?? [], catMap),
             },
             sedesCubiertas: {
               tipo: alcanceRaw.aplica_todas_sedes ? 'todas' : 'seleccionadas',
-              sedes: alcanceRaw.sedes?.map(String) ?? [],
+              sedes: resolveNames(alcanceRaw.sedes ?? [], sedeMap),
             },
             observaciones: alcanceRaw.observaciones || '',
           };
         }
 
-        if (tiemposRaw?.tiempos?.length) {
+        // Normalize tiempos — handle { tiempos: [] }, { data: { tiempos: [] } } or []
+        const tiemposArray: any[] = tiemposRaw
+          ? (Array.isArray(tiemposRaw) ? tiemposRaw
+            : tiemposRaw.tiempos ?? tiemposRaw.data?.tiempos ?? [])
+          : [];
+        if (tiemposArray.length) {
           version.tiemposSla = {
-            tiemposPorPrioridad: tiemposRaw.tiempos.map(t => ({
-              prioridad: t.prioridad.toLowerCase() as 'critica' | 'alta' | 'media' | 'baja',
-              tiempoRespuesta: minutesToDisplay(t.tiempo_respuesta_minutos),
-              tiempoResolucion: minutesToDisplay(t.tiempo_resolucion_minutos),
-              escalamiento: t.escalamiento,
-              tiempoEscalamiento: t.tiempo_escalamiento_minutos
-                ? minutesToDisplay(t.tiempo_escalamiento_minutos)
+            tiemposPorPrioridad: tiemposArray.map((t: any) => ({
+              prioridad: (t.prioridad || 'media').toLowerCase() as 'critica' | 'alta' | 'media' | 'baja',
+              tiempoRespuesta: minutesToDisplay(t.tiempo_respuesta_minutos ?? t.tiempoRespuesta ?? 60),
+              tiempoResolucion: minutesToDisplay(t.tiempo_resolucion_minutos ?? t.tiempoResolucion ?? 240),
+              escalamiento: t.escalamiento ?? false,
+              tiempoEscalamiento: (t.tiempo_escalamiento_minutos || t.tiempoEscalamiento)
+                ? minutesToDisplay(t.tiempo_escalamiento_minutos ?? t.tiempoEscalamiento ?? 0)
                 : undefined,
             })),
+          };
+        }
+
+        const DIAS_NOMBRES: Record<number, string> = {
+          0: 'Domingo', 1: 'Lunes', 2: 'Martes', 3: 'Miercoles',
+          4: 'Jueves', 5: 'Viernes', 6: 'Sabado',
+        };
+        // Normalize horarios — handle { horarios: [] }, { data: { horarios: [] } } or []
+        const horariosArray: any[] = horariosRaw
+          ? (Array.isArray(horariosRaw) ? horariosRaw
+            : horariosRaw.horarios ?? horariosRaw.data?.horarios ?? [])
+          : [];
+        if (horariosArray.length) {
+          const diasRecord: Record<string, { atiende: boolean; horaInicio: string; horaFin: string }> = {};
+          horariosArray.forEach((h: any) => {
+            const nombre = DIAS_NOMBRES[h.day_of_week] || String(h.day_of_week);
+            diasRecord[nombre] = {
+              atiende: h.atiende ?? h.activo ?? true,
+              horaInicio: (h.hora_inicio || h.horaInicio || '08:00').slice(0, 5),
+              horaFin: (h.hora_fin || h.horaFin || '18:00').slice(0, 5),
+            };
+          });
+          version.horariosSla = {
+            dias: diasRecord as any,
+            excluirFeriados: false,
+            calendarioFeriados: [],
           };
         }
 
@@ -207,7 +258,7 @@ function ContratoSlaTabInner({ empresaId, sedes = [], usuariosAdmin = [] }: Inne
       setMode('wizard');
       reset();
     }
-  }, [empresaId, reset]);
+  }, [empresaId, reset, sedes]);
 
   useEffect(() => { loadContrato(); }, [loadContrato]);
 
@@ -279,6 +330,15 @@ function ContratoSlaTabInner({ empresaId, sedes = [], usuariosAdmin = [] }: Inne
       try {
         await slaService.guardarAlcance(empresaId, {
           tiposTicket: al.tiposTicket,
+          servicios: al.serviciosCatalogoSLA?.tipo === 'todos'
+            ? undefined
+            : (al.serviciosCatalogoSLA?.servicios ?? []).map(Number).filter(Boolean),
+          categorias: al.activosCubiertos?.tipo === 'todos'
+            ? undefined
+            : (al.activosCubiertos?.categorias ?? []).map(Number).filter(Boolean),
+          sedes: al.sedesCubiertas?.tipo === 'todas'
+            ? undefined
+            : (al.sedesCubiertas?.sedes ?? []).map(Number).filter(Boolean),
           aplica_todos_servicios: al.serviciosCatalogoSLA?.tipo === 'todos',
           aplica_todas_categorias: al.activosCubiertos?.tipo === 'todos',
           aplica_todas_sedes: al.sedesCubiertas?.tipo === 'todas',
@@ -380,19 +440,8 @@ function ContratoSlaTabInner({ empresaId, sedes = [], usuariosAdmin = [] }: Inne
     }
   };
 
-  // Compute "mostrar renovar" logic
-  const mostrarBotonRenovar = (() => {
-    if (!contratoActivo) return false;
-    const estado = (contratoActivo.estado || '').toLowerCase();
-    if (estado === 'suspendido' || estado === 'vencido') return true;
-    if (contratoActivo.fechaFin) {
-      const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-      const fin = new Date(contratoActivo.fechaFin); fin.setHours(0, 0, 0, 0);
-      const dias = Math.ceil((fin.getTime() - hoy.getTime()) / 86400000);
-      return dias <= 30;
-    }
-    return false;
-  })();
+  // Show renovar button whenever a contract exists
+  const mostrarBotonRenovar = !!contratoActivo;
 
   return (
     <div className="relative">
