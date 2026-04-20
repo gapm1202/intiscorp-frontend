@@ -61,6 +61,8 @@ export default function ContratoSlaWizard({ empresaId, sedes = [], usuariosAdmin
   const slaStep5Saved = useRef(false);
   const slaStep6Saved = useRef(false);
   const slaStep7Saved = useRef(false);
+  // Guard against double/triple submit — lives in the wizard, survives parent re-renders
+  const isSubmittingRef = useRef(false);
 
   const steps = state.isRenewal ? WIZARD_STEPS_RENEWAL : WIZARD_STEPS;
   const current = state.currentStep;
@@ -71,15 +73,18 @@ export default function ContratoSlaWizard({ empresaId, sedes = [], usuariosAdmin
   const color = colorMap[GROUP_COLORS[group] as keyof typeof colorMap] || 'blue';
 
   const handleNext = useCallback(() => {
+    // Prevent double/triple click before React re-renders with isSaving=true
+    if (isSubmittingRef.current || isSaving) return;
     const err = validateStep(current, state);
     if (err) { setStepError(err); return; }
     setStepError(null);
     if (current === total) {
-      onSave(state);
+      isSubmittingRef.current = true;
+      onSave(state).finally(() => { isSubmittingRef.current = false; });
     } else {
       nextStep();
     }
-  }, [current, total, state, nextStep, onSave]);
+  }, [current, total, state, nextStep, onSave, isSaving]);
 
   const handlePrev = useCallback(() => {
     setStepError(null);

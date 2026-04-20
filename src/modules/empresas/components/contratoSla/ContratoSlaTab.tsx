@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ContratoSlaProvider, useContratoSla } from './ContratoSlaContext';
 import ContratoSlaWizard from './ContratoSlaWizard';
 import ContratoSlaView from './ContratoSlaView';
@@ -133,6 +133,7 @@ function ContratoSlaTabInner({ empresaId, sedes = [], usuariosAdmin = [] }: Inne
 
   const [mode, setMode] = useState<'loading' | 'wizard' | 'view'>('loading');
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false); // sync guard — prevents double-submit before React state propagates
   const [saveError, setSaveError] = useState<string | null>(null);
   const [contratoActivo, setContratoActivo] = useState<ContratoVersion | null>(null);
   const [historial, setHistorial] = useState<any[]>([]);
@@ -264,6 +265,9 @@ function ContratoSlaTabInner({ empresaId, sedes = [], usuariosAdmin = [] }: Inne
 
   // Save wizard
   const handleWizardSave = async (wizardState: WizardContratoSlaState) => {
+    // Guard against double/triple submit (click spam before React re-renders)
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     setSaveError(null);
     try {
@@ -389,6 +393,7 @@ function ContratoSlaTabInner({ empresaId, sedes = [], usuariosAdmin = [] }: Inne
       setSaveError(msg);
       showToast('❌ ' + msg, 'error');
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };

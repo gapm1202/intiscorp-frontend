@@ -1,5 +1,5 @@
 ﻿
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { getEmpresaById } from "@/modules/empresas/services/empresasService";
 import { getSedesByEmpresa, toggleSedeActivo } from "@/modules/empresas/services/sedesService";
@@ -210,6 +210,12 @@ const EmpresaDetailPage = () => {
   
   // Usuarios administrativos (para ContratoSlaTab)
   const [usuariosAdmin, setUsuariosAdmin] = useState<Array<{ id: string; nombre: string }>>([]);
+
+  // Stable sedes array for ContratoSlaTab — prevents loadContrato from re-running on every parent render
+  const sedesForTab = useMemo(() =>
+    sedes.map(s => ({ id: String((s as any)._id || (s as any).id || ''), nombre: s.nombre || '' })),
+    [sedes]
+  );
   const [showToast, setShowToast] = useState(false);
   const [toastMessage] = useState('');
   const [toastType] = useState<'success' | 'error'>('success');
@@ -734,7 +740,7 @@ return (
           {(activeTab === 'contrato-sla' || activeTab === 'contrato' || activeTab === 'sla') && (
             <ContratoSlaTab
               empresaId={empresaId!}
-              sedes={sedes.map(s => ({ id: String((s as any)._id || (s as any).id || ''), nombre: s.nombre || '' }))}
+              sedes={sedesForTab}
               usuariosAdmin={usuariosAdmin}
             />
           )}
