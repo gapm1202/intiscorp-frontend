@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { MantenimientoForm } from '../types';
+import { getCategorias, type Category } from '@/modules/inventario/services/categoriasService';
 
 interface Props {
   data: MantenimientoForm;
@@ -8,12 +9,23 @@ interface Props {
 
 const FRECUENCIAS = ['Mensual', 'Bimestral', 'Trimestral', 'Semestral', 'Anual', 'Según demanda'];
 const MODALIDADES = ['Presencial', 'Remoto', 'Mixto'];
-const APLICA_OPTIONS = ['Servidores', 'PCs y laptops', 'Equipos de red', 'Impresoras', 'Todos los equipos'];
 
 export default function Step3Mantenimiento({ data, onChange }: Props) {
-  const [local, setLocal] = useState<MantenimientoForm>(data);
+  const [local, setLocal] = useState<MantenimientoForm>({ categoriasAplica: [], ...data });
+  const [categorias, setCategorias] = useState<Category[]>([]);
+  const [loadingCats, setLoadingCats] = useState(false);
 
-  useEffect(() => { setLocal(data); }, [data]);
+  useEffect(() => { setLocal({ categoriasAplica: [], ...data }); }, [data]);
+
+  // Carga categorías solo cuando se selecciona "por_categoria"
+  useEffect(() => {
+    if (local.aplica === 'por_categoria' && categorias.length === 0) {
+      setLoadingCats(true);
+      getCategorias()
+        .then(setCategorias)
+        .finally(() => setLoadingCats(false));
+    }
+  }, [local.aplica]);
 
   const update = (patch: Partial<MantenimientoForm>) => {
     const next = { ...local, ...patch };
@@ -21,8 +33,18 @@ export default function Step3Mantenimiento({ data, onChange }: Props) {
     onChange(next);
   };
 
+  const toggleCategoria = (id: string) => {
+    const current = local.categoriasAplica ?? [];
+    const next = current.includes(id)
+      ? current.filter(c => c !== id)
+      : [...current, id];
+    update({ categoriasAplica: next });
+  };
+
   const inputCls = 'w-full px-3 py-2.5 bg-white rounded-lg border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all';
   const labelCls = 'block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide';
+
+  const aplicaLabel = local.aplica === 'todos' ? 'Todos los activos' : local.aplica === 'por_categoria' ? 'Por categoría' : '';
 
   return (
     <div className="space-y-6">
@@ -70,12 +92,58 @@ export default function Step3Mantenimiento({ data, onChange }: Props) {
             {/* Aplica a */}
             <div className="bg-slate-50 rounded-xl border border-slate-100 p-4">
               <label className={labelCls}>Aplica a <span className="text-red-500">*</span></label>
-              <select value={local.aplica} onChange={e => update({ aplica: e.target.value })} className={inputCls}>
+              <select
+                value={local.aplica}
+                onChange={e => update({ aplica: e.target.value, categoriasAplica: [] })}
+                className={inputCls}
+              >
                 <option value="">-- Seleccionar --</option>
-                {APLICA_OPTIONS.map(a => <option key={a} value={a.toLowerCase()}>{a}</option>)}
+                <option value="todos">Todos los activos</option>
+                <option value="por_categoria">Por categoría</option>
               </select>
             </div>
           </div>
+
+          {/* Selector de categorías – solo cuando aplica = por_categoria */}
+          {local.aplica === 'por_categoria' && (
+            <div className="bg-slate-50 rounded-xl border border-slate-100 p-4">
+              <label className={labelCls}>Categorías de activos <span className="text-red-500">*</span></label>
+              {loadingCats ? (
+                <p className="text-sm text-slate-400 mt-2">Cargando categorías...</p>
+              ) : categorias.length === 0 ? (
+                <p className="text-sm text-slate-400 mt-2">No hay categorías registradas.</p>
+              ) : (
+                <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {categorias.map(cat => {
+                    const id = String(cat.id ?? cat.codigo ?? cat.nombre);
+                    const selected = (local.categoriasAplica ?? []).includes(id);
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => toggleCategoria(id)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all text-left ${
+                          selected
+                            ? 'bg-emerald-50 border-emerald-400 text-emerald-700'
+                            : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                          {selected && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                        </span>
+                        {cat.nombre}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {(local.categoriasAplica ?? []).length > 0 && (
+                <p className="text-xs text-emerald-600 mt-2 font-medium">
+                  {local.categoriasAplica.length} categoría{local.categoriasAplica.length !== 1 ? 's' : ''} seleccionada{local.categoriasAplica.length !== 1 ? 's' : ''}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Observaciones */}
           <div className="bg-slate-50 rounded-xl border border-slate-100 p-4">
@@ -95,7 +163,11 @@ export default function Step3Mantenimiento({ data, onChange }: Props) {
             <div className="flex flex-wrap gap-2">
               {local.frecuencia && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-medium">🗓️ {local.frecuencia}</span>}
               {local.modalidad && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-medium">📍 {local.modalidad}</span>}
-              {local.aplica && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-medium">🖥️ {local.aplica}</span>}
+              {aplicaLabel && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-medium">🖥️ {aplicaLabel}</span>}
+              {local.aplica === 'por_categoria' && (local.categoriasAplica ?? []).map(id => {
+                const cat = categorias.find(c => String(c.id ?? c.codigo ?? c.nombre) === id);
+                return cat ? <span key={id} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium">{cat.nombre}</span> : null;
+              })}
             </div>
           </div>
         </div>

@@ -132,6 +132,7 @@ export function GestionHorariosForm({ initialData, onSave, onCancel, showFueraHo
   const [nuevoFeriado, setNuevoFeriado] = useState('');
 
   useEffect(() => {
+    if (hideActions) return;
     setFormData(normalized);
   }, [normalized]);
 

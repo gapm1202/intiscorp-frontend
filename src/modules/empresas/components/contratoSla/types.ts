@@ -41,7 +41,8 @@ export interface MantenimientoForm {
   incluyePreventivo: boolean;
   frecuencia: string;
   modalidad: string;
-  aplica: string;
+  aplica: string; // 'todos' | 'por_categoria'
+  categoriasAplica: string[]; // IDs de categorías seleccionadas
   observaciones: string;
 }
 
@@ -197,6 +198,7 @@ export const defaultMantenimiento: MantenimientoForm = {
   frecuencia: '',
   modalidad: '',
   aplica: '',
+  categoriasAplica: [],
   observaciones: '',
 };
 

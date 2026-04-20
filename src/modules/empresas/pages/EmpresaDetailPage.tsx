@@ -9,7 +9,6 @@ import CreateEmpresaWizard from "@/modules/empresas/components/wizard/CreateEmpr
 import { getUsuariosByEmpresa } from "@/modules/usuarios/services/usuariosService";
 import DeleteSedeModal from "./../components/DeleteSedeModal";
 import { useNavGuard } from "@/context/NavGuardContext";
-import MantenimientoSubTabs from "@/modules/mantenimiento/components/MantenimientoSubTabs";
 import ContratoSlaTab from "@/modules/empresas/components/contratoSla/ContratoSlaTab";
 
 interface Sede {
@@ -200,7 +199,7 @@ const EmpresaDetailPage = () => {
   const [sedeToDelete, setSedeToDelete] = useState<Sede | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   // Restaurar activeTab desde sessionStorage para mantener la pestaña después de reload
-  const [activeTab, setActiveTab] = useState<'general' | 'sedes' | 'contactos' | 'contrato-sla' | 'contrato' | 'sla' | 'mantenimientos' | 'historial'>(
+  const [activeTab, setActiveTab] = useState<'general' | 'sedes' | 'contactos' | 'contrato-sla' | 'contrato' | 'sla' | 'historial'>(
     () => {
       const saved = sessionStorage.getItem(`empresaTab_${empresaId}`);
       // Migrate old 'contrato' or 'sla' tab to unified 'contrato-sla'
@@ -222,14 +221,7 @@ const EmpresaDetailPage = () => {
   const [pendingTab, setPendingTab] = useState<string | null>(null);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
 
-  // Mantenimiento Preventivo (para MantenimientoSubTabs)
-  const [preventivoData] = useState({
-    incluyePreventivo: false,
-    frecuencia: '',
-    modalidad: '',
-    aplica: '',
-    observaciones: '',
-  });
+  
 
   const getInitials = (name?: string) => {
     if (!name) return "?";
@@ -497,12 +489,7 @@ return (
                 { id: 'sedes', label: 'Sedes', icon: '📍', badge: sedes.length },
                 { id: 'contactos', label: 'Contactos', icon: '👥' },
                 { id: 'contrato-sla', label: 'Contrato & SLA', icon: '📄' },
-                {
-                  id: 'mantenimientos',
-                  label: 'Mantenimientos',
-                  icon: '🔧',
-                  disabled: false,
-                },
+                
                 { id: 'historial', label: 'Historial', icon: '📊' },
               ].map(tab => (
                 <div key={tab.id} className="relative group">
@@ -752,24 +739,7 @@ return (
             />
           )}
 
-          {/* TAB: Mantenimientos */}
-          {activeTab === 'mantenimientos' && (
-            <div className="bg-white rounded-2xl border border-blue-100 shadow-sm p-7">
-              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
-                <div className="p-2.5 bg-indigo-50 rounded-xl">
-                  <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                </div>
-                <h2 className="text-xl font-bold text-slate-900">Mantenimiento Preventivo</h2>
-              </div>
-              <MantenimientoSubTabs
-                empresa={empresa}
-                empresaId={empresaId!}
-                frecuencia={preventivoData.frecuencia}
-                modalidad={preventivoData.modalidad}
-                contractStatus={empresa?.estadoContrato}
-              />
-            </div>
-          )}
+          
 
           {/* TAB: Historial */}
           {activeTab === 'historial' && (

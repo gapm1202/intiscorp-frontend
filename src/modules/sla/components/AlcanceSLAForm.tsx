@@ -132,6 +132,9 @@ export function AlcanceSLAForm({
   }, [estadoContrato, estadoContratoActivo, estadoContratoInactivo]);
 
   useEffect(() => {
+    // In wizard mode (hideActions) the form owns its state and propagates up;
+    // resetting here would undo every user interaction immediately.
+    if (hideActions) return;
     setFormData(getInitialData());
   }, [initialData, estadoContrato, contratoCompleto]);
 

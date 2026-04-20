@@ -94,6 +94,7 @@ export function GestionTiemposForm({ initialData, onSave, onCancel, hideActions 
   });
 
   useEffect(() => {
+    if (hideActions) return;
     if (initialData?.tiemposPorPrioridad && initialData.tiemposPorPrioridad.length > 0) {
       setRows(initialData.tiemposPorPrioridad.map(toRowInterno));
     } else {
