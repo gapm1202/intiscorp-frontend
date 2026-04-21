@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { UsuarioData, SedeData, ContactoAdminConfig, ContactoTecnicoConfig, ResponsableSedeConfig } from "./wizardTypes";
-
 interface Step4Props {
   usuarios: UsuarioData[];
   sedes: SedeData[];
@@ -12,6 +11,9 @@ interface Step4Props {
   onResponsablesSedeChange: (responsables: ResponsableSedeConfig[]) => void;
   onNext: () => void;
   onPrev: () => void;
+  isLastStep?: boolean;
+  onSubmit?: () => void;
+  loading?: boolean;
 }
 
 const Step4Contactos = ({
@@ -25,11 +27,16 @@ const Step4Contactos = ({
   onResponsablesSedeChange,
   onNext,
   onPrev,
+  isLastStep = false,
+  onSubmit,
+  loading = false,
 }: Step4Props) => {
   const [adminSelect, setAdminSelect] = useState("");
   const [tecnicoSelect, setTecnicoSelect] = useState("");
-  const [responsableSelect, setResponsableSelect] = useState("");
-  const [responsableSedeSelect, setResponsableSedeSelect] = useState("");
+  // Per-sede user selectors: { [sedeId]: usuarioId }
+  const [responsableSelectBySede, setResponsableSelectBySede] = useState<Record<string, string>>({});
+  // Expanded state for each sede accordion: { [sedeId]: boolean }
+  const [sedeExpanded, setSedeExpanded] = useState<Record<string, boolean>>({});
 
   // Usuarios disponibles que no han sido asignados aún como cierto rol
   const usedAdminIds = new Set(contactosAdmin.map(c => c.usuarioId));
@@ -82,27 +89,26 @@ const Step4Contactos = ({
     onContactosTecnicosChange(contactosTecnicos.map((c, i) => i === idx ? { ...c, [field]: value } : c));
   };
 
-  const handleAddResponsable = () => {
-    if (!responsableSelect || !responsableSedeSelect) return;
-    const usr = usuarios.find(u => (u._id || u.id) === responsableSelect);
-    const sede = sedes.find(s => (s._id || s.id) === responsableSedeSelect);
-    if (!usr || !sede) return;
-    const key = `${responsableSelect}-${responsableSedeSelect}`;
+  const handleAddResponsable = (sedeId: string, sedeNombre: string) => {
+    const usuarioId = responsableSelectBySede[sedeId] || "";
+    if (!usuarioId) return;
+    const usr = usuarios.find(u => (u._id || u.id) === usuarioId);
+    if (!usr) return;
+    const key = `${usuarioId}-${sedeId}`;
     if (usedResponsableKeys.has(key)) return;
     onResponsablesSedeChange([
       ...responsablesSede,
       {
-        usuarioId: responsableSelect,
+        usuarioId,
         nombreCompleto: usr.nombreCompleto,
-        sedeId: responsableSedeSelect,
-        sedeNombre: sede.nombre,
+        sedeId,
+        sedeNombre,
         autorizaIngresoTecnico: false,
         autorizaMantenimientoFueraHorario: false,
         supervisionCoordinacion: false,
       },
     ]);
-    setResponsableSelect("");
-    setResponsableSedeSelect("");
+    setResponsableSelectBySede(prev => ({ ...prev, [sedeId]: "" }));
   };
 
   const handleRemoveResponsable = (idx: number) => {
@@ -263,70 +269,129 @@ const Step4Contactos = ({
         <h4 className="font-semibold text-gray-800 mb-1 flex items-center gap-2">
           <span>👥</span> Responsables de la Sede
         </h4>
-        <p className="text-xs text-gray-500 mb-4">Asigna responsables con autorizaciones por sede.</p>
+        <p className="text-xs text-gray-500 mb-1">Asigna responsables con autorizaciones por sede.</p>
 
-        <div className="flex gap-2 mb-4">
-          <select
-            value={responsableSelect}
-            onChange={e => setResponsableSelect(e.target.value)}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            disabled={noUsuarios}
-          >
-            <option value="">-- Seleccionar usuario --</option>
-            {usuarios.map(u => (
-              <option key={u._id || u.id} value={u._id || u.id}>{u.nombreCompleto}</option>
-            ))}
-          </select>
-          <select
-            value={responsableSedeSelect}
-            onChange={e => setResponsableSedeSelect(e.target.value)}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            disabled={sedes.length === 0}
-          >
-            <option value="">-- Seleccionar sede --</option>
-            {sedes.map(s => (
-              <option key={s._id || s.id} value={s._id || s.id}>{s.nombre}</option>
-            ))}
-          </select>
-          <button type="button" onClick={handleAddResponsable} disabled={!responsableSelect || !responsableSedeSelect} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors">
-            Agregar
-          </button>
-        </div>
+        
 
-        {responsablesSede.length > 0 && (
+        {sedes.length === 0 ? (
+          <div className="text-sm text-gray-500 bg-white rounded-lg border border-dashed border-gray-300 px-4 py-6 text-center">
+            No hay sedes creadas. Regresa al paso 2 para crear sedes.
+          </div>
+        ) : (
           <div className="space-y-3">
-            {responsablesSede.map((resp, idx) => (
-              <div key={idx} className="bg-white p-4 rounded-lg border border-gray-200">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <span className="font-medium text-gray-800 text-sm">{resp.nombreCompleto}</span>
-                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">{resp.sedeNombre}</span>
-                  </div>
-                  <button type="button" onClick={() => handleRemoveResponsable(idx)} className="text-red-500 hover:text-red-700 text-sm">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            {sedes.map(sede => {
+              const sedeId = sede._id || sede.id || sede.nombre;
+              const sedeNombre = sede.nombre || "Sede sin nombre";
+              const isExpanded = sedeExpanded[sedeId ?? ""] ?? false;
+              const sedeResponsables = responsablesSede.filter(r => r.sedeId === sedeId);
+              const usedInSede = new Set(sedeResponsables.map(r => r.usuarioId));
+              const availableUsers = usuarios.filter(u => !usedInSede.has(u._id || u.id || ""));
+              const selectedUser = responsableSelectBySede[sedeId ?? ""] || "";
+
+              return (
+                <div key={sedeId} className="border border-gray-200 rounded-xl bg-white overflow-hidden">
+                  {/* Sede header / accordion toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setSedeExpanded(prev => ({ ...prev, [sedeId ?? ""]: !isExpanded }))}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-base">🏢</span>
+                      <span className="font-semibold text-gray-800 text-sm">{sedeNombre}</span>
+                      {sedeResponsables.length > 0 && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                          {sedeResponsables.length} responsable{sedeResponsables.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                    <svg
+                      className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
                   </button>
+
+                  {isExpanded && (
+                    <div className="px-4 pb-4 border-t border-slate-100 pt-3 space-y-3">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-600 mb-2">Responsables de la Sede</p>
+                        <p className="text-xs text-gray-400 mb-3">Asigna responsables con autorizaciones por sede.</p>
+
+                        {/* Add form */}
+                        <div className="flex gap-2">
+                          <select
+                            value={selectedUser}
+                            onChange={e => setResponsableSelectBySede(prev => ({ ...prev, [sedeId ?? ""]: e.target.value }))}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            disabled={noUsuarios}
+                          >
+                            <option value="">-- Seleccionar usuario --</option>
+                            {availableUsers.map(u => (
+                              <option key={u._id || u.id} value={u._id || u.id}>{u.nombreCompleto}</option>
+                            ))}
+                          </select>
+                          <div className="flex items-center px-3 py-2 border border-gray-200 rounded-lg bg-slate-50 text-sm text-gray-500 min-w-0 max-w-[160px] truncate">
+                            {sedeNombre}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleAddResponsable(sedeId ?? "", sedeNombre)}
+                            disabled={!selectedUser}
+                            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors whitespace-nowrap"
+                          >
+                            Agregar
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Assigned responsables for this sede */}
+                      {sedeResponsables.length > 0 && (
+                        <div className="space-y-2">
+                          {sedeResponsables.map((resp, idx) => {
+                            const globalIdx = responsablesSede.findIndex(
+                              r => r.usuarioId === resp.usuarioId && r.sedeId === resp.sedeId
+                            );
+                            return (
+                              <div key={idx} className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="font-medium text-gray-800 text-sm">{resp.nombreCompleto}</span>
+                                  <button type="button" onClick={() => handleRemoveResponsable(globalIdx)} className="text-red-400 hover:text-red-600">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                  </button>
+                                </div>
+                                <div className="p-2 bg-white rounded border border-gray-100">
+                                  <p className="text-xs font-semibold text-gray-500 mb-1.5 flex items-center gap-1">🔐 Autorizaciones</p>
+                                  <div className="flex flex-wrap gap-3">
+                                    <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                                      <input type="checkbox" checked={resp.autorizaIngresoTecnico} onChange={e => handleResponsableFieldChange(globalIdx, "autorizaIngresoTecnico", e.target.checked)} className="w-4 h-4" />
+                                      Autoriza ingreso técnico
+                                    </label>
+                                    <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                                      <input type="checkbox" checked={resp.autorizaMantenimientoFueraHorario} onChange={e => handleResponsableFieldChange(globalIdx, "autorizaMantenimientoFueraHorario", e.target.checked)} className="w-4 h-4" />
+                                      Mantenimiento fuera de horario
+                                    </label>
+                                    <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                                      <input type="checkbox" checked={resp.supervisionCoordinacion} onChange={e => handleResponsableFieldChange(globalIdx, "supervisionCoordinacion", e.target.checked)} className="w-4 h-4" />
+                                      Supervisión y coordinación
+                                    </label>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {sedeResponsables.length === 0 && (
+                        <p className="text-xs text-gray-400 italic">Sin responsables asignados a esta sede aún.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                  <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1">
-                    <span>🔐</span> Autorizaciones
-                  </p>
-                  <div className="flex flex-wrap gap-4">
-                    <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                      <input type="checkbox" checked={resp.autorizaIngresoTecnico} onChange={e => handleResponsableFieldChange(idx, "autorizaIngresoTecnico", e.target.checked)} className="w-4 h-4" />
-                      Autoriza ingreso técnico
-                    </label>
-                    <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                      <input type="checkbox" checked={resp.autorizaMantenimientoFueraHorario} onChange={e => handleResponsableFieldChange(idx, "autorizaMantenimientoFueraHorario", e.target.checked)} className="w-4 h-4" />
-                      Mantenimiento fuera de horario
-                    </label>
-                    <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                      <input type="checkbox" checked={resp.supervisionCoordinacion} onChange={e => handleResponsableFieldChange(idx, "supervisionCoordinacion", e.target.checked)} className="w-4 h-4" />
-                      Supervisión y coordinación
-                    </label>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -362,14 +427,28 @@ const Step4Contactos = ({
         </button>
         <button
           type="button"
-          onClick={onNext}
-          disabled={contactosAdmin.length === 0 || contactosTecnicos.length === 0 || responsablesSede.length === 0}
+          onClick={isLastStep ? onSubmit : onNext}
+          disabled={loading || contactosAdmin.length === 0 || contactosTecnicos.length === 0 || responsablesSede.length === 0}
           className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
         >
-          Siguiente
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+          {loading ? (
+            <>
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+              Guardando...
+            </>
+          ) : isLastStep ? (
+            <>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              Guardar cambios
+            </>
+          ) : (
+            <>
+              Siguiente
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </>
+          )}
         </button>
       </div>
     </div>

@@ -86,12 +86,12 @@ const mapEmpresaToEditWizardData = (empresa?: Empresa | null, sedes: Sede[] = []
   if (!empresa) return undefined;
 
   const findUsuarioId = (nombre?: string, email?: string) => {
+    if (!nombre && !email) return "";
     const matched = usuarios.find((usuario) => {
       const sameEmail = email && String(usuario.correo || "").toLowerCase() === String(email).toLowerCase();
       const sameName = nombre && String(usuario.nombreCompleto || "").trim().toLowerCase() === String(nombre).trim().toLowerCase();
       return sameEmail || sameName;
     });
-
     return String(matched?._id || matched?.id || "");
   };
 
@@ -128,11 +128,17 @@ const mapEmpresaToEditWizardData = (empresa?: Empresa | null, sedes: Sede[] = []
   }));
 
   const contactosAdmin = Array.isArray(empresa.contactosAdmin) && empresa.contactosAdmin.length > 0
-    ? empresa.contactosAdmin.map((contacto, index) => ({
-        usuarioId: findUsuarioId(contacto.nombre, contacto.email) || `admin-${index}`,
-        nombreCompleto: String(contacto.nombre ?? ""),
-        autorizacionFacturacion: Boolean((contacto as any).autorizacionFacturacion ?? empresa.autorizacionFacturacion ?? (empresa as any).autorizacion_facturacion ?? false),
-      }))
+    ? empresa.contactosAdmin.map((contacto, index) => {
+        const displayName = String((contacto as any).nombreCompleto || contacto.nombre || "");
+        const resolvedId = findUsuarioId(displayName, contacto.email)
+          || String((contacto as any).usuarioId || (contacto as any).usuario_id || "")
+          || `admin-${index}`;
+        return {
+          usuarioId: resolvedId,
+          nombreCompleto: displayName,
+          autorizacionFacturacion: Boolean((contacto as any).autorizacionFacturacion ?? empresa.autorizacionFacturacion ?? (empresa as any).autorizacion_facturacion ?? false),
+        };
+      })
     : (empresa.adminNombre || empresa.adminEmail)
     ? [{
         usuarioId: findUsuarioId(empresa.adminNombre, empresa.adminEmail) || "admin-0",
@@ -142,15 +148,21 @@ const mapEmpresaToEditWizardData = (empresa?: Empresa | null, sedes: Sede[] = []
     : [];
 
   const contactosTecnicos = Array.isArray(empresa.contactosTecnicos) && empresa.contactosTecnicos.length > 0
-    ? empresa.contactosTecnicos.map((contacto, index) => ({
-        usuarioId: findUsuarioId(contacto.nombre, contacto.email) || `tecnico-${index}`,
-        nombreCompleto: String(contacto.nombre ?? ""),
-        horarioDisponible: String(contacto.horarioDisponible ?? ""),
-        contactoPrincipal: Boolean(contacto.contactoPrincipal ?? false),
-        autorizaCambiosCriticos: Boolean(contacto.autorizaCambiosCriticos ?? false),
-        supervisionCoordinacion: Boolean(contacto.supervisionCoordinacion ?? false),
-        nivelAutorizacion: String(contacto.nivelAutorizacion ?? ""),
-      }))
+    ? empresa.contactosTecnicos.map((contacto, index) => {
+        const displayName = String((contacto as any).nombreCompleto || contacto.nombre || "");
+        const resolvedId = findUsuarioId(displayName, contacto.email)
+          || String((contacto as any).usuarioId || (contacto as any).usuario_id || "")
+          || `tecnico-${index}`;
+        return {
+          usuarioId: resolvedId,
+          nombreCompleto: displayName,
+          horarioDisponible: String(contacto.horarioDisponible ?? ""),
+          contactoPrincipal: Boolean(contacto.contactoPrincipal ?? false),
+          autorizaCambiosCriticos: Boolean(contacto.autorizaCambiosCriticos ?? false),
+          supervisionCoordinacion: Boolean(contacto.supervisionCoordinacion ?? false),
+          nivelAutorizacion: String(contacto.nivelAutorizacion ?? ""),
+        };
+      })
     : (empresa.tecNombre || empresa.tecEmail)
     ? [{
         usuarioId: findUsuarioId(empresa.tecNombre, empresa.tecEmail) || "tecnico-0",
@@ -180,7 +192,27 @@ const mapEmpresaToEditWizardData = (empresa?: Empresa | null, sedes: Sede[] = []
     usuarios: wizardUsuarios,
     contactosAdmin,
     contactosTecnicos,
-    responsablesSede: [],
+    responsablesSede: (
+      Array.isArray((empresa as any).responsablesSede)
+        ? (empresa as any).responsablesSede
+        : Array.isArray((empresa as any).responsables_sede)
+          ? (empresa as any).responsables_sede
+          : []
+    ).map((r: any) => {
+      const usuarioId = String(r.usuarioId || r.usuario_id || "");
+      const sedeId = String(r.sedeId || r.sede_id || "");
+      const matchedSede = wizardSedes.find(s => s._id === sedeId || s.id === sedeId);
+      const matchedUser = wizardUsuarios.find(u => u._id === usuarioId || u.id === usuarioId);
+      return {
+        usuarioId,
+        nombreCompleto: String(r.nombreCompleto || matchedUser?.nombreCompleto || ""),
+        sedeId,
+        sedeNombre: String(r.sedeNombre || matchedSede?.nombre || ""),
+        autorizaIngresoTecnico: Boolean(r.autorizaIngresoTecnico ?? r.autoriza_ingreso_tecnico ?? false),
+        autorizaMantenimientoFueraHorario: Boolean(r.autorizaMantenimientoFueraHorario ?? r.autoriza_mantenimiento_fuera_horario ?? false),
+        supervisionCoordinacion: Boolean(r.supervisionCoordinacion ?? r.supervision_coordinacion ?? false),
+      };
+    }),
     contrasenaPortalSoporte: "",
   };
 };
@@ -195,6 +227,7 @@ const EmpresaDetailPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [showCreateSedeModal, setShowCreateSedeModal] = useState(false);
   const [selectedSede, setSelectedSede] = useState<Sede | null>(null);
+  const [viewSede, setViewSede] = useState<Sede | null>(null);
   const [showEditEmpresaModal, setShowEditEmpresaModal] = useState(false);
   const [sedeToDelete, setSedeToDelete] = useState<Sede | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -220,7 +253,11 @@ const EmpresaDetailPage = () => {
   const [toastMessage] = useState('');
   const [toastType] = useState<'success' | 'error'>('success');
   const [empresaUsuarios, setEmpresaUsuarios] = useState<any[]>([]);
-  const empresaEditInitialData = mapEmpresaToEditWizardData(empresa, sedes, empresaUsuarios);
+  const empresaEditInitialData = useMemo(
+    () => mapEmpresaToEditWizardData(empresa, sedes, empresaUsuarios),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [empresa?._id, empresa?.nombre, sedes.length, empresaUsuarios.length]
+  );
 
   // Confirmación de salida sin guardar
   const [showUnsavedConfirmModal, setShowUnsavedConfirmModal] = useState(false);
@@ -258,10 +295,14 @@ const EmpresaDetailPage = () => {
       setLoading(true);
       setError(null);
       try {
-        const data = await getEmpresaById(empresaId);
+        const [data, sedesData, usuariosData] = await Promise.all([
+          getEmpresaById(empresaId),
+          getSedesByEmpresa(empresaId, true),
+          getUsuariosByEmpresa(empresaId).catch(() => []),
+        ]);
         setEmpresa(data);
-        const sedesData = await getSedesByEmpresa(empresaId, true);
         setSedes(Array.isArray(sedesData) ? sedesData : sedesData.data || []);
+        setEmpresaUsuarios(Array.isArray(usuariosData) ? usuariosData : []);
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : "Error al cargar empresa";
         console.error('[ERROR] Al cargar empresa/sedes:', err);
@@ -296,22 +337,6 @@ const EmpresaDetailPage = () => {
 
     fetchUsuariosAdmin();
   }, [activeTab]);
-
-  useEffect(() => {
-    if (!showEditEmpresaModal || !empresaId) return;
-
-    const fetchUsuariosEmpresa = async () => {
-      try {
-        const usuarios = await getUsuariosByEmpresa(empresaId);
-        setEmpresaUsuarios(Array.isArray(usuarios) ? usuarios : []);
-      } catch (err) {
-        console.error('Error al cargar usuarios de la empresa para edición:', err);
-        setEmpresaUsuarios([]);
-      }
-    };
-
-    fetchUsuariosEmpresa();
-  }, [empresaId, showEditEmpresaModal]);
 
   // Guardar activeTab en sessionStorage para restaurarlo después de reload
   useEffect(() => {
@@ -803,6 +828,10 @@ return (
                           </div>
                         </div>
                         <div className="flex gap-1.5 flex-wrap justify-end">
+                          <button onClick={() => setViewSede(sede)}
+                            className="text-xs font-semibold py-1.5 px-2.5 rounded-lg transition-all text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100">
+                            🔍 Ver Detalles
+                          </button>
                           <button onClick={() => { setSelectedSede(sede); setShowCreateSedeModal(true); }} disabled={sede.activo === false}
                             className={`text-xs font-semibold py-1.5 px-2.5 rounded-lg transition-all ${sede.activo === false ? "text-slate-300 bg-slate-100 cursor-not-allowed" : "text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100"}`}>
                             ✏️ Editar
@@ -913,6 +942,118 @@ return (
         onConfirm={handleToggleSede}
         isProcessing={isDeleting}
       />
+
+      {/* Modal Ver Detalles Sede */}
+      {viewSede && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setViewSede(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-50 rounded-xl">
+                  <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Detalles de la Sede</h3>
+                  <p className="text-xs text-slate-400">Información registrada de la sede</p>
+                </div>
+              </div>
+              <button onClick={() => setViewSede(null)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 hover:text-slate-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Nombre */}
+                <div className="sm:col-span-2 space-y-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Nombre de la sede <span className="text-red-500">*</span></p>
+                  <p className="text-sm font-semibold text-slate-900 px-4 py-2.5 bg-orange-50/50 rounded-xl border border-orange-100">{viewSede.nombre || "—"}</p>
+                </div>
+
+                {/* Código interno */}
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Código interno (automático)</p>
+                  <p className="text-sm font-mono font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">{(viewSede as any).codigoInterno || "—"}</p>
+                </div>
+
+                {/* Tipo */}
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipo de sede</p>
+                  <p className="text-sm font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                    {viewSede.tipo ? String(viewSede.tipo).charAt(0).toUpperCase() + String(viewSede.tipo).slice(1) : "—"}
+                  </p>
+                </div>
+
+                {/* Dirección */}
+                <div className="sm:col-span-2 space-y-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Dirección <span className="text-red-500">*</span></p>
+                  <p className="text-sm font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">{viewSede.direccion || "—"}</p>
+                </div>
+
+                {/* Ciudad */}
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Ciudad</p>
+                  <p className="text-sm font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">{viewSede.ciudad || "—"}</p>
+                </div>
+
+                {/* Provincia */}
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Provincia</p>
+                  <p className="text-sm font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">{viewSede.provincia || "—"}</p>
+                </div>
+
+                {/* Teléfono */}
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Teléfono</p>
+                  <p className="text-sm font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                    {viewSede.telefono ? <a href={`tel:${String(viewSede.telefono)}`} className="text-orange-600 hover:text-orange-700">{String(viewSede.telefono)}</a> : "—"}
+                  </p>
+                </div>
+
+                {/* Email */}
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Email</p>
+                  <p className="text-sm font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200 break-all">
+                    {viewSede.email ? <a href={`mailto:${String(viewSede.email)}`} className="text-orange-600 hover:text-orange-700">{String(viewSede.email)}</a> : "—"}
+                  </p>
+                </div>
+
+                {/* Horario */}
+                <div className="sm:col-span-2 space-y-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Horario de atención</p>
+                  <p className="text-sm font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">{(viewSede as any).horarioAtencion || "—"}</p>
+                </div>
+
+                {/* Observaciones */}
+                <div className="sm:col-span-2 space-y-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Observaciones</p>
+                  {(viewSede as any).observaciones ? (
+                    <div className="px-4 py-3 bg-sky-50/60 rounded-xl border border-sky-100 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed min-h-16">
+                      {(viewSede as any).observaciones}
+                    </div>
+                  ) : (
+                    <p className="text-sm font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">—</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-slate-100 flex justify-end">
+              <button onClick={() => setViewSede(null)} className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors text-sm">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal confirmación SLA sin guardar */}
       {showUnsavedConfirmModal && (
