@@ -305,18 +305,21 @@ const Step4Contactos = ({
                         </span>
                       )}
                     </div>
-                    <svg
-                      className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                    <div className="flex items-center gap-2 text-xs font-semibold text-blue-700">
+                      <span>{isExpanded ? "Ocultar detalles" : "Ver detalles"}</span>
+                      <svg
+                        className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
                   </button>
 
                   {isExpanded && (
                     <div className="px-4 pb-4 border-t border-slate-100 pt-3 space-y-3">
                       <div>
-                        <p className="text-xs font-semibold text-gray-600 mb-2">Responsables de la Sede</p>
+                        <p className="text-xs font-semibold text-gray-600 mb-2">Responsables de la sede</p>
                         <p className="text-xs text-gray-400 mb-3">Asigna responsables con autorizaciones por sede.</p>
 
                         {/* Add form */}

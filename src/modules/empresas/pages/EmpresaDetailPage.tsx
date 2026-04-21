@@ -258,6 +258,63 @@ const EmpresaDetailPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [empresa?._id, empresa?.nombre, sedes.length, empresaUsuarios.length]
   );
+  const viewSedeResponsables = useMemo(() => {
+    if (!viewSede) return [];
+
+    const selectedSedeIds = new Set(
+      [
+        String((viewSede as any)._id ?? ""),
+        String((viewSede as any).id ?? ""),
+        String((viewSede as any).sedeId ?? ""),
+        String((viewSede as any).sede_id ?? ""),
+      ].filter(Boolean)
+    );
+
+    const fromViewSede = Array.isArray((viewSede as any).responsablesSede)
+      ? (viewSede as any).responsablesSede
+      : Array.isArray((viewSede as any).responsables_sede)
+        ? (viewSede as any).responsables_sede
+        : [];
+
+    const empresaResponsables = Array.isArray((empresa as any)?.responsablesSede)
+      ? (empresa as any).responsablesSede
+      : Array.isArray((empresa as any)?.responsables_sede)
+        ? (empresa as any).responsables_sede
+        : [];
+
+    const normalizedFromEmpresa = empresaResponsables.filter((r: any) => {
+      const sedeId = String(r.sedeId || r.sede_id || "");
+      const sedeNombre = String(r.sedeNombre || r.sede_nombre || "").trim().toLowerCase();
+      const currentSedeNombre = String(viewSede.nombre || "").trim().toLowerCase();
+      return selectedSedeIds.has(sedeId) || (sedeNombre && sedeNombre === currentSedeNombre);
+    });
+
+    const source = fromViewSede.length > 0 ? fromViewSede : normalizedFromEmpresa;
+
+    const normalized = source.map((r: any) => {
+      const usuarioId = String(r.usuarioId || r.usuario_id || "");
+      const matchedUser = empresaUsuarios.find(u => String(u._id || u.id || "") === usuarioId);
+      return {
+        nombreCompleto: String(r.nombreCompleto || r.nombre_completo || matchedUser?.nombreCompleto || r.nombre || ""),
+        autorizaIngresoTecnico: Boolean(r.autorizaIngresoTecnico ?? r.autoriza_ingreso_tecnico ?? false),
+        autorizaMantenimientoFueraHorario: Boolean(r.autorizaMantenimientoFueraHorario ?? r.autoriza_mantenimiento_fuera_horario ?? false),
+        supervisionCoordinacion: Boolean(r.supervisionCoordinacion ?? r.supervision_coordinacion ?? false),
+      };
+    }).filter((r: any) => r.nombreCompleto);
+
+    if (normalized.length > 0) return normalized;
+
+    if ((viewSede as any).responsable) {
+      return [{
+        nombreCompleto: String((viewSede as any).responsable),
+        autorizaIngresoTecnico: false,
+        autorizaMantenimientoFueraHorario: false,
+        supervisionCoordinacion: false,
+      }];
+    }
+
+    return [];
+  }, [viewSede, empresa, empresaUsuarios]);
 
   // Confirmación de salida sin guardar
   const [showUnsavedConfirmModal, setShowUnsavedConfirmModal] = useState(false);
@@ -1037,6 +1094,27 @@ return (
                   {(viewSede as any).observaciones ? (
                     <div className="px-4 py-3 bg-sky-50/60 rounded-xl border border-sky-100 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed min-h-16">
                       {(viewSede as any).observaciones}
+                    </div>
+                  ) : (
+                    <p className="text-sm font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">—</p>
+                  )}
+                </div>
+
+                {/* Responsables de la sede */}
+                <div className="sm:col-span-2 space-y-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Responsables de la sede</p>
+                  {viewSedeResponsables.length > 0 ? (
+                    <div className="space-y-2">
+                      {viewSedeResponsables.map((responsable, idx) => (
+                        <div key={`${responsable.nombreCompleto}-${idx}`} className="px-4 py-3 bg-slate-50 rounded-xl border border-slate-200">
+                          <p className="text-sm font-semibold text-slate-900">{responsable.nombreCompleto}</p>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {responsable.autorizaIngresoTecnico && <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">Ingreso técnico</span>}
+                            {responsable.autorizaMantenimientoFueraHorario && <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">Fuera de horario</span>}
+                            {responsable.supervisionCoordinacion && <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Supervisión y coordinación</span>}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <p className="text-sm font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">—</p>
