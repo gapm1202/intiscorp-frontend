@@ -2,11 +2,18 @@ import { useState, useEffect } from "react";
 import { createSede, updateSede } from "../services/sedesService";
 import ConfirmModal from "./ConfirmModal";
 
-interface Responsable {
-  nombre: string;
-  cargo: string;
-  telefono: string;
-  email: string;
+interface UsuarioOption {
+  _id?: string;
+  id?: string;
+  nombreCompleto: string;
+}
+
+interface ResponsableSede {
+  usuarioId: string;
+  nombreCompleto: string;
+  autorizaIngresoTecnico: boolean;
+  autorizaMantenimientoFueraHorario: boolean;
+  supervisionCoordinacion: boolean;
 }
 
 interface CreateSedeModalProps {
@@ -14,6 +21,7 @@ interface CreateSedeModalProps {
   empresaId: string | number;
   // when provided, modal will work in edit mode
   sedeId?: string | number;
+  usuarios?: UsuarioOption[];
   initialData?: Partial<{
     nombre: string;
     codigoInterno: string;
@@ -25,16 +33,13 @@ interface CreateSedeModalProps {
     tipo: string;
     horarioAtencion: string;
     observaciones: string;
-    responsables: Responsable[];
-    autorizaIngresoTecnico: boolean;
-    autorizaMantenimientoFueraHorario: boolean;
-    autorizaSupervisionCoordinacion: boolean;
+    responsablesSede: ResponsableSede[];
   }>;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const CreateSedeModal = ({ isOpen, empresaId, sedeId, initialData, onClose, onSuccess }: CreateSedeModalProps) => {
+const CreateSedeModal = ({ isOpen, empresaId, sedeId, initialData, usuarios = [], onClose, onSuccess }: CreateSedeModalProps) => {
   const [formData, setFormData] = useState({
     nombre: "",
     codigoInterno: "",
@@ -46,15 +51,14 @@ const CreateSedeModal = ({ isOpen, empresaId, sedeId, initialData, onClose, onSu
     tipo: "principal",
     horarioAtencion: "",
     observaciones: "",
-    responsables: [{ nombre: "", cargo: "", telefono: "", email: "" }],
-    autorizaIngresoTecnico: false,
-    autorizaMantenimientoFueraHorario: false,
-    autorizaSupervisionCoordinacion: true,
   });
+  const [responsablesSede, setResponsablesSede] = useState<ResponsableSede[]>([]);
+  const [selectedUser, setSelectedUser] = useState("");
+  const [isExpanded, setIsExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pendingSedeData, setPendingSedeData] = useState<typeof formData | null>(null);
+  const [pendingSedeData, setPendingSedeData] = useState<any>(null);
 
   // Generar código interno automático basado en el nombre
   const generarCodigoInterno = (nombre: string) => {
@@ -101,27 +105,24 @@ const CreateSedeModal = ({ isOpen, empresaId, sedeId, initialData, onClose, onSu
     }
   };
 
-  const handleResponsableChange = (index: number, field: string, value: string) => {
-    setFormData(prev => ({
+  const handleAddResponsable = () => {
+    if (!selectedUser) return;
+    const usr = usuarios.find(u => (u._id || u.id) === selectedUser);
+    if (!usr) return;
+    if (responsablesSede.some(r => r.usuarioId === selectedUser)) return;
+    setResponsablesSede(prev => [
       ...prev,
-      responsables: prev.responsables.map((r, i) => 
-        i === index ? { ...r, [field]: value } : r
-      ),
-    }));
+      { usuarioId: selectedUser, nombreCompleto: usr.nombreCompleto, autorizaIngresoTecnico: false, autorizaMantenimientoFueraHorario: false, supervisionCoordinacion: false },
+    ]);
+    setSelectedUser("");
   };
 
-  const addResponsable = () => {
-    setFormData(prev => ({
-      ...prev,
-      responsables: [...prev.responsables, { nombre: "", cargo: "", telefono: "", email: "" }],
-    }));
+  const handleRemoveResponsable = (idx: number) => {
+    setResponsablesSede(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const removeResponsable = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      responsables: prev.responsables.filter((_, i) => i !== index),
-    }));
+  const handleResponsableFieldChange = (idx: number, field: keyof ResponsableSede, value: boolean) => {
+    setResponsablesSede(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -140,9 +141,7 @@ const CreateSedeModal = ({ isOpen, empresaId, sedeId, initialData, onClose, onSu
       tipo: formData.tipo,
       horarioAtencion: formData.horarioAtencion,
       observaciones: formData.observaciones,
-      responsables: formData.responsables,
-      autorizaIngresoTecnico: formData.autorizaIngresoTecnico,
-      autorizaMantenimientoFueraHorario: formData.autorizaMantenimientoFueraHorario,
+      responsablesSede,
     };
 
     try {
@@ -153,22 +152,12 @@ const CreateSedeModal = ({ isOpen, empresaId, sedeId, initialData, onClose, onSu
         setLoading(false);
         return;
       } else {
-        const created = await createSede(empresaId, sedeData);
+        await createSede(empresaId, sedeData);
       }
-      
-      setFormData({
-        nombre: "",
-        direccion: "",
-        ciudad: "",
-        provincia: "",
-        telefono: "",
-        email: "",
-        tipo: "principal",
-        responsable: "",
-        cargoResponsable: "",
-        telefonoResponsable: "",
-        emailResponsable: "",
-      });
+
+      setFormData({ nombre: "", codigoInterno: "", direccion: "", ciudad: "", provincia: "", telefono: "", email: "", tipo: "principal", horarioAtencion: "", observaciones: "" });
+      setResponsablesSede([]);
+      setSelectedUser("");
       onSuccess();
       onClose();
     } catch (err) {
@@ -212,28 +201,15 @@ const CreateSedeModal = ({ isOpen, empresaId, sedeId, initialData, onClose, onSu
         tipo: initialData.tipo ?? "principal",
         horarioAtencion: initialData.horarioAtencion ?? "",
         observaciones: initialData.observaciones ?? "",
-        responsables: initialData.responsables ?? [{ nombre: "", cargo: "", telefono: "", email: "" }],
-        autorizaIngresoTecnico: initialData.autorizaIngresoTecnico ?? false,
-        autorizaMantenimientoFueraHorario: initialData.autorizaMantenimientoFueraHorario ?? false,
       }));
+      setResponsablesSede(initialData.responsablesSede ?? []);
     }
     // reset when modal closed
     if (!isOpen) {
-      setFormData({
-        nombre: "",
-        codigoInterno: "",
-        direccion: "",
-        ciudad: "",
-        provincia: "",
-        telefono: "",
-        email: "",
-        tipo: "principal",
-        horarioAtencion: "",
-        observaciones: "",
-        responsables: [{ nombre: "", cargo: "", telefono: "", email: "" }],
-        autorizaIngresoTecnico: false,
-        autorizaMantenimientoFueraHorario: false,
-      });
+      setFormData({ nombre: "", codigoInterno: "", direccion: "", ciudad: "", provincia: "", telefono: "", email: "", tipo: "principal", horarioAtencion: "", observaciones: "" });
+      setResponsablesSede([]);
+      setSelectedUser("");
+      setIsExpanded(false);
     }
   }, [initialData, sedeId, isOpen]);
 
@@ -406,122 +382,117 @@ const CreateSedeModal = ({ isOpen, empresaId, sedeId, initialData, onClose, onSu
 
             {/* Responsables de la Sede */}
             <div className="bg-slate-50 rounded-lg p-6 border border-slate-200">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">👥 Responsables de la Sede</h3>
+              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2 mb-1">👥 Responsables de la Sede</h3>
+              <p className="text-xs text-gray-500 mb-4">Asigna responsables con autorizaciones por sede.</p>
+
+              {/* Sede accordion */}
+              <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
+                {/* Accordion header */}
                 <button
                   type="button"
-                  onClick={addResponsable}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                  onClick={() => setIsExpanded(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors text-left"
                 >
-                  + Agregar Responsable
-                </button>
-              </div>
-              
-              {formData.responsables.map((responsable, idx) => (
-                <div key={idx} className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nombre completo
-                      </label>
-                      <input
-                        type="text"
-                        value={responsable.nombre}
-                        onChange={(e) => handleResponsableChange(idx, "nombre", e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Nombre del responsable"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Cargo
-                      </label>
-                      <input
-                        type="text"
-                        value={responsable.cargo}
-                        onChange={(e) => handleResponsableChange(idx, "cargo", e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Ej: Gerente de Sede"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Teléfono
-                      </label>
-                      <input
-                        type="tel"
-                        value={responsable.telefono}
-                        onChange={(e) => handleResponsableChange(idx, "telefono", e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Ej: 9-87654321"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Email
-                      </label>
-                      <input
-                        type="email"
-                        value={responsable.email}
-                        onChange={(e) => handleResponsableChange(idx, "email", e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="responsable@empresa.com"
-                      />
-                    </div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base">🏢</span>
+                    <span className="font-semibold text-gray-800 text-sm">
+                      {formData.nombre.trim() || "Nueva sede"}
+                    </span>
+                    {responsablesSede.length > 0 && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                        {responsablesSede.length} responsable{responsablesSede.length !== 1 ? "s" : ""}
+                      </span>
+                    )}
                   </div>
-
-                  {formData.responsables.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeResponsable(idx)}
-                      className="mt-3 text-red-600 hover:text-red-700 font-medium text-sm"
+                  <div className="flex items-center gap-2 text-xs font-semibold text-blue-700">
+                    <span>{isExpanded ? "Ocultar detalles" : "Ver detalles"}</span>
+                    <svg
+                      className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
                     >
-                      🗑️ Eliminar responsable
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </button>
 
-            {/* Autorizaciones */}
-            <div className="bg-slate-50 rounded-lg p-6 border border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900 mb-6 flex items-center gap-2">🔐 Autorizaciones</h3>
-              <div className="space-y-4">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="autorizaIngresoTecnico"
-                    checked={formData.autorizaIngresoTecnico}
-                    onChange={handleChange}
-                    className="w-5 h-5 text-blue-600 rounded border-gray-300"
-                  />
-                  <span className="text-gray-700 font-medium">¿Autoriza ingreso técnico?</span>
-                </label>
+                {isExpanded && (
+                  <div className="px-4 pb-4 border-t border-slate-100 pt-3 space-y-3">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-600 mb-2">Responsables de la sede</p>
+                      <p className="text-xs text-gray-400 mb-3">Asigna responsables con autorizaciones por sede.</p>
 
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="autorizaMantenimientoFueraHorario"
-                    checked={formData.autorizaMantenimientoFueraHorario}
-                    onChange={handleChange}
-                    className="w-5 h-5 text-blue-600 rounded border-gray-300"
-                  />
-                  <span className="text-gray-700 font-medium">¿Autoriza mantenimiento fuera de horario?</span>
-                </label>
+                      {/* User selector */}
+                      {usuarios.length === 0 ? (
+                        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          No hay usuarios disponibles. Agrega usuarios a la empresa primero.
+                        </p>
+                      ) : (
+                        <div className="flex gap-2">
+                          <select
+                            value={selectedUser}
+                            onChange={e => setSelectedUser(e.target.value)}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          >
+                            <option value="">-- Seleccionar usuario --</option>
+                            {usuarios
+                              .filter(u => !responsablesSede.some(r => r.usuarioId === (u._id || u.id)))
+                              .map(u => (
+                                <option key={u._id || u.id} value={u._id || u.id}>{u.nombreCompleto}</option>
+                              ))}
+                          </select>
+                          <div className="flex items-center px-3 py-2 border border-gray-200 rounded-lg bg-slate-50 text-sm text-gray-500 max-w-40 truncate">
+                            {formData.nombre.trim() || "Nueva sede"}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleAddResponsable}
+                            disabled={!selectedUser}
+                            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors whitespace-nowrap"
+                          >
+                            Agregar
+                          </button>
+                        </div>
+                      )}
+                    </div>
 
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="autorizaSupervisionCoordinacion"
-                    checked={formData.autorizaSupervisionCoordinacion}
-                    onChange={handleChange}
-                    className="w-5 h-5 text-blue-600 rounded border-gray-300"
-                  />
-                  <span className="text-gray-700 font-medium">Supervisión y Coordinación</span>
-                </label>
+                    {/* Assigned responsables */}
+                    {responsablesSede.length > 0 && (
+                      <div className="space-y-2">
+                        {responsablesSede.map((resp, idx) => (
+                          <div key={idx} className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium text-gray-800 text-sm">{resp.nombreCompleto}</span>
+                              <button type="button" onClick={() => handleRemoveResponsable(idx)} className="text-red-400 hover:text-red-600">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            </div>
+                            <div className="p-2 bg-white rounded border border-gray-100">
+                              <p className="text-xs font-semibold text-gray-500 mb-1.5 flex items-center gap-1">🔐 Autorizaciones</p>
+                              <div className="flex flex-wrap gap-3">
+                                <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                                  <input type="checkbox" checked={resp.autorizaIngresoTecnico} onChange={e => handleResponsableFieldChange(idx, "autorizaIngresoTecnico", e.target.checked)} className="w-4 h-4" />
+                                  Autoriza ingreso técnico
+                                </label>
+                                <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                                  <input type="checkbox" checked={resp.autorizaMantenimientoFueraHorario} onChange={e => handleResponsableFieldChange(idx, "autorizaMantenimientoFueraHorario", e.target.checked)} className="w-4 h-4" />
+                                  Mantenimiento fuera de horario
+                                </label>
+                                <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                                  <input type="checkbox" checked={resp.supervisionCoordinacion} onChange={e => handleResponsableFieldChange(idx, "supervisionCoordinacion", e.target.checked)} className="w-4 h-4" />
+                                  Supervisión y coordinación
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {responsablesSede.length === 0 && (
+                      <p className="text-xs text-gray-400 italic">Sin responsables asignados a esta sede aún.</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

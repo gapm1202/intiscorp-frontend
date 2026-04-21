@@ -957,6 +957,7 @@ return (
         empresaId={empresaId || ""}
         sedeId={selectedSede?._id ?? selectedSede?.id}
         initialData={selectedSede ?? undefined}
+        usuarios={empresaUsuarios}
         onClose={() => { setShowCreateSedeModal(false); setSelectedSede(null); }}
         onSuccess={() => {
           if (empresaId) {
