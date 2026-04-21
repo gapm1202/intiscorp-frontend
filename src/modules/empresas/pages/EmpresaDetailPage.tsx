@@ -567,56 +567,57 @@ return (
                   <p className="text-base font-semibold text-slate-900 px-4 py-2.5 bg-blue-50/50 rounded-xl border border-blue-100">{empresa.nombre || "—"}</p>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Sector empresarial</label>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">RUC <span className="text-red-500">*</span></label>
+                  <p className="text-base font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">{empresa.ruc || "—"}</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Código interno de cliente</label>
+                  <p className="text-base font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200 font-mono">{empresa.codigoCliente || "—"}</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Nombre comercial</label>
+                  <p className="text-base font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">{empresa.direccionFiscal || "—"}</p>
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Dirección operativa</label>
+                  <p className="text-base font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">{empresa.direccionOperativa || "—"}</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Ciudad <span className="text-red-500">*</span></label>
+                  <p className="text-base font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">{empresa.ciudad || "—"}</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Provincia</label>
+                  <p className="text-base font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">{empresa.provincia || "—"}</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Sector empresarial (opcional)</label>
                   <p className="text-base font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">{empresa.sector || "—"}</p>
                 </div>
-              </div>
-
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="bg-blue-50/50 rounded-xl border border-blue-100 p-5">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Página web</p>
-                  {empresa.paginaWeb ? (
-                    <a href={String(empresa.paginaWeb)} target="_blank" rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-700 break-all font-medium">
-                      {String(empresa.paginaWeb)}
-                    </a>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Página web (opcional)</label>
+                  <div className="px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200 min-h-[42px]">
+                    {empresa.paginaWeb ? (
+                      <a href={String(empresa.paginaWeb)} target="_blank" rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:text-blue-700 break-all font-medium">
+                        {String(empresa.paginaWeb)}
+                      </a>
+                    ) : (
+                      <span className="text-base font-semibold text-slate-900">—</span>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Observaciones generales</label>
+                  {empresa.observacionesGenerales || empresa.observaciones ? (
+                    <div className="p-4 bg-sky-50/60 rounded-xl border border-sky-100 whitespace-pre-wrap text-slate-800 leading-relaxed text-sm font-medium min-h-16">
+                      {empresa.observacionesGenerales || empresa.observaciones}
+                    </div>
                   ) : (
-                    <p className="text-sm text-slate-400">—</p>
+                    <p className="text-base font-semibold text-slate-900 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">—</p>
                   )}
                 </div>
-                <div className="bg-blue-50/50 rounded-xl border border-blue-100 p-5">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Estado del contrato</p>
-                  <span className={`text-base font-bold ${
-                    empresa?.estadoContrato === "activo" ? "text-emerald-600" :
-                    empresa?.estadoContrato === "suspendido" ? "text-amber-600" :
-                    empresa?.estadoContrato === "vencido" ? "text-rose-600" : "text-slate-400"
-                  }`}>
-                    {empresa?.estadoContrato ? empresa.estadoContrato.replace(/_/g, " ").toUpperCase() : "— — —"}
-                  </span>
-                </div>
               </div>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-blue-100 shadow-sm p-8">
-              <div className="flex items-center gap-3 mb-7 pb-5 border-b border-slate-100">
-                <div className="p-2.5 bg-sky-50 rounded-xl">
-                  <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h8m-8 4h6M5 6a2 2 0 012-2h10a2 2 0 012 2v12l-4-3H7a2 2 0 01-2-2V6z" />
-                  </svg>
-                </div>
-                <h2 className="text-xl font-bold text-slate-900">Observaciones Generales</h2>
-              </div>
-              {empresa.observacionesGenerales || empresa.observaciones ? (
-                <div className="p-5 bg-sky-50/60 rounded-xl border border-sky-100 whitespace-pre-wrap text-slate-800 leading-relaxed text-sm font-medium min-h-24">
-                  {empresa.observacionesGenerales || empresa.observaciones}
-                </div>
-              ) : (
-                <div className="py-12 text-center">
-                  <div className="text-slate-300 text-4xl mb-3">📝</div>
-                  <p className="text-slate-500 font-medium text-sm">No hay observaciones registradas</p>
-                  <p className="text-slate-400 text-xs mt-1">Las notas generales aparecerán aquí</p>
-                </div>
-              )}
             </div>
             </>
           )}
