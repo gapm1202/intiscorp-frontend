@@ -104,17 +104,53 @@ function mapApiDocumentos(raw: any[]): DocumentoContrato[] {
   }));
 }
 
+function resolveHistoryUser(h: any): string {
+  const normalize = (v: any) => (typeof v === 'string' ? v.trim() : '');
+
+  const candidates = [
+    normalize(h.nombreUsuario),
+    normalize(h.nombre_usuario),
+    normalize(h.userName),
+    normalize(h.user_name),
+    normalize(h.user?.nombre),
+    normalize(h.user?.name),
+    normalize(h.usuario),
+    normalize(h.user),
+    normalize(h.createdBy),
+    normalize(h.created_by),
+    normalize(h.email),
+  ].filter(Boolean);
+
+  // Prefer non-generic values over placeholders like "Sistema"
+  const nonGeneric = candidates.find((c) => c.toLowerCase() !== 'sistema');
+  return nonGeneric || candidates[0] || 'Sistema';
+}
+
 function mapHistorial(rawHistory: any[]) {
   if (!Array.isArray(rawHistory)) return [];
   return rawHistory.map((h: any) => ({
+    // Normalize renewal rows that backend may emit as generic edits
+    // (e.g. estado_contrato: activo -> renovado with tipo_accion=EDICION)
+    tipoAccion: (() => {
+      const tipoRaw = String(h.tipoAccion || h.tipo_accion || '').toUpperCase();
+      const campoRaw = String(h.campo || h.fieldChanged || '').toLowerCase();
+      const nuevoRaw = String(h.valorNuevo || h.newValue || '').toLowerCase();
+      const motivoRaw = String(h.motivo || h.reason || '').toLowerCase();
+
+      const isRenewalByState = campoRaw.includes('estado') && nuevoRaw.includes('renovado');
+      const isRenewalByMotivo = motivoRaw.includes('renov');
+
+      if (tipoRaw === 'RENOVACION' || isRenewalByState || isRenewalByMotivo) return 'RENOVACION';
+      if (tipoRaw) return tipoRaw;
+      return 'EDICION';
+    })(),
     campo: h.campo || h.fieldChanged || '',
     valorAnterior: h.valorAnterior || h.oldValue || '—',
     valorNuevo: h.valorNuevo || h.newValue || '—',
     motivo: h.motivo || h.reason,
     // Store raw ISO/timestamp — let component format it
     fecha: h.fecha || h.timestamp || h.createdAt || h.created_at || '',
-    usuario: h.usuario || h.user || h.userName || h.user_name || 'Sistema',
-    tipoAccion: (h.tipoAccion || h.tipo_accion || '').toUpperCase() || 'EDICION',
+    usuario: resolveHistoryUser(h),
     contractId: h.contractId || h.contract_id || h.contratoId,
   }));
 }

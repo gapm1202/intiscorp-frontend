@@ -23,6 +23,17 @@ function formatDate(d?: string): string {
   return dt.toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function humanizeLabel(value?: string): string {
+  if (!value) return '';
+  const cleaned = value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  if (!cleaned) return '';
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
 const TIPO_CONFIG: Record<string, { label: string; color: string; dot: string; border: string }> = {
   CREACION:   { label: 'Creación',   color: 'bg-emerald-100 text-emerald-800', dot: 'bg-emerald-500', border: 'border-emerald-200' },
   RENOVACION: { label: 'Renovación', color: 'bg-sky-100 text-sky-800',         dot: 'bg-sky-500',     border: 'border-sky-200' },
@@ -52,7 +63,8 @@ function buildGroups(items: HistorialItem[]): HistorialGroup[] {
     if (tipo === 'CREACION' || tipo === 'RENOVACION') {
       groups.push({
         tipo,
-        titulo: item.campo || (tipo === 'CREACION' ? 'Creación del Contrato' : 'Renovación del Contrato'),
+        // Keep semantic titles for main events; avoid showing raw IDs like "107"
+        titulo: tipo === 'CREACION' ? 'Creación del Contrato' : 'Renovación del Contrato',
         motivo: item.motivo,
         fecha: item.fecha,
         usuario: item.usuario,
@@ -120,7 +132,7 @@ export default function ContratoHistorialVersiones({ historial, onVerDetalles }:
                     )}
 
                     {group.motivo && (
-                      <p className="text-xs text-slate-400 italic mb-1">"{group.motivo}"</p>
+                      <p className="text-xs text-slate-400 italic mb-1">"{humanizeLabel(group.motivo)}"</p>
                     )}
 
                     <div className="flex items-center gap-3 text-[11px] text-slate-400">
@@ -129,7 +141,7 @@ export default function ContratoHistorialVersiones({ historial, onVerDetalles }:
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     {isMain && group.contractId && onVerDetalles && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onVerDetalles(group.contractId!); }}

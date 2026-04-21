@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { ContratoVersion, DocumentoContrato } from './types';
 import ContratoVersionActiva from './ContratoVersionActiva';
 import ContratoHistorialVersiones from './ContratoHistorialVersiones';
@@ -48,6 +48,20 @@ export default function ContratoSlaView({
 }: Props) {
   const [activeTab, setActiveTab] = useState<InnerTab>('activa');
 
+  // Count only CREACION/RENOVACION entries — mirrors buildGroups filter in ContratoHistorialVersiones
+  const historialCount = useMemo(
+    () => historial.filter(h => {
+      const tipo = (h.tipoAccion || '').toUpperCase();
+      const campo = (h.campo || '').toLowerCase();
+      const valorNuevo = (h.valorNuevo || '').toLowerCase();
+      const motivo = (h.motivo || '').toLowerCase();
+      const isRenewalByState = campo.includes('estado') && valorNuevo.includes('renovado');
+      const isRenewalByMotivo = motivo.includes('renov');
+      return tipo === 'CREACION' || tipo === 'RENOVACION' || isRenewalByState || isRenewalByMotivo;
+    }).length,
+    [historial]
+  );
+
   return (
     <div className="space-y-0">
       {/* Inner tab navigation */}
@@ -65,10 +79,10 @@ export default function ContratoSlaView({
             >
               <span>{tab.icon}</span>
               <span>{tab.label}</span>
-              {tab.id === 'historial' && historial.length > 0 && (
+              {tab.id === 'historial' && historialCount > 0 && (
                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                   activeTab === tab.id ? 'bg-white/30 text-white' : 'bg-slate-200 text-slate-600'
-                }`}>{historial.length}</span>
+                }`}>{historialCount}</span>
               )}
               {tab.id === 'documentos' && documentos.length > 0 && (
                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
