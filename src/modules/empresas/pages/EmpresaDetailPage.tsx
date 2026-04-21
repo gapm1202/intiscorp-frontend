@@ -726,34 +726,40 @@ return (
 
               {Array.isArray(empresa.contactosAdmin) && empresa.contactosAdmin.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4">
-                  {empresa.contactosAdmin.map((c, idx) => (
+                  {empresa.contactosAdmin.map((c, idx) => {
+                    const usuarioId = String((c as any).usuarioId || (c as any).usuario_id || "");
+                    const matchedUser = empresaUsuarios.find(u => String(u._id || u.id || "") === usuarioId);
+                    const displayName = String((c as any).nombreCompleto || c.nombre || matchedUser?.nombreCompleto || "") || "—";
+                    const displayCargo = String(matchedUser?.cargo || (c as any).cargo || c.cargo || "") || "Sin cargo";
+                    return (
                     <div key={idx} className="border border-slate-200 rounded-xl p-6 hover:border-blue-200 hover:shadow-sm transition-all bg-slate-50/40">
                       <div className="grid grid-cols-2 gap-8 mb-5">
                         <div>
                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Nombre completo</p>
-                          <p className="text-base font-bold text-slate-900">{c.nombre || "—"}</p>
+                          <p className="text-base font-bold text-slate-900">{displayName}</p>
                         </div>
                         <div>
                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Cargo</p>
-                          <p className="text-base font-semibold text-slate-700">{c.cargo || "Sin cargo"}</p>
+                          <p className="text-base font-semibold text-slate-700">{displayCargo}</p>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-8 pt-4 border-t border-slate-200">
-                        {c.telefono && (
+                        {(c.telefono || matchedUser?.telefono) && (
                           <div>
                             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Teléfono</p>
-                            <a href={`tel:${c.telefono}`} className="text-sm font-semibold text-emerald-600 hover:text-emerald-700">{c.telefono}</a>
+                            <a href={`tel:${c.telefono || matchedUser?.telefono}`} className="text-sm font-semibold text-emerald-600 hover:text-emerald-700">{c.telefono || matchedUser?.telefono}</a>
                           </div>
                         )}
-                        {c.email && (
+                        {(c.email || matchedUser?.correo) && (
                           <div>
                             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Email</p>
-                            <a href={`mailto:${c.email}`} className="text-sm font-semibold text-emerald-600 hover:text-emerald-700 break-all">{c.email}</a>
+                            <a href={`mailto:${c.email || matchedUser?.correo}`} className="text-sm font-semibold text-emerald-600 hover:text-emerald-700 break-all">{c.email || matchedUser?.correo}</a>
                           </div>
                         )}
                       </div>
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -777,16 +783,21 @@ return (
 
               {Array.isArray(empresa.contactosTecnicos) && empresa.contactosTecnicos.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4">
-                  {empresa.contactosTecnicos.map((c, idx) => (
+                  {empresa.contactosTecnicos.map((c, idx) => {
+                    const usuarioIdTec = String((c as any).usuarioId || (c as any).usuario_id || "");
+                    const matchedUserTec = empresaUsuarios.find(u => String(u._id || u.id || "") === usuarioIdTec);
+                    const displayNameTec = String((c as any).nombreCompleto || c.nombre || matchedUserTec?.nombreCompleto || "") || "—";
+                    const displayCargoTec = String(matchedUserTec?.cargo || (c as any).cargo || c.cargo || "") || "Sin cargo";
+                    return (
                     <div key={idx} className="border border-slate-200 rounded-xl p-6 hover:border-purple-200 hover:shadow-sm transition-all bg-slate-50/40">
                       <div className="grid grid-cols-2 gap-8 mb-4">
                         <div>
                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Nombre completo</p>
-                          <p className="text-base font-bold text-slate-900">{c.nombre || "—"}</p>
+                          <p className="text-base font-bold text-slate-900">{displayNameTec}</p>
                         </div>
                         <div>
                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Cargo</p>
-                          <p className="text-base font-semibold text-slate-700">{c.cargo || "Sin cargo"}</p>
+                          <p className="text-base font-semibold text-slate-700">{displayCargoTec}</p>
                         </div>
                       </div>
                       {(c.contactoPrincipal || c.autorizaCambiosCriticos || c.nivelAutorizacion) && (
@@ -797,13 +808,14 @@ return (
                         </div>
                       )}
                       <div className="grid grid-cols-2 gap-8 pt-4 border-t border-slate-200">
-                        {c.telefono1 && <div><p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Teléfono principal</p><a href={`tel:${c.telefono1}`} className="text-sm font-semibold text-purple-600 hover:text-purple-700">{c.telefono1}</a></div>}
+                        {(c.telefono1 || matchedUserTec?.telefono) && <div><p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Teléfono principal</p><a href={`tel:${c.telefono1 || matchedUserTec?.telefono}`} className="text-sm font-semibold text-purple-600 hover:text-purple-700">{c.telefono1 || matchedUserTec?.telefono}</a></div>}
                         {c.telefono2 && <div><p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Teléfono alterno</p><a href={`tel:${c.telefono2}`} className="text-sm font-semibold text-purple-600 hover:text-purple-700">{c.telefono2}</a></div>}
-                        {c.email && <div><p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Email</p><a href={`mailto:${c.email}`} className="text-sm font-semibold text-purple-600 hover:text-purple-700 break-all">{c.email}</a></div>}
+                        {(c.email || matchedUserTec?.correo) && <div><p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Email</p><a href={`mailto:${c.email || matchedUserTec?.correo}`} className="text-sm font-semibold text-purple-600 hover:text-purple-700 break-all">{c.email || matchedUserTec?.correo}</a></div>}
                         {c.horarioDisponible && <div><p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Horario disponible</p><p className="text-sm font-semibold text-slate-800">{c.horarioDisponible}</p></div>}
                       </div>
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
