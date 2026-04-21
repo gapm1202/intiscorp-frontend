@@ -2,9 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ContratoSlaProvider, useContratoSla } from './ContratoSlaContext';
 import ContratoSlaWizard from './ContratoSlaWizard';
 import ContratoSlaView from './ContratoSlaView';
+import ContratoVersionActiva from './ContratoVersionActiva';
 import type { WizardContratoSlaState, ContratoVersion, DocumentoContrato } from './types';
 import {
   getContratoActivo,
+  getContratoById,
   createContrato,
   updateContratoServicios,
   updateContratoPreventivo,
@@ -176,6 +178,8 @@ function ContratoSlaTabInner({ empresaId, sedes = [], usuariosAdmin = [] }: Inne
   const [documentos, setDocumentos] = useState<DocumentoContrato[]>([]);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [detalleContrato, setDetalleContrato] = useState<ContratoVersion | null>(null);
+  const [detalleLoading, setDetalleLoading] = useState(false);
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
@@ -573,6 +577,53 @@ function ContratoSlaTabInner({ empresaId, sedes = [], usuariosAdmin = [] }: Inne
             </div>
           </div>
 
+          {/* Modal detalles de versión histórica */}
+          {(detalleContrato || detalleLoading) && (
+            <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 backdrop-blur-sm overflow-y-auto py-8">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 overflow-hidden">
+                {/* Modal header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">📋</span>
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900">
+                        {detalleContrato ? `Detalles del Contrato V${detalleContrato.version}` : 'Cargando...'}
+                      </h2>
+                      <p className="text-xs text-slate-400 mt-0.5">Vista de solo lectura de la versión histórica</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setDetalleContrato(null)}
+                    className="p-2 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Modal body */}
+                <div className="p-6 overflow-y-auto max-h-[75vh]">
+                  {detalleLoading && !detalleContrato ? (
+                    <div className="flex items-center justify-center py-20 gap-3 text-slate-500">
+                      <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                      </svg>
+                      <span className="text-sm font-medium">Cargando detalles del contrato...</span>
+                    </div>
+                  ) : detalleContrato ? (
+                    <ContratoVersionActiva
+                      contrato={detalleContrato}
+                      onRenovar={() => {}}
+                      mostrarBotonRenovar={false}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          )}
+
           <ContratoSlaView
             contratoActivo={contratoActivo}
             historial={historial}
@@ -581,9 +632,97 @@ function ContratoSlaTabInner({ empresaId, sedes = [], usuariosAdmin = [] }: Inne
             onRenovar={handleRenovar}
             onUploadDoc={handleUploadDoc}
             onDeleteDoc={handleDeleteDoc}
-            onVerDetalles={(id) => {
-              // For now just show an alert; could integrate existing modal
-              console.log('[ContratoSlaTab] Ver detalles:', id);
+            onVerDetalles={async (id) => {
+              setDetalleLoading(true);
+              try {
+                const [raw, alcanceRaw, tiemposRaw, horariosRaw, ticketTypes, catalogCategorias, catalogServicios] = await Promise.all([
+                  getContratoById(id),
+                  slaService.getAlcance(empresaId).catch(() => null),
+                  slaService.getTiempos(empresaId).catch(() => null),
+                  slaService.getHorarios(empresaId).catch(() => null),
+                  getTicketTypes().catch(() => [] as any[]),
+                  getCatalogCategories().catch(() => [] as any[]),
+                  getServicios().catch(() => [] as any[]),
+                ]);
+                const mapped = mapApiToContratoVersion(raw);
+                if (!mapped) return;
+
+                // Lookup maps
+                const ticketMap: Record<string, string> = {};
+                (ticketTypes || []).forEach((t: any) => { ticketMap[String(t.id)] = t.nombre || t.id; });
+                const catMap: Record<string, string> = {};
+                (catalogCategorias || []).forEach((c: any) => { catMap[String(c.id ?? c._id ?? c.nombre)] = c.nombre; });
+                const svcMap: Record<string, string> = {};
+                (catalogServicios || []).forEach((s: any) => { svcMap[String(s.id ?? s._id)] = s.nombre || String(s.id); });
+                const sedeMap: Record<string, string> = {};
+                sedes.forEach((s) => { sedeMap[s.id] = s.nombre; });
+                const resolveNames = (ids: any[], map: Record<string, string>) =>
+                  (ids || []).map((id: any) => map[String(id)] || String(id));
+
+                if (alcanceRaw) {
+                  mapped.alcanceSla = {
+                    slaActivo: true,
+                    aplicaA: 'incidentes',
+                    tiposTicket: resolveNames(alcanceRaw.tiposTicket || [], ticketMap),
+                    serviciosCatalogoSLA: {
+                      tipo: alcanceRaw.aplica_todos_servicios ? 'todos' : 'seleccionados',
+                      servicios: resolveNames(alcanceRaw.servicios ?? [], svcMap),
+                    },
+                    activosCubiertos: {
+                      tipo: alcanceRaw.aplica_todas_categorias ? 'todos' : 'porCategoria',
+                      categorias: resolveNames(alcanceRaw.categorias ?? [], catMap),
+                    },
+                    sedesCubiertas: {
+                      tipo: alcanceRaw.aplica_todas_sedes ? 'todas' : 'seleccionadas',
+                      sedes: resolveNames(alcanceRaw.sedes ?? [], sedeMap),
+                    },
+                    observaciones: alcanceRaw.observaciones || '',
+                  };
+                }
+
+                const tiemposArray: any[] = tiemposRaw
+                  ? (Array.isArray(tiemposRaw) ? tiemposRaw : tiemposRaw.tiempos ?? tiemposRaw.data?.tiempos ?? [])
+                  : [];
+                if (tiemposArray.length) {
+                  mapped.tiemposSla = {
+                    tiemposPorPrioridad: tiemposArray.map((t: any) => ({
+                      prioridad: (t.prioridad || 'media').toLowerCase() as 'critica' | 'alta' | 'media' | 'baja',
+                      tiempoRespuesta: minutesToDisplay(t.tiempo_respuesta_minutos ?? t.tiempoRespuesta ?? 60),
+                      tiempoResolucion: minutesToDisplay(t.tiempo_resolucion_minutos ?? t.tiempoResolucion ?? 240),
+                      escalamiento: t.escalamiento ?? false,
+                      tiempoEscalamiento: (t.tiempo_escalamiento_minutos || t.tiempoEscalamiento)
+                        ? minutesToDisplay(t.tiempo_escalamiento_minutos ?? t.tiempoEscalamiento ?? 0)
+                        : undefined,
+                    })),
+                  };
+                }
+
+                const DIAS_NOMBRES: Record<number, string> = {
+                  0: 'Domingo', 1: 'Lunes', 2: 'Martes', 3: 'Miercoles',
+                  4: 'Jueves', 5: 'Viernes', 6: 'Sabado',
+                };
+                const horariosArray: any[] = horariosRaw
+                  ? (Array.isArray(horariosRaw) ? horariosRaw : horariosRaw.horarios ?? horariosRaw.data?.horarios ?? [])
+                  : [];
+                if (horariosArray.length) {
+                  const diasRecord: Record<string, { atiende: boolean; horaInicio: string; horaFin: string }> = {};
+                  horariosArray.forEach((h: any) => {
+                    const nombre = DIAS_NOMBRES[h.day_of_week] || String(h.day_of_week);
+                    diasRecord[nombre] = {
+                      atiende: h.atiende ?? h.activo ?? true,
+                      horaInicio: (h.hora_inicio || h.horaInicio || '08:00').slice(0, 5),
+                      horaFin: (h.hora_fin || h.horaFin || '18:00').slice(0, 5),
+                    };
+                  });
+                  mapped.horariosSla = { dias: diasRecord as any, excluirFeriados: false, calendarioFeriados: [] };
+                }
+
+                setDetalleContrato(mapped);
+              } catch (err) {
+                console.error('[ContratoSlaTab] Error cargando detalle:', err);
+              } finally {
+                setDetalleLoading(false);
+              }
             }}
             uploadingDoc={uploadingDoc}
           />
