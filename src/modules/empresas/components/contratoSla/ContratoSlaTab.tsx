@@ -452,6 +452,7 @@ function ContratoSlaTabInner({ empresaId, sedes = [], usuariosAdmin = [] }: Inne
       }
 
       showToast('✅ Contrato y SLA guardados correctamente', 'success');
+
       await loadContrato();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error al guardar el contrato';

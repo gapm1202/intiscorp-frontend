@@ -9,6 +9,7 @@ import {
   type ContractualVisitNotification,
   type UpcomingVisitNotification,
 } from "@/modules/visitas/services/contractualNotificationsService";
+import { getNotificacionesPendientes, type NotificacionSistema } from "@/modules/notificaciones/services/notificacionesSistemaService";
 import { Package, Building2, FileText, TrendingUp, Activity, BarChart3, PieChart as PieChartIcon, Bell, Calendar, AlertTriangle, Clock } from "lucide-react";
 
 const GlobalStyles = () => (
@@ -299,7 +300,8 @@ const Dashboard = () => {
   const [contratosProximos, setContratosProximos] = useState<ContratoProximoVencer[]>([]);
   const [visitasPendientes, setVisitasPendientes] = useState<ContractualVisitNotification[]>([]);
   const [visitasProximas, setVisitasProximas] = useState<UpcomingVisitNotification[]>([]);
-  const [pendTab, setPendTab] = useState<'all' | 'proximas' | 'contractuales' | 'contratos'>('all');
+  const [preventivoPendientes, setPreventivoPendientes] = useState<NotificacionSistema[]>([]);
+  const [pendTab, setPendTab] = useState<'all' | 'proximas' | 'contractuales' | 'contratos' | 'preventivo'>('all');
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -319,10 +321,11 @@ const Dashboard = () => {
   useEffect(() => {
     const cargarPendientes = async () => {
       try {
-        const [contratos, contractuales, proximas] = await Promise.all([
+        const [contratos, contractuales, proximas, preventivo] = await Promise.all([
           getContratosProximosAVencer(30),
           getContractualVisitNotifications(),
           getUpcomingVisitNotifications(3),
+          getNotificacionesPendientes(),
         ]);
         setContratosProximos((contratos || []).map(c => ({
           ...c,
@@ -330,6 +333,7 @@ const Dashboard = () => {
         })));
         setVisitasPendientes(contractuales || []);
         setVisitasProximas(proximas || []);
+        setPreventivoPendientes(preventivo || []);
       } catch (err) {
         console.error('Error cargando pendientes:', err);
       }
@@ -337,13 +341,17 @@ const Dashboard = () => {
     cargarPendientes();
   }, []);
 
-  const totalPendientes = contratosProximos.length + visitasPendientes.length + visitasProximas.length;
+  const totalPendientes = contratosProximos.length + visitasPendientes.length + visitasProximas.length + preventivoPendientes.length;
 
   const filteredItems = useMemo(() => {
     type PendItem = { type: 'proxima'; data: UpcomingVisitNotification }
       | { type: 'contractual'; data: ContractualVisitNotification }
-      | { type: 'contrato'; data: ContratoProximoVencer };
+      | { type: 'contrato'; data: ContratoProximoVencer }
+      | { type: 'preventivo'; data: NotificacionSistema };
     const items: PendItem[] = [];
+    if (pendTab === 'all' || pendTab === 'preventivo') {
+      preventivoPendientes.forEach(p => items.push({ type: 'preventivo', data: p }));
+    }
     if (pendTab === 'all' || pendTab === 'proximas') {
       visitasProximas.forEach(v => items.push({ type: 'proxima', data: v }));
     }
@@ -354,7 +362,7 @@ const Dashboard = () => {
       contratosProximos.forEach(c => items.push({ type: 'contrato', data: c }));
     }
     return items;
-  }, [pendTab, visitasProximas, visitasPendientes, contratosProximos]);
+  }, [pendTab, visitasProximas, visitasPendientes, contratosProximos, preventivoPendientes]);
 
   const months = useMemo(() => {
     const names = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -464,6 +472,7 @@ const Dashboard = () => {
         <div className="db-pend-tabs">
           {[
             { key: 'all' as const, label: 'Todos', count: totalPendientes },
+            { key: 'preventivo' as const, label: 'Mantenimiento', count: preventivoPendientes.length },
             { key: 'proximas' as const, label: 'Visitas próximas', count: visitasProximas.length },
             { key: 'contractuales' as const, label: 'Contractuales', count: visitasPendientes.length },
             { key: 'contratos' as const, label: 'Contratos', count: contratosProximos.length },
@@ -493,6 +502,26 @@ const Dashboard = () => {
         ) : (
           <div className="db-pend-list" style={{ maxHeight: 340, overflowY: 'auto' }}>
             {filteredItems.map((item, idx) => {
+              if (item.type === 'preventivo') {
+                const p = item.data as NotificacionSistema;
+                return (
+                  <div key={`prev-${p.id}`} className="db-pend-item" style={{ borderLeft: '3px solid #3b82f6' }}>
+                    <div className="db-pend-icon" style={{ background: '#dbeafe' }}>
+                      <Clock size={16} color="#2563eb" />
+                    </div>
+                    <div className="db-pend-body">
+                      <div className="db-pend-empresa">{p.empresaNombre}</div>
+                      <div className="db-pend-msg">{p.mensaje}</div>
+                    </div>
+                    <span className="db-pend-badge" style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+                      Preventivo
+                    </span>
+                    <button className="db-pend-action" style={{ background: '#3b82f6' }} onClick={() => navigate('/admin/mantenimiento-preventivo')}>
+                      Planificar
+                    </button>
+                  </div>
+                );
+              }
               if (item.type === 'proxima') {
                 const v = item.data as UpcomingVisitNotification;
                 return (

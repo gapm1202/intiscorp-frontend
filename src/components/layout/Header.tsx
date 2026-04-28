@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { getContratosProximosAVencer } from '@/modules/empresas/services/contratosService';
 import { getContractualVisitNotifications, type ContractualVisitNotification, getUpcomingVisitNotifications, type UpcomingVisitNotification } from '@/modules/visitas/services/contractualNotificationsService';
+import { getNotificacionesPendientes, type NotificacionSistema } from '@/modules/notificaciones/services/notificacionesSistemaService';
 import { useNavigate } from 'react-router-dom';
 
 interface HeaderProps {
@@ -17,6 +18,8 @@ interface ContratoProximoVencer {
   renovacionAutomatica: boolean;
 }
 
+
+
 const Header = ({ toggleSidebar }: HeaderProps) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -24,15 +27,17 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
   const [contratosProximos, setContratosProximos] = useState<ContratoProximoVencer[]>([]);
   const [visitasContractualesPendientes, setVisitasContractualesPendientes] = useState<ContractualVisitNotification[]>([]);
   const [visitasProximas, setVisitasProximas] = useState<UpcomingVisitNotification[]>([]);
+  const [preventivoPendientes, setPreventivoPendientes] = useState<NotificacionSistema[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     const cargarNotificaciones = async () => {
       try {
-        const [contratos, visitasPendientes, proximas] = await Promise.all([
+        const [contratos, visitasPendientes, proximas, notifSistema] = await Promise.all([
           getContratosProximosAVencer(30),
           getContractualVisitNotifications(),
           getUpcomingVisitNotifications(3),
+          getNotificacionesPendientes(),
         ]);
         const contratosNormalizados = (contratos || []).map(c => ({
           ...c,
@@ -41,6 +46,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
         setContratosProximos(contratosNormalizados);
         setVisitasContractualesPendientes(visitasPendientes);
         setVisitasProximas(proximas || []);
+        setPreventivoPendientes(notifSistema);
       } catch (error) {
         console.error('Error al cargar notificaciones del header:', error);
         setContratosProximos([]);
@@ -63,6 +69,11 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
   const handleIrAGestionVisitas = (empresaId: string) => {
     setShowNotifications(false);
     navigate(`/admin/visitas?empresaId=${empresaId}`);
+  };
+
+  const handleIrAMantenimientoPreventivo = () => {
+    setShowNotifications(false);
+    navigate('/admin/mantenimiento-preventivo');
   };
 
   useEffect(() => {
@@ -94,7 +105,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
     return { bg: '#fefce8', icon: '#eab308', badge: '#ca8a04', text: '#a16207' };
   };
 
-  const totalNotifications = contratosProximos.length + visitasContractualesPendientes.length + visitasProximas.length;
+  const totalNotifications = preventivoPendientes.length + contratosProximos.length + visitasContractualesPendientes.length + visitasProximas.length;
 
   return (
     <>
@@ -119,6 +130,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
         .hdr-revisar-btn:hover { background: #0284c7 !important; }
         .hdr-visitas-btn:hover { background: #d97706 !important; }
         .hdr-proximas-btn:hover { background: #059669 !important; }
+        .hdr-preventivo-btn:hover { background: #2563eb !important; }
       `}</style>
 
       <header style={{
@@ -257,6 +269,66 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
                       </div>
                     ) : (
                       <>
+                        {preventivoPendientes.length > 0 && (
+                          <div style={{ borderBottom: (visitasProximas.length > 0 || visitasContractualesPendientes.length > 0 || contratosProximos.length > 0) ? '1px solid #dbeafe' : 'none' }}>
+                            <div style={{
+                              padding: '10px 16px 8px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              letterSpacing: '0.04em',
+                              textTransform: 'uppercase',
+                              color: '#1d4ed8',
+                              background: '#eff6ff',
+                            }}>
+                              Mantenimiento preventivo pendiente
+                            </div>
+                            {preventivoPendientes.map((notificacion) => (
+                              <div key={`preventivo-${notificacion.id}`} className="hdr-notif-row" style={{
+                                padding: '12px 16px',
+                                borderBottom: '1px solid #dbeafe',
+                                transition: 'background 0.12s',
+                                cursor: 'default',
+                                background: '#f8fbff',
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                                  <div style={{
+                                    width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                                    background: '#dbeafe',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  }}>
+                                    <svg style={{ width: 16, height: 16, color: '#2563eb' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 8v4l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#1e3a8a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {notificacion.empresaNombre}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#1d4ed8', marginTop: 2, fontWeight: 500, lineHeight: 1.35 }}>
+                                      {notificacion.mensaje}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                                      <button
+                                        className="hdr-preventivo-btn"
+                                        onClick={handleIrAMantenimientoPreventivo}
+                                        style={{
+                                          padding: '3px 10px', borderRadius: 6,
+                                          background: '#3b82f6', color: '#fff',
+                                          border: 'none', cursor: 'pointer',
+                                          fontSize: 10, fontWeight: 600,
+                                          transition: 'background 0.15s',
+                                        }}
+                                      >
+                                        Ir a Mantenimiento Preventivo
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                         {visitasProximas.length > 0 && (
                           <div style={{ borderBottom: (visitasContractualesPendientes.length > 0 || contratosProximos.length > 0) ? '1px solid #d1fae5' : 'none' }}>
                             <div style={{
