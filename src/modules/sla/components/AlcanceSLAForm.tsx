@@ -169,14 +169,38 @@ export function AlcanceSLAForm({
         const tiposActivos = types.filter((tipo: any) => tipo.activo === true);
         console.log('[AlcanceSLAForm] Tipos de ticket activos cargados:', tiposActivos);
         setAvailableTypes(tiposActivos);
-        
-        // Si no hay tipos seleccionados, seleccionar el primero por defecto usando su UUID
-        if (!formData.tiposTicket || !formData.tiposTicket.length) {
-          const primerTipoUUID = tiposActivos[0]?.id;  // Usar UUID, no nombre
-          if (primerTipoUUID) {
-            setFormData((prev) => ({ ...prev, tiposTicket: [primerTipoUUID] }));
+
+        // Normaliza selección inicial para soportar prefill por UUID o por nombre.
+        setFormData((prev) => {
+          const current = (prev.tiposTicket || []).map((v) => String(v));
+          const firstId = tiposActivos[0]?.id ? String(tiposActivos[0].id) : '';
+
+          // Si no hay selección, asignar primer tipo activo por defecto
+          if (current.length === 0) {
+            return firstId ? { ...prev, tiposTicket: [firstId] } : prev;
           }
-        }
+
+          const ids = new Set(tiposActivos.map((t: any) => String(t.id)));
+          const nameToId = new Map(
+            tiposActivos.map((t: any) => [String(t.nombre || '').trim().toLowerCase(), String(t.id)])
+          );
+
+          const mapped = current
+            .map((value) => {
+              if (ids.has(value)) return value;
+              return nameToId.get(value.trim().toLowerCase()) || value;
+            })
+            .filter((value) => ids.has(value));
+
+          const uniqueMapped = Array.from(new Set(mapped));
+          const next = uniqueMapped.length > 0 ? uniqueMapped : (firstId ? [firstId] : current);
+
+          const same =
+            next.length === current.length &&
+            next.every((value, index) => value === current[index]);
+
+          return same ? prev : { ...prev, tiposTicket: next };
+        });
       } catch (e) {
         console.warn('[AlcanceSLAForm] no se pudieron cargar tipos del catálogo', e);
       }
@@ -354,7 +378,7 @@ export function AlcanceSLAForm({
             </div>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
                 <div className="flex-1">
@@ -472,7 +496,7 @@ export function AlcanceSLAForm({
                             type="checkbox"
                             checked={(formData.serviciosCatalogoSLA.servicios || []).includes(String(servicio.id))}
                             onChange={() => handleToggleServicioCatalogo(String(servicio.id))}
-                            className="w-4 h-4 text-blue-600 rounded mt-0.5 flex-shrink-0"
+                            className="w-4 h-4 text-blue-600 rounded mt-0.5 shrink-0"
                           />
                           <div className="flex-1">
                             <span className="text-sm text-gray-900 font-medium">{servicio.nombre}</span>

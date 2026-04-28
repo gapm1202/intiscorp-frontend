@@ -475,6 +475,9 @@ function ContratoSlaTabInner({ empresaId, sedes = [], usuariosAdmin = [] }: Inne
       servicios: contratoActivo.servicios,
       mantenimiento: contratoActivo.mantenimiento,
       economicas: contratoActivo.economicas,
+      alcanceSla: contratoActivo.alcanceSla,
+      tiemposSla: contratoActivo.tiemposSla,
+      horariosSla: contratoActivo.horariosSla,
     });
     setMode('wizard');
   };
