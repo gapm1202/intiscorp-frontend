@@ -114,11 +114,7 @@ export default function Step1DatosContrato({ data, onChange, usuariosAdmin = [] 
           <select value={local.visitaFrecuencia} onChange={e => update('visitaFrecuencia', e.target.value)} className={inputCls}>
             <option value="">-- Seleccionar --</option>
             <option value="mensual">Mensual</option>
-            <option value="bimestral">Bimestral</option>
-            <option value="trimestral">Trimestral</option>
-            <option value="semestral">Semestral</option>
-            <option value="anual">Anual</option>
-            <option value="según_demanda">Según demanda</option>
+            <option value="semanal">Semanal</option>
           </select>
         </div>
 

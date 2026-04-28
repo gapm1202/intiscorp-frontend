@@ -7,7 +7,17 @@ interface Props {
   onChange: (data: MantenimientoForm) => void;
 }
 
-const FRECUENCIAS = ['Mensual', 'Bimestral', 'Trimestral', 'Semestral', 'Anual', 'Según demanda'];
+const FRECUENCIAS = [
+  'Mensual',
+  'Cada 2 meses',
+  'Cada 3 meses',
+  'Cada 4 meses',
+  'Cada 5 meses',
+  'Cada 6 meses',
+  'Cada 7 meses',
+  'Cada 8 meses',
+  'Cada 12 meses',
+];
 const MODALIDADES = ['Presencial', 'Remoto', 'Mixto'];
 
 export default function Step3Mantenimiento({ data, onChange }: Props) {

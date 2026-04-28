@@ -30,6 +30,31 @@ function minutesToDisplay(minutes: number): string {
   return `${m}min`;
 }
 
+function toDateInputValue(value?: string): string {
+  if (!value) return '';
+  const trimmed = String(value).trim();
+  if (!trimmed) return '';
+
+  // Already in date-input format
+  const plainDate = trimmed.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (plainDate) return plainDate[1];
+
+  // ISO-like values: keep only YYYY-MM-DD prefix
+  const isoPrefix = trimmed.match(/^(\d{4}-\d{2}-\d{2})T/);
+  if (isoPrefix) return isoPrefix[1];
+
+  // Fallback for other parseable formats
+  const parsed = new Date(trimmed);
+  if (!Number.isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  return '';
+}
+
 // ─────────────────────────────────────────────────
 // Helper: map raw API contrato to ContratoVersion
 // ─────────────────────────────────────────────────
@@ -442,7 +467,11 @@ function ContratoSlaTabInner({ empresaId, sedes = [], usuariosAdmin = [] }: Inne
   const handleRenovar = () => {
     if (!contratoActivo) return;
     initRenewal({
-      datosContrato: contratoActivo.datosContrato,
+      datosContrato: {
+        ...contratoActivo.datosContrato,
+        fechaInicio: toDateInputValue(contratoActivo.datosContrato?.fechaInicio),
+        fechaFin: toDateInputValue(contratoActivo.datosContrato?.fechaFin),
+      },
       servicios: contratoActivo.servicios,
       mantenimiento: contratoActivo.mantenimiento,
       economicas: contratoActivo.economicas,
